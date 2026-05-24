@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="theme-color" content="#0a0f1a"/>
+<title>Akkumulatortank</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #0a0f1a;
+    --surface:  #111827;
+    --card:     #161e2e;
+    --border:   rgba(255,255,255,0.07);
+    --text:     #e8edf5;
+    --muted:    #6b7c99;
+    --accent:   #3b82f6;
+    --mono:     'DM Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .header {
+    padding: 1.2rem 1.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .header-left h1 {
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: .02em;
+    color: var(--text);
+  }
+  .header-left p {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-family: var(--mono);
+  }
+  .refresh-btn {
+    background: rgba(59,130,246,0.12);
+    border: 1px solid rgba(59,130,246,0.3);
+    color: #60a5fa;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: var(--mono);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background .2s;
+    white-space: nowrap;
+  }
+  .refresh-btn:hover { background: rgba(59,130,246,0.22); }
+  .refresh-btn svg { width: 13px; height: 13px; }
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+    transition: background .4s;
+  }
+  .status-dot.ok { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+  .status-dot.err { background: #ef4444; }
+  .layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    padding: 1.5rem;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .tank-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .tank-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .right-col {
+    flex: 1;
+    min-width: 220px;
+    max-width: 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sec-title {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .scard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 9px 14px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 6px;
+    transition: border-color .2s;
+  }
+  .scard:last-child { margin-bottom: 0; }
+  .scard:hover { border-color: rgba(255,255,255,0.14); }
+  .spct {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    width: 30px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .sname {
+    font-size: 13px;
+    color: #94a3b8;
+    flex: 1;
+  }
+  .stemp {
+    font-size: 15px;
+    font-weight: 500;
+    font-family: var(--mono);
+    color: var(--text);
+  }
+  .sdot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .mgrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .mcard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .mlabel {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .mval {
+    font-size: 24px;
+    font-weight: 500;
+    font-family: var(--mono);
+    color: var(--text);
+    line-height: 1;
+  }
+  .munit {
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: 3px;
+  }
+  .updated {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    text-align: center;
+  }
+  .config-row {
+    padding: 0.8rem 1.5rem 1rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    border-top: 1px solid var(--border);
+    margin-top: 0.5rem;
+  }
+  .config-row input {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 11px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .config-row input:focus { border-color: rgba(59,130,246,0.5); }
+  #ipInput { width: 145px; }
+  #tokInput { flex: 1; min-width: 160px; max-width: 280px; }
+  .config-row label {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--muted);
+    margin-right: -4px;
+  }
+  .err-msg {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: #f87171;
+    padding: 0 1.5rem 0.8rem;
+    display: none;
+    line-height: 1.6;
+  }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 520px) {
+    .layout { padding: 1rem; gap: 16px; }
+    .header { padding: 1rem; }
+    .config-row { padding: 0.7rem 1rem 0.8rem; }
+    .err-msg { padding: 0 1rem 0.7rem; }
+    .mval { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Akkumulatortank</h1>
+    <p id="statusTxt">Klar</p>
+  </div>
+  <button class="refresh-btn" onclick="fetchHomey()" id="refreshBtn">
+    <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
+    </svg>
+    Oppdater
+  </button>
+</div>
+
+<div class="layout">
+  <div class="tank-col">
+    <div class="tank-label">500 liter</div>
+    <svg id="tankSvg" viewBox="-80 0 280 440" xmlns="http://www.w3.org/2000/svg"
+         style="width:250px;height:418px;overflow:visible;display:block"></svg>
+    <div class="updated" id="upd"></div>
+  </div>
+
+  <div class="right-col">
+    <div class="sec-title">Temperaturnivåer</div>
+    <div id="scards"></div>
+    <div class="sec-title" style="margin-top:6px">Nøkkeltall</div>
+    <div class="mgrid">
+      <div class="mcard">
+        <div class="mlabel">Snitt</div>
+        <div class="mval" id="vSnitt">–<span class="munit">°C</span></div>
+      </div>
+      <div class="mcard">
+        <div class="mlabel">Energi</div>
+        <div class="mval" id="vEnergi">–<span class="munit">kWh</span></div>
+      </div>
+      <div class="mcard">
+        <div class="mlabel">ΔT Topp–Bunn</div>
+        <div class="mval" id="vDTB">–<span class="munit">K</span></div>
+      </div>
+      <div class="mcard">
+        <div class="mlabel">ΔT VP</div>
+        <div class="mval" id="vDVP">–<span class="munit">K</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="err-msg" id="errMsg"></div>
+
+<div class="config-row">
+  <label>Homey ID</label>
+  <input id="homeyId" type="text" placeholder="abc123.connect.athom.com" autocomplete="off" style="width:210px"/>
+  <label>API Key</label>
+  <input id="apiKey" type="text" placeholder="Lim inn API Key her" autocomplete="off" style="flex:1;min-width:180px;max-width:320px"/>
+</div>
+<div style="padding:0 1.5rem 0.8rem;font-size:11px;color:#6b7c99;font-family:'DM Mono',monospace;line-height:1.7">
+  Homey ID finner du på <strong style="color:#94a3b8">my.homey.app → din Homey → innstillinger</strong> (f.eks. <em>abc123.connect.athom.com</em>).
+  API Key lager du under <strong style="color:#94a3b8">Innstillinger → API Keys → Opprett ny</strong>.
+</div>
+
+<script>
+const SENSORS = [
+  { pct:100, name:'Topp',   dev:'Akkumulator Sensor Nr.1 (Øverst)'    },
+  { pct:75,  name:'Tur VP', dev:'Akkumulator Sensor Nr.2 (Tur fra VP)' },
+  { pct:50,  name:'Midt',   dev:'Akkumulator Sensor Nr.3'              },
+  { pct:25,  name:'Nedre',  dev:'Akkumulator Sensor Nr.4'              },
+  { pct:0,   name:'Retur',  dev:'Akkumulator Sensor Nr.5 (Retur)'      },
+];
+const REF = 25, KWH = 0.5815;
+const CAP = 'devicecapabilities_number.number1';
+
+function r1(v) { return Math.round(v * 10) / 10; }
+
+function tempColor(t) {
+  if (t === null) return '#334155';
+  const stops = [
+    { v:15, c:[41,128,185]   },
+    { v:30, c:[39,174,96]    },
+    { v:45, c:[243,156,18]   },
+    { v:60, c:[231,76,60]    },
+    { v:80, c:[146,43,33]    },
+  ];
+  let a = stops[0], b = stops[stops.length-1];
+  for (let i = 0; i < stops.length-1; i++) {
+    if (t >= stops[i].v && t < stops[i+1].v) { a = stops[i]; b = stops[i+1]; break; }
+  }
+  const f = Math.min(1, Math.max(0, (t - a.v) / (b.v - a.v)));
+  const r = Math.round(a.c[0] + (b.c[0]-a.c[0])*f);
+  const g = Math.round(a.c[1] + (b.c[1]-a.c[1])*f);
+  const bl= Math.round(a.c[2] + (b.c[2]-a.c[2])*f);
+  return `rgb(${r},${g},${bl})`;
+}
+
+function lightenRgb(css, amt) {
+  const m = css.match(/\d+/g).map(Number);
+  return `rgb(${Math.min(255,m[0]+amt)},${Math.min(255,m[1]+amt)},${Math.min(255,m[2]+amt)})`;
+}
+function darkenRgb(css, amt) {
+  const m = css.match(/\d+/g).map(Number);
+  return `rgb(${Math.max(0,m[0]-amt)},${Math.max(0,m[1]-amt)},${Math.max(0,m[2]-amt)})`;
+}
+
+function buildTank(temps) {
+  const svg = document.getElementById('tankSvg');
+  const cx = 100;
+  const bx = 16, bw = 168;
+  const bTop = 24, bBot = 408, bH = bBot - bTop;
+  const rx = 22, ellRy = 20;
+
+  const valid = temps.filter(t => t !== null);
+  const snitt = valid.length ? valid.reduce((a,b)=>a+b,0)/valid.length : 28;
+  const fillFrac = Math.min(0.96, Math.max(0.04, (snitt - 15) / 70));
+  const fillY = bBot - bH * fillFrac;
+
+  const wBase  = tempColor(snitt);
+  const wLight = lightenRgb(wBase, 50);
+  const wDark  = darkenRgb(wBase, 30);
+  const wSurf  = lightenRgb(wBase, 70);
+
+  let s = `<defs>
+    <clipPath id="bc"><rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" rx="${rx}"/></clipPath>
+    <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#1e3a4a"/>
+      <stop offset="12%"  stop-color="#2d5a72"/>
+      <stop offset="30%"  stop-color="#3d7a9a"/>
+      <stop offset="50%"  stop-color="#4a8fb0"/>
+      <stop offset="68%"  stop-color="#3a7090"/>
+      <stop offset="88%"  stop-color="#255070"/>
+      <stop offset="100%" stop-color="#142a38"/>
+    </linearGradient>
+    <linearGradient id="shineL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#fff" stop-opacity="0"/>
+      <stop offset="22%"  stop-color="#fff" stop-opacity="0.18"/>
+      <stop offset="42%"  stop-color="#fff" stop-opacity="0.38"/>
+      <stop offset="58%"  stop-color="#fff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.1"/>
+    </linearGradient>
+    <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="${wLight}"/>
+      <stop offset="60%"  stop-color="${wBase}"/>
+      <stop offset="100%" stop-color="${wDark}"/>
+    </linearGradient>
+    <linearGradient id="ws" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#fff" stop-opacity="0"/>
+      <stop offset="28%"  stop-color="#fff" stop-opacity="0.18"/>
+      <stop offset="55%"  stop-color="#fff" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="topFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#000" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rimTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#5a8aaa"/>
+      <stop offset="40%"  stop-color="#7ab0cc"/>
+      <stop offset="100%" stop-color="#2a5a78"/>
+    </linearGradient>
+    <linearGradient id="rimBot" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#2a5a78"/>
+      <stop offset="55%"  stop-color="#6aaac8"/>
+      <stop offset="100%" stop-color="#1a3a50"/>
+    </linearGradient>
+    <linearGradient id="bandG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#3a7a9a"/>
+      <stop offset="50%"  stop-color="#5aaac8"/>
+      <stop offset="100%" stop-color="#2a5a78"/>
+    </linearGradient>
+  </defs>`;
+
+  // Drop shadow
+  s += `<ellipse cx="${cx}" cy="${bBot+14}" rx="${bw/2-6}" ry="7" fill="#000" fill-opacity="0.32"/>`;
+
+  // Tank body – steel
+  s += `<rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" rx="${rx}" fill="url(#sg)" stroke="#1a4060" stroke-width="1.5"/>`;
+
+  // Water inside (clipped)
+  s += `<g clip-path="url(#bc)">
+    <rect x="${bx}" y="${fillY}" width="${bw}" height="${bBot-fillY}" fill="url(#wg)"/>
+    <rect x="${bx}" y="${fillY}" width="${bw}" height="${bBot-fillY}" fill="url(#ws)"/>
+    <ellipse cx="${cx}" cy="${fillY}" rx="${bw/2-1}" ry="10" fill="${wSurf}" fill-opacity="0.55"/>
+    <rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" fill="url(#topFade)"/>
+    <rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" fill="url(#shineL)"/>
+  </g>`;
+
+  // Top ellipse (rim) – drawn before bottom so bottom sits on top visually
+  s += `<ellipse cx="${cx}" cy="${bTop}" rx="${bw/2}" ry="${ellRy}" fill="url(#rimTop)" stroke="#1a4060" stroke-width="1.2"/>`;
+
+  // Horizontal reinforcement bands
+  const bands = [bTop + bH*0.24, bTop + bH*0.50, bTop + bH*0.76];
+  for (const by of bands) {
+    s += `<rect x="${bx+2}" y="${by-4.5}" width="${bw-4}" height="8" rx="3" fill="url(#bandG)" stroke="#1a4060" stroke-width="0.7" opacity="0.8"/>`;
+    s += `<rect x="${bx+8}" y="${by-3}" width="${bw-16}" height="5" rx="2" fill="#5aaac8" fill-opacity="0.18"/>`;
+  }
+
+  // Specular highlight stripe on body
+  s += `<rect x="${bx+14}" y="${bTop+ellRy}" width="18" height="${bH-ellRy*2}" rx="6" fill="#fff" fill-opacity="0.07"/>`;
+
+  // Bottom ellipse – drawn last so it sits visually in front (3D base)
+  // Shadow ring behind bottom cap
+  s += `<ellipse cx="${cx}" cy="${bBot+ellRy-4}" rx="${bw/2-2}" ry="${ellRy*0.55}" fill="#000" fill-opacity="0.28"/>`;
+  // Bottom cap fill (water color if filled to bottom, else steel)
+  const botFilled = fillFrac > 0.12;
+  s += `<ellipse cx="${cx}" cy="${bBot}" rx="${bw/2}" ry="${ellRy}" fill="${botFilled ? wDark : 'url(#rimBot)'}" stroke="#1a4060" stroke-width="1.2"/>`;
+  // Rim highlight on bottom cap
+  s += `<ellipse cx="${cx}" cy="${bBot-3}" rx="${bw/2-6}" ry="${ellRy*0.55}" fill="${botFilled ? wBase : '#5aaac8'}" fill-opacity="0.22"/>`;
+  // Outer edge catch-light
+  s += `<ellipse cx="${cx}" cy="${bBot}" rx="${bw/2}" ry="${ellRy}" fill="none" stroke="#4a9abf" stroke-width="0.8" opacity="0.4"/>`;
+
+  // Sensor connectors – ALL on the left, labels pinned to same X column
+  const dotX    = bx - 4;   // where dot sits (tank edge)
+  const lineEnd = bx - 20;  // where dashed line ends
+  const labelX  = bx - 58;  // fixed X for ALL labels → perfect vertical alignment
+
+  SENSORS.forEach((sen, i) => {
+    const sy  = bTop + (1 - sen.pct/100) * bH;
+    const t   = temps[i];
+    const col = tempColor(t);
+
+    s += `<line x1="${dotX}" y1="${sy}" x2="${labelX + 2}" y2="${sy}"
+           stroke="${col}" stroke-width="1.4" stroke-dasharray="4,3" opacity="0.85"/>`;
+    s += `<circle cx="${dotX}" cy="${sy}" r="5"
+           fill="${col}" stroke="#0a0f1a" stroke-width="1.6"/>`;
+    s += `<circle cx="${dotX}" cy="${sy}" r="2.5"
+           fill="#fff" fill-opacity="0.5"/>`;
+
+    const label = t !== null ? t.toFixed(1) + '°' : '–';
+    s += `<text x="${labelX}" y="${sy + 4}" text-anchor="end"
+           font-size="12" font-family="'DM Mono',monospace"
+           fill="${col}" font-weight="500">${label}</text>`;
+  });
+
+  // Outer rim highlight
+  s += `<rect x="${bx+1}" y="${bTop}" width="${bw-2}" height="${bH}"
+         rx="${rx}" fill="none" stroke="#fff" stroke-width="1" opacity="0.07"/>`;
+
+  svg.innerHTML = s;
+}
+
+function render(temps) {
+  buildTank(temps);
+
+  const cards = document.getElementById('scards');
+  cards.innerHTML = '';
+  SENSORS.forEach((s, i) => {
+    const t = temps[i];
+    const col = tempColor(t);
+    const div = document.createElement('div');
+    div.className = 'scard';
+    div.innerHTML = `
+      <div class="sdot" style="background:${col}; box-shadow:0 0 5px ${col}88"></div>
+      <div class="spct">${s.pct}%</div>
+      <div class="sname">${s.name}</div>
+      <div class="stemp">${t !== null ? t.toFixed(1)+' °C' : '–'}</div>`;
+    cards.appendChild(div);
+  });
+
+  const valid = temps.filter(t => t !== null);
+  const snitt  = valid.length ? r1(valid.reduce((a,b)=>a+b,0)/valid.length) : null;
+  const topp   = temps[0], bunn = temps[4], turVP = temps[1];
+  const energi = snitt !== null ? r1(Math.max(0, KWH*(snitt-REF))) : null;
+  const dtb    = (topp!==null && bunn!==null) ? r1(topp-bunn) : null;
+  const dvp    = (turVP!==null && bunn!==null) ? r1(turVP-bunn) : null;
+
+  document.getElementById('vSnitt').innerHTML  = snitt  !== null ? snitt.toFixed(1) +'<span class="munit">°C</span>'  : '–';
+  document.getElementById('vEnergi').innerHTML = energi !== null ? energi.toFixed(1)+'<span class="munit">kWh</span>' : '–';
+  document.getElementById('vDTB').innerHTML    = dtb    !== null ? dtb.toFixed(1)   +'<span class="munit">K</span>'   : '–';
+  document.getElementById('vDVP').innerHTML    = dvp    !== null ? dvp.toFixed(1)   +'<span class="munit">K</span>'   : '–';
+
+  const now = new Date();
+  document.getElementById('upd').textContent =
+    now.toLocaleTimeString('nb-NO', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function setStatus(ok, txt) {
+  document.getElementById('statusTxt').textContent = txt;
+}
+
+function setSpinner(active) {
+  const icon = document.getElementById('refreshIcon');
+  if (active) icon.classList.add('spin');
+  else icon.classList.remove('spin');
+}
+
+function saveConfig() {
+  try {
+    localStorage.setItem('homeyId', document.getElementById('homeyId').value.trim());
+    localStorage.setItem('apiKey',  document.getElementById('apiKey').value.trim());
+  } catch(e) {}
+}
+
+function loadConfig() {
+  try {
+    const id  = localStorage.getItem('homeyId');
+    const key = localStorage.getItem('apiKey');
+    if (id)  document.getElementById('homeyId').value = id;
+    if (key) document.getElementById('apiKey').value  = key;
+  } catch(e) {}
+}
+
+async function fetchHomey() {
+  saveConfig();
+  const homeyId = document.getElementById('homeyId').value.trim();
+  const apiKey  = document.getElementById('apiKey').value.trim();
+  const errEl   = document.getElementById('errMsg');
+  errEl.style.display = 'none';
+
+  if (!homeyId || !apiKey) {
+    setStatus(false, 'Fyll inn Homey ID og API Key nedenfor');
+    errEl.style.display = 'block';
+    errEl.innerHTML = `Fyll inn <strong>Homey ID</strong> og <strong>API Key</strong> i feltene nedenfor.<br><br>
+<strong>Slik finner du dem:</strong><br>
+1. Gå til <a href="https://my.homey.app" style="color:#60a5fa" target="_blank">my.homey.app</a> og logg inn<br>
+2. Velg din Homey Pro<br>
+3. <strong>Homey ID</strong>: vises i URL-en eller under Innstillinger (f.eks. <em>abc123.connect.athom.com</em>)<br>
+4. <strong>API Key</strong>: Innstillinger → API Keys → Opprett ny nøkkel → kopier`;
+    return;
+  }
+
+  setSpinner(true);
+  setStatus(false, 'Henter data fra Homey…');
+
+  const baseUrl = homeyId.includes('.')
+    ? `https://${homeyId}`
+    : `https://${homeyId}.connect.athom.com`;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/manager/devices/device`, {
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type':  'application/json',
+      }
+    });
+
+    if (res.status === 401) throw new Error('401 – API Key er feil eller utløpt. Opprett en ny under Innstillinger → API Keys.');
+    if (res.status === 403) throw new Error('403 – API Key mangler rettigheter. Sørg for at den har tilgang til Devices.');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const data = await res.json();
+    const devList = Object.values(data);
+
+    const temps = SENSORS.map(s => {
+      const dev = devList.find(d => d.name === s.dev);
+      if (!dev) { console.warn('Fant ikke enhet:', s.dev); return null; }
+      const cap = dev.capabilitiesObj?.[CAP];
+      return (cap && typeof cap.value === 'number') ? r1(cap.value) : null;
+    });
+
+    render(temps);
+    setStatus(true, 'Live – ' + new Date().toLocaleTimeString('nb-NO'));
+
+  } catch (e) {
+    setStatus(false, 'Tilkoblingsfeil');
+    errEl.style.display = 'block';
+    errEl.innerHTML = `<strong>Feil:</strong> ${e.message}`;
+  } finally {
+    setSpinner(false);
+  }
+}
+
+// Autorefresh hvert 5. minutt
+setInterval(fetchHomey, 5 * 60 * 1000);
+
+// Last lagret konfig og vis demo ved oppstart
+loadConfig();
+render([56.4, 48.2, 38.7, 32.1, 29.3]);
+setStatus(false, 'Demo – fyll inn Homey ID og API Key nedenfor');
+setTimeout(fetchHomey, 400);
+</script>
+</body>
+</html>
