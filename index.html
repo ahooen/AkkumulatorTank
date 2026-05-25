@@ -207,7 +207,11 @@ const TANK_SENSORS=[
   {pct:25, name:'Nedre',  dev:'Akkumulator Sensor Nr.4'},
   {pct:0,  name:'Retur',  dev:'Akkumulator Sensor Nr.5 (Retur)'},
 ];
-const SCOP_DEV='NIBE COP', BRINE_IN_DEV='Nibe Brine Inn', BRINE_OUT_DEV='Nibe Brine Ut';
+const SCOP_DEV='Nibe S1256-8kw';  // enhet med SCOP i devicecapabilities_number.number1
+// Brine-temperaturer: disse enhetene eksisterer ikke ennå i Homey
+// Opprett dem i Homey (Device Capabilities → Number) og skriv verdier fra MyUplink-scriptet
+const BRINE_IN_DEV='Nibe Brine Inn';   // TODO: opprett eller bytt til riktig navn
+const BRINE_OUT_DEV='Nibe Brine Ut';   // TODO: opprett eller bytt til riktig navn
 const REF=25,KWH=0.5815,MAX_HIST=288;
 const H={topp:[],turVP:[],midt:[],nedre:[],retur:[],snitt:[],energi:[],dtb:[],dvp:[],scop:[],brineIn:[],brineOut:[]};
 function ph(k,v){if(v==null)return;H[k].push(v);if(H[k].length>MAX_HIST)H[k].shift()}
@@ -687,102 +691,87 @@ function saveConfig(){sv('hId',document.getElementById('homeyId').value.trim());
 function loadConfig(){const i=lv('hId'),k=lv('hKey');if(i)document.getElementById('homeyId').value=i;if(k)document.getElementById('apiKey').value=k}
 function setSpinner(a){const i=document.getElementById('refreshIcon');a?i.classList.add('spin'):i.classList.remove('spin')}
 
-// ═══ INSIGHTS – 24t historikk ══════════════════════════════
-// Mapping: histKey → { devName, capabilityId }
-// capabilityId = "devicecapabilities_number.number1"
-// Insights log ID format: homey:device:<deviceId>/<capabilityId>
-// URI format:             homey:device:<deviceId>
+// ═══ HISTORIKK – localStorage + Homey Insights for SCOP ═══
+// Homey logger ikke Device Capabilities i Insights.
+// Tank-sensorer lagres i localStorage ved hver oppdatering.
+// SCOP hentes fra Homey Insights (Logic-variabel).
 
-const INSIGHT_MAP = [
-  { hk:'topp',    dev:'Akkumulator Sensor Nr.1 (Øverst)'    },
-  { hk:'turVP',   dev:'Akkumulator Sensor Nr.2 (Tur fra VP)' },
-  { hk:'midt',    dev:'Akkumulator Sensor Nr.3'              },
-  { hk:'nedre',   dev:'Akkumulator Sensor Nr.4'              },
-  { hk:'retur',   dev:'Akkumulator Sensor Nr.5 (Retur)'      },
-  { hk:'snitt',   dev:'Tank Snitt'                           },
-  { hk:'energi',  dev:'Tank Energi'                         },
-  { hk:'dtb',     dev:'Tank ΔT T/B'                         },
-  { hk:'dvp',     dev:'Tank ΔT VP'                          },
-  { hk:'scop',    dev:'NIBE COP'                            },
-  { hk:'brineIn', dev:'Nibe Brine Inn'                      },
-  { hk:'brineOut',dev:'Nibe Brine Ut'                       },
-];
+const LS_KEY = 'varmesystem_history_v2';
+
+function saveHistory() {
+  try {
+    const toSave = {};
+    Object.keys(H).forEach(k => { toSave[k] = H[k].slice(-MAX_HIST); });
+    localStorage.setItem(LS_KEY, JSON.stringify(toSave));
+  } catch(e) { console.warn('History save failed:', e.message); }
+}
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    Object.keys(saved).forEach(k => {
+      if (H[k] !== undefined && Array.isArray(saved[k])) {
+        H[k] = saved[k].slice(-MAX_HIST);
+      }
+    });
+    console.log('History restored from localStorage');
+  } catch(e) { console.warn('History load failed:', e.message); }
+}
 
 let insightsLoaded = false;
-let lastHId = '';  // track config changes to reset history
+let lastHId = '';
 
-async function loadInsightsHistory(base, key, devs) {
-  // Only load once per session – history persists in H{}
-  // Reset if Homey ID changed
+async function loadScopInsights(base, key) {
   const currentHId = document.getElementById('homeyId').value.trim();
-  if (lastHId && lastHId !== currentHId) { insightsLoaded = false; Object.keys(H).forEach(k=>H[k]=[]); }
+  if (lastHId && lastHId !== currentHId) {
+    insightsLoaded = false;
+    Object.keys(H).forEach(k => H[k] = []);
+    localStorage.removeItem(LS_KEY);
+  }
   lastHId = currentHId;
   if (insightsLoaded) return;
   try {
-    // 1. Get all insight logs
     const logsRes = await fetch(`${base}/api/manager/insights/log`, {
       headers:{'Authorization':'Bearer '+key}
     });
     if (!logsRes.ok) return;
     const logs = await logsRes.json();
 
-    // Debug: log what insight logs exist for our devices
-    const ourDevNames = INSIGHT_MAP.map(i=>i.dev);
-    const matchingLogs = Object.values(logs).filter(log => {
-      const devId = log.uri?.replace('homey:device:','');
-      return devs.some(d => d.id === devId && ourDevNames.includes(d.name));
-    });
-    console.log(`Insights: found ${Object.keys(logs).length} total logs, ${matchingLogs.length} matching our devices`);
-    matchingLogs.forEach(l => console.log('  log:', l.uri, l.id, l.title));
+    // SCOP er en Logic-variabel med ownerUri=homey:manager:logic og title=SCOP
+    const scopLog = Object.values(logs).find(l =>
+      l.ownerUri === 'homey:manager:logic' &&
+      l.type === 'number' &&
+      l.title === 'SCOP'
+    );
+    if (!scopLog) { console.log('SCOP Insights-logg ikke funnet'); insightsLoaded=true; return; }
 
-    // 2. For each sensor we care about, find matching log and fetch entries
-    for (const item of INSIGHT_MAP) {
-      const dev = devs.find(d => d.name === item.dev);
-      if (!dev) continue;
+    // Hent entries – uri og id er fulle strenger
+    const uri = encodeURIComponent(scopLog.uri);
+    const id  = encodeURIComponent(scopLog.id);
+    const res = await fetch(
+      `${base}/api/manager/insights/log/${uri}/${id}/entry?resolution=last24Hours`,
+      { headers:{'Authorization':'Bearer '+key} }
+    );
+    if (!res.ok) { insightsLoaded=true; return; }
+    const entries = await res.json();
+    if (!Array.isArray(entries) || entries.length === 0) { insightsLoaded=true; return; }
 
-      // Find the insights log for this device + capability
-      // Device Capabilities logs may have id as full capability or just the base part
-      const logKey = Object.keys(logs).find(k => {
-        const log = logs[k];
-        return log.uri === `homey:device:${dev.id}` && (
-          log.id === CAP ||
-          log.id === 'devicecapabilities_number' ||
-          log.id === 'devicecapabilities_number.number1'
-        );
-      });
-      if (!logKey) continue;
+    const insightScop = entries
+      .filter(e => typeof e.v === 'number' && isFinite(e.v))
+      .map(e => r2(e.v));
 
-      const log = logs[logKey];
-      // Try fetching last 24h entries; some Homey versions use different params
-      let entriesRes = await fetch(
-        `${base}/api/manager/insights/log/${encodeURIComponent(log.uri)}/${encodeURIComponent(log.id)}/entry?resolution=last24Hours`,
-        { headers:{'Authorization':'Bearer '+key} }
-      );
-      // Fallback without resolution param if first attempt fails or returns empty
-      if (!entriesRes.ok) {
-        entriesRes = await fetch(
-          `${base}/api/manager/insights/log/${encodeURIComponent(log.uri)}/${encodeURIComponent(log.id)}/entry`,
-          { headers:{'Authorization':'Bearer '+key} }
-        );
-      }
-      if (!entriesRes.ok) continue;
-      const entries = await entriesRes.json();
-
-      // entries is array of {t: ISO timestamp, v: number}
-      if (!Array.isArray(entries)) continue;
-
-      // Fill history array – clear first then load chronologically
-      H[item.hk] = entries
-        .filter(e => typeof e.v === 'number' && isFinite(e.v))
-        .map(e => r1(e.v))
-        .slice(-MAX_HIST);
+    if (insightScop.length > H.scop.length) {
+      H.scop = insightScop.slice(-MAX_HIST);
+      console.log(`SCOP: ${H.scop.length} punkter lastet fra Homey Insights`);
     }
-
     insightsLoaded = true;
-    console.log('Insights history loaded for', Object.keys(H).filter(k=>H[k].length>0).join(', '));
   } catch(e) {
-    console.warn('Insights load failed (non-fatal):', e.message, e);
+    console.warn('SCOP Insights load failed (non-fatal):', e.message);
+    insightsLoaded = true;
   }
+}
 }
 
 async function fetchHomey(){
@@ -803,12 +792,13 @@ async function fetchHomey(){
     if(!res.ok)throw new Error('HTTP '+res.status);
     const devs=Object.values(await res.json());
 
-    // Load insights history on first successful fetch
-    await loadInsightsHistory(base, key, devs);
+    // Load SCOP from Homey Insights (once per session)
+    await loadScopInsights(base, key);
 
     const temps=TANK_SENSORS.map(s=>{const d=devs.find(x=>x.name===s.dev);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null});
     const gv=name=>{const d=devs.find(x=>x.name===name);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null};
     render(temps,{scop:gv(SCOP_DEV),brineIn:gv(BRINE_IN_DEV),brineOut:gv(BRINE_OUT_DEV)});
+    saveHistory();  // persist to localStorage for next session
     document.getElementById('statusTxt').textContent='Live · '+new Date().toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit'});
   }catch(e){
     document.getElementById('statusTxt').textContent='Tilkoblingsfeil';
@@ -818,6 +808,7 @@ async function fetchHomey(){
 
 setInterval(fetchHomey,5*60*1000);
 loadConfig();
+loadHistory();  // restore history from localStorage immediately
 render([58.4,49.2,40.1,33.7,29.3],{scop:3.84,brineIn:8.2,brineOut:2.1});
 document.getElementById('statusTxt').textContent='Demo · Fyll inn tilkobling';
 setTimeout(fetchHomey,500);
