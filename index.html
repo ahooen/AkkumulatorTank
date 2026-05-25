@@ -438,11 +438,13 @@ function buildScene(temps,nibe){
   s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".28"/>`;
   s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#0c4a6e" stroke-width="11" stroke-linecap="round" opacity=".35" transform="translate(0,3)"/>`;
 
-  // Flow arrows
+  // Flow arrows – hot goes tank←VP (left), cold goes tank→VP (right)
   for(let i=0;i<2;i++){
-    const ax=tRX+20+i*50;
-    s+=`<polygon points="${ax},${hotY-4} ${ax+8},${hotY} ${ax},${hotY+4}" fill="#f97316" opacity=".8"/>`;
-    s+=`<polygon points="${ax+8},${coldY-4} ${ax},${coldY} ${ax+8},${coldY+4}" fill="#38bdf8" opacity=".8"/>`;
+    const ax=tRX+25+i*50;
+    // Varm TUR: strøm fra VP mot tank → pil peker venstre
+    s+=`<polygon points="${ax+8},${hotY-4} ${ax},${hotY} ${ax+8},${hotY+4}" fill="#f97316" opacity=".85"/>`;
+    // Kald Retur: strøm fra tank mot VP → pil peker høyre
+    s+=`<polygon points="${ax},${coldY-4} ${ax+8},${coldY} ${ax},${coldY+4}" fill="#38bdf8" opacity=".85"/>`;
   }
 
   // Pipe temp labels between tank and VP
@@ -707,9 +709,14 @@ const INSIGHT_MAP = [
 ];
 
 let insightsLoaded = false;
+let lastHId = '';  // track config changes to reset history
 
 async function loadInsightsHistory(base, key, devs) {
   // Only load once per session – history persists in H{}
+  // Reset if Homey ID changed
+  const currentHId = document.getElementById('homeyId').value.trim();
+  if (lastHId && lastHId !== currentHId) { insightsLoaded = false; Object.keys(H).forEach(k=>H[k]=[]); }
+  lastHId = currentHId;
   if (insightsLoaded) return;
   try {
     // 1. Get all insight logs
@@ -719,24 +726,45 @@ async function loadInsightsHistory(base, key, devs) {
     if (!logsRes.ok) return;
     const logs = await logsRes.json();
 
+    // Debug: log what insight logs exist for our devices
+    const ourDevNames = INSIGHT_MAP.map(i=>i.dev);
+    const matchingLogs = Object.values(logs).filter(log => {
+      const devId = log.uri?.replace('homey:device:','');
+      return devs.some(d => d.id === devId && ourDevNames.includes(d.name));
+    });
+    console.log(`Insights: found ${Object.keys(logs).length} total logs, ${matchingLogs.length} matching our devices`);
+    matchingLogs.forEach(l => console.log('  log:', l.uri, l.id, l.title));
+
     // 2. For each sensor we care about, find matching log and fetch entries
     for (const item of INSIGHT_MAP) {
       const dev = devs.find(d => d.name === item.dev);
       if (!dev) continue;
 
       // Find the insights log for this device + capability
+      // Device Capabilities logs may have id as full capability or just the base part
       const logKey = Object.keys(logs).find(k => {
         const log = logs[k];
-        return log.uri === `homey:device:${dev.id}` &&
-               log.id  === CAP;
+        return log.uri === `homey:device:${dev.id}` && (
+          log.id === CAP ||
+          log.id === 'devicecapabilities_number' ||
+          log.id === 'devicecapabilities_number.number1'
+        );
       });
       if (!logKey) continue;
 
       const log = logs[logKey];
-      const entriesRes = await fetch(
+      // Try fetching last 24h entries; some Homey versions use different params
+      let entriesRes = await fetch(
         `${base}/api/manager/insights/log/${encodeURIComponent(log.uri)}/${encodeURIComponent(log.id)}/entry?resolution=last24Hours`,
         { headers:{'Authorization':'Bearer '+key} }
       );
+      // Fallback without resolution param if first attempt fails or returns empty
+      if (!entriesRes.ok) {
+        entriesRes = await fetch(
+          `${base}/api/manager/insights/log/${encodeURIComponent(log.uri)}/${encodeURIComponent(log.id)}/entry`,
+          { headers:{'Authorization':'Bearer '+key} }
+        );
+      }
       if (!entriesRes.ok) continue;
       const entries = await entriesRes.json();
 
@@ -753,7 +781,7 @@ async function loadInsightsHistory(base, key, devs) {
     insightsLoaded = true;
     console.log('Insights history loaded for', Object.keys(H).filter(k=>H[k].length>0).join(', '));
   } catch(e) {
-    console.warn('Insights load failed (non-fatal):', e.message);
+    console.warn('Insights load failed (non-fatal):', e.message, e);
   }
 }
 
