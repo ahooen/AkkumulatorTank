@@ -257,8 +257,39 @@ function hideTT(){ttTO=setTimeout(()=>document.getElementById('tt').classList.re
 function btt(el,label,hk,unit){
   el.addEventListener('mouseenter',()=>showTT(el,label,hk,unit));
   el.addEventListener('mouseleave',hideTT);
-  el.addEventListener('touchstart',e=>{e.preventDefault();showTT(el,label,hk,unit)},{passive:false});
-  el.addEventListener('touchend',()=>setTimeout(hideTT,2500));
+
+  // Touch: bare vis tooltip ved langt trykk (500ms), ikke ved scroll
+  let touchTimer=null;
+  let touchMoved=false;
+  let touchStartY=0;
+
+  el.addEventListener('touchstart',e=>{
+    touchMoved=false;
+    touchStartY=e.touches[0].clientY;
+    // Vent 500ms – hvis fingeren ikke har beveget seg er det et langt trykk
+    touchTimer=setTimeout(()=>{
+      if(!touchMoved){
+        e.preventDefault();
+        showTT(el,label,hk,unit);
+      }
+    },500);
+  },{passive:true});
+
+  el.addEventListener('touchmove',e=>{
+    // Hvis fingeren beveger seg mer enn 8px er det scroll, ikke trykk
+    const dy=Math.abs(e.touches[0].clientY-touchStartY);
+    if(dy>8){
+      touchMoved=true;
+      clearTimeout(touchTimer);
+      hideTT();
+    }
+  },{passive:true});
+
+  el.addEventListener('touchend',()=>{
+    clearTimeout(touchTimer);
+    // Skjul tooltip etter 3 sekunder
+    setTimeout(hideTT,3000);
+  },{passive:true});
 }
 
 // ═══ SCENE SVG ═══════════════════════════════════════════
