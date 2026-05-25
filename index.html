@@ -39,6 +39,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
   color:#60a5fa;padding:6px 14px;border-radius:8px;font-size:12px;
   font-family:var(--mono);cursor:pointer;display:flex;align-items:center;gap:6px;
   transition:all .2s;white-space:nowrap;font-weight:500;
+  touch-action:manipulation;-webkit-tap-highlight-color:rgba(59,125,248,0.2);
 }
 .rbtn:hover{background:rgba(59,125,248,0.2);border-color:rgba(59,125,248,0.4)}
 .rbtn svg{width:13px;height:13px;flex-shrink:0}
@@ -105,7 +106,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 /* ── CONFIG ── */
 .cfg-section{margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-.cfg-toggle{width:100%;padding:.8rem 1.1rem;background:none;border:none;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
+.cfg-toggle{width:100%;padding:.8rem 1.1rem;background:none;border:none;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;-webkit-tap-highlight-color:rgba(255,255,255,0.1);touch-action:manipulation}
 .cfg-toggle:hover{color:var(--text)}
 .cfg-toggle svg{width:13px;height:13px;flex-shrink:0;transition:transform .2s;color:var(--muted)}
 .cfg-toggle.open svg{transform:rotate(180deg)}
@@ -185,7 +186,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
     </div>
   </div>
   <div class="cfg-section">
-    <button class="cfg-toggle" id="cfgToggle" onclick="toggleCfg()">
+    <button class="cfg-toggle" id="cfgToggle" onclick="toggleCfg()" ontouchend="event.preventDefault();toggleCfg()">
       <span>⚙ Tilkobling · Homey ID og API Key</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
     </button>
@@ -258,27 +259,24 @@ function btt(el,label,hk,unit){
   el.addEventListener('mouseenter',()=>showTT(el,label,hk,unit));
   el.addEventListener('mouseleave',hideTT);
 
-  // Touch: bare vis tooltip ved langt trykk (500ms), ikke ved scroll
+  // Touch: vis tooltip ved langt trykk (600ms), aldri ved scroll
   let touchTimer=null;
   let touchMoved=false;
-  let touchStartY=0;
+  let touchStartX=0, touchStartY=0;
 
   el.addEventListener('touchstart',e=>{
     touchMoved=false;
+    touchStartX=e.touches[0].clientX;
     touchStartY=e.touches[0].clientY;
-    // Vent 500ms – hvis fingeren ikke har beveget seg er det et langt trykk
     touchTimer=setTimeout(()=>{
-      if(!touchMoved){
-        e.preventDefault();
-        showTT(el,label,hk,unit);
-      }
-    },500);
-  },{passive:true});
+      if(!touchMoved) showTT(el,label,hk,unit);
+    },600);
+  },{passive:true});  // passive:true = ikke blokkér scroll
 
   el.addEventListener('touchmove',e=>{
-    // Hvis fingeren beveger seg mer enn 8px er det scroll, ikke trykk
+    const dx=Math.abs(e.touches[0].clientX-touchStartX);
     const dy=Math.abs(e.touches[0].clientY-touchStartY);
-    if(dy>8){
+    if(dx>6||dy>6){
       touchMoved=true;
       clearTimeout(touchTimer);
       hideTT();
@@ -287,7 +285,6 @@ function btt(el,label,hk,unit){
 
   el.addEventListener('touchend',()=>{
     clearTimeout(touchTimer);
-    // Skjul tooltip etter 3 sekunder
     setTimeout(hideTT,3000);
   },{passive:true});
 }
@@ -715,7 +712,10 @@ function render(temps,nibe){
   renderPanels(temps,nibe);
 }
 
-function toggleCfg(){const b=document.getElementById('cfgBody'),t=document.getElementById('cfgToggle');b.classList.toggle('open');t.classList.toggle('open')}
+function toggleCfg(){
+  const b=document.getElementById('cfgBody'),t=document.getElementById('cfgToggle');
+  b.classList.toggle('open');t.classList.toggle('open');
+}
 function sv(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function lv(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function saveConfig(){sv('hId',document.getElementById('homeyId').value.trim());sv('hKey',document.getElementById('apiKey').value.trim())}
@@ -802,7 +802,6 @@ async function loadScopInsights(base, key) {
     console.warn('SCOP Insights load failed (non-fatal):', e.message);
     insightsLoaded = true;
   }
-}
 }
 
 async function fetchHomey(){
