@@ -208,11 +208,13 @@ const TANK_SENSORS=[
   {pct:25, name:'Nedre',  dev:'Akkumulator Sensor Nr.4'},
   {pct:0,  name:'Retur',  dev:'Akkumulator Sensor Nr.5 (Retur)'},
 ];
-const SCOP_DEV='Nibe S1256-8kw';  // enhet med SCOP i devicecapabilities_number.number1
-// Brine-temperaturer: disse enhetene eksisterer ikke ennå i Homey
-// Opprett dem i Homey (Device Capabilities → Number) og skriv verdier fra MyUplink-scriptet
-const BRINE_IN_DEV='Nibe Brine Inn';   // TODO: opprett eller bytt til riktig navn
-const BRINE_OUT_DEV='Nibe Brine Ut';   // TODO: opprett eller bytt til riktig navn
+const SCOP_DEV     = 'Nibe S1256-8kw';
+const BRINE_IN_DEV = 'Nibe Brine Inn';
+const BRINE_OUT_DEV= 'Nibe Brine Ut';
+// Nye virtuelle enheter for NIBE driftsdata (opprett i Homey som Number)
+const NIBE_SUPPLY_DEV = 'Nibe Supply Line';    // BT2 – turtemperatur
+const NIBE_POWER_DEV  = 'Nibe System Power';   // System power consumption
+const NIBE_DHW_DEV    = 'Nibe Hot Water';      // Hot water demand
 const REF=25,KWH=0.5815,MAX_HIST=288;
 const H={topp:[],turVP:[],midt:[],nedre:[],retur:[],snitt:[],energi:[],dtb:[],dvp:[],scop:[],brineIn:[],brineOut:[]};
 function ph(k,v){if(v==null)return;H[k].push(v);if(H[k].length>MAX_HIST)H[k].shift()}
@@ -315,15 +317,33 @@ function buildScene(temps,nibe){
   // Pipe stubs go from flange downward slightly
   const stubTop=flangeY-42;
 
-  // Tank fill: 0% = snitt equals retur (bunn), 100% = snitt equals topp
+  // Tank fill – adapts based on NIBE operating state
+  // System power unit = kW (0.5 = 500W), threshold >0.1 kW = running
+  // VP heating tank = power>0.1 AND supplyLine > returTemp+3°C
+  // VP making DHW   = power>0.1 AND supplyLine ≈ returTemp (heat goes to DHW, not tank)
+  // VP off          = power≤0.1
   const valid=temps.filter(t=>t!==null);
   const snitt=valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:32;
-  const toppT = temps[0]!==null ? temps[0] : snitt+10;
-  const returT = temps[4]!==null ? temps[4] : snitt-10;
-  const tempRange = toppT - returT;
-  const fillFrac = tempRange > 0.5
-    ? Math.min(.96, Math.max(.04, (snitt - returT) / tempRange))
-    : 0.5;  // fallback if sensors equal
+  const returT  = temps[4]!==null ? temps[4] : 25;
+  const turVP   = nibe.supplyLine !== null ? nibe.supplyLine : null;
+  const powerKW = nibe.powerConsumption !== null ? nibe.powerConsumption : 0;
+
+  // VP runs AND supply line is significantly warmer than return → heating tank
+  const vpRunning     = powerKW > 0.1;
+  const heatingTank   = vpRunning && turVP !== null && turVP > (returT + 3);
+
+  let fillFrac;
+  if (heatingTank) {
+    // Dynamic: snitt relative to VP output temperature
+    // 0% = snitt equals retur, 100% = snitt equals turVP
+    const range = turVP - returT;
+    fillFrac = range > 1
+      ? Math.min(.96, Math.max(.04, (snitt - returT) / range))
+      : 0.5;
+  } else {
+    // Static: 25°C = 0%, 40°C = 100%
+    fillFrac = Math.min(.96, Math.max(.04, (snitt - 25) / (40 - 25)));
+  }
   const fill = fillFrac;
   const fillY=tBot-tH*fill;
   const wB=tCol(snitt),wL=lc(wB,55),wD=dc(wB,35),wS=lc(wB,80);
@@ -536,22 +556,28 @@ function buildScene(temps,nibe){
     const ledY = vpY + 148;
     const ledR = 3.4;
 
-    // Color ramp per position (1=red, 2-3=orange, 4-5=yellow, 6-7=lime, 8=bright green)
-    const ledColors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e','#00ffaa'];
+    // LED color based on how many are lit (fraction of max)
+    // All lit = bright green, few lit = red. Each LED gets the color of the final lit level.
+    function ledColor(litFrac) {
+      if (litFrac <= 0)   return '#ef4444';  // 0     = red
+      if (litFrac <= 0.33) return '#f97316'; // 1-2   = orange
+      if (litFrac <= 0.5)  return '#eab308'; // 3     = yellow
+      if (litFrac <= 0.67) return '#84cc16'; // 4     = lime
+      if (litFrac <= 0.83) return '#22c55e'; // 5     = green
+      return '#00ffaa';                       // 6     = bright green
+    }
+    const litFrac = litCount / ledCount;
+    const activeCol = ledColor(litFrac);
 
     for (let i = 0; i < ledCount; i++) {
       const lx = vpX + ledMargin + i * ledSpacing;
       const lit = i < litCount;
-      const col = ledColors[i];
       if (lit) {
-        // Lit: full color + glow effect
-        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="${col}" opacity=".95" filter="url(#glow)"/>`;
-        // Inner bright core
+        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="${activeCol}" opacity=".95" filter="url(#glow)"/>`;
         s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR*0.45}" fill="#fff" opacity=".55"/>`;
       } else {
-        // Unlit: dark with subtle color tint
-        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="${col}" opacity=".12"/>`;
-        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="none" stroke="${col}" stroke-width=".6" opacity=".2"/>`;
+        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="#1a3050" opacity=".6"/>`;
+        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="none" stroke="#2a4a70" stroke-width=".8" opacity=".5"/>`;
       }
     }
   }
@@ -701,13 +727,15 @@ function renderPanels(temps,nibe){
   document.getElementById('statusTxt').textContent='Oppdatert '+new Date().toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
-function render(temps,nibe){
-  ph('topp',temps[0]);ph('turVP',temps[1]);ph('midt',temps[2]);ph('nedre',temps[3]);ph('retur',temps[4]);
-  const v=temps.filter(t=>t!==null);
-  if(v.length){const sn=r1(v.reduce((a,b)=>a+b,0)/v.length);ph('snitt',sn);ph('energi',r1(Math.max(0,KWH*(sn-REF))));}
-  if(temps[0]!==null&&temps[4]!==null)ph('dtb',r1(temps[0]-temps[4]));
-  if(temps[1]!==null&&temps[4]!==null)ph('dvp',r1(temps[1]-temps[4]));
-  ph('scop',nibe.scop);ph('brineIn',nibe.brineIn);ph('brineOut',nibe.brineOut);
+function render(temps,nibe,isLive){
+  if(isLive){
+    ph('topp',temps[0]);ph('turVP',temps[1]);ph('midt',temps[2]);ph('nedre',temps[3]);ph('retur',temps[4]);
+    const v=temps.filter(t=>t!==null);
+    if(v.length){const sn=r1(v.reduce((a,b)=>a+b,0)/v.length);ph('snitt',sn);ph('energi',r1(Math.max(0,KWH*(sn-REF))));}
+    if(temps[0]!==null&&temps[4]!==null)ph('dtb',r1(temps[0]-temps[4]));
+    if(temps[1]!==null&&temps[4]!==null)ph('dvp',r1(temps[1]-temps[4]));
+    ph('scop',nibe.scop);ph('brineIn',nibe.brineIn);ph('brineOut',nibe.brineOut);
+  }
   buildScene(temps,nibe);
   renderPanels(temps,nibe);
 }
@@ -827,8 +855,15 @@ async function fetchHomey(){
 
     const temps=TANK_SENSORS.map(s=>{const d=devs.find(x=>x.name===s.dev);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null});
     const gv=name=>{const d=devs.find(x=>x.name===name);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null};
-    render(temps,{scop:gv(SCOP_DEV),brineIn:gv(BRINE_IN_DEV),brineOut:gv(BRINE_OUT_DEV)});
-    saveHistory();  // persist to localStorage for next session
+    render(temps,{
+      scop:             gv(SCOP_DEV),
+      brineIn:          gv(BRINE_IN_DEV),
+      brineOut:         gv(BRINE_OUT_DEV),
+      supplyLine:       gv(NIBE_SUPPLY_DEV),
+      powerConsumption: gv(NIBE_POWER_DEV),
+      hotWaterDemand:   gv(NIBE_DHW_DEV),
+    }, true);  // isLive=true → push to history
+    saveHistory();
     document.getElementById('statusTxt').textContent='Live · '+new Date().toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit'});
   }catch(e){
     document.getElementById('statusTxt').textContent='Tilkoblingsfeil';
@@ -839,7 +874,7 @@ async function fetchHomey(){
 setInterval(fetchHomey,5*60*1000);
 loadConfig();
 loadHistory();  // restore history from localStorage immediately
-render([58.4,49.2,40.1,33.7,29.3],{scop:3.84,brineIn:8.2,brineOut:2.1});
+render([58.4,49.2,40.1,33.7,29.3],{scop:3.84,brineIn:8.2,brineOut:2.1,supplyLine:55.0,powerConsumption:3.2,hotWaterDemand:0}, false);  // demo, no history (power in kW)
 document.getElementById('statusTxt').textContent='Demo · Fyll inn tilkobling';
 setTimeout(fetchHomey,500);
 </script>
