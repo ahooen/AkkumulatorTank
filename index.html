@@ -2,141 +2,239 @@
 <html lang="nb">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="theme-color" content="#0b1220"/>
+<meta name="apple-mobile-web-app-title" content="Varmesystem"/>
+<meta name="theme-color" content="#08111f"/>
+<meta name="format-detection" content="telephone=no"/>
 <title>Varmesystem</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<!-- Preconnect for faster font load -->
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap&display=swap" rel="stylesheet" media="print" onload="this.media='all'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/></noscript>
 <style>
+/* ── TOKENS ── */
 :root{
-  --bg:#0b1220;--bg2:#0f1828;--card:#141f32;--card2:#192540;
-  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.1);
-  --text:#e2eaf8;--text2:#8ba0c0;--muted:#4a6080;
-  --accent:#3b7df8;--accent2:#00d4b8;
-  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;--r:14px;
+  --bg:#08111f;--s1:#0d1828;--s2:#111f35;--s3:#172440;
+  --b1:rgba(255,255,255,.055);--b2:rgba(255,255,255,.1);
+  --t1:#dce8f8;--t2:#7b96b8;--t3:#3d5878;
+  --acc:#3b7df8;--teal:#00d4b8;
+  --f:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;
+  --m:'JetBrains Mono','SF Mono',ui-monospace,monospace;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,0px);
+  --r:14px;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
-/* ── NO HEADER – floating refresh button in bottom-right corner ── */
-/* ── STICKY HEADER ── */
+/* ── RESET ── */
+*{box-sizing:border-box;margin:0;padding:0;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none}
+html{background:var(--bg);height:-webkit-fill-available}
+body{font-family:var(--f);color:var(--t1);
+  min-height:100svh;min-height:-webkit-fill-available;
+  -webkit-font-smoothing:antialiased;
+  -webkit-text-size-adjust:100%;
+  overflow-x:hidden;overscroll-behavior-y:contain}
+
+/* ── HEADER ── */
 .hdr{
-  background:rgba(11,18,32,0.96);
-  border-bottom:1px solid var(--border);
-  padding:env(safe-area-inset-top,0) 0 0;
-}
-.hdr-inner{
-  max-width:1100px;margin:0 auto;
-  padding:.6rem 1rem;
-  display:flex;align-items:center;justify-content:space-between;gap:10px;
-}
-.hdr-status{font-size:11px;color:var(--muted);font-family:var(--mono)}
-.rbtn{
-  background:rgba(59,125,248,0.1);
-  border:1px solid rgba(59,125,248,0.25);
-  color:#60a5fa;padding:6px 14px;border-radius:8px;font-size:12px;
-  font-family:var(--mono);cursor:pointer;display:flex;align-items:center;gap:6px;
-  transition:all .2s;white-space:nowrap;font-weight:500;
-  touch-action:manipulation;-webkit-tap-highlight-color:rgba(59,125,248,0.2);
-}
-.rbtn:hover{background:rgba(59,125,248,0.2);border-color:rgba(59,125,248,0.4)}
-.rbtn svg{width:13px;height:13px;flex-shrink:0}
+  background:rgba(8,17,31,.97);
+  backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid var(--b1);
+  padding-top:var(--safe-top);
+  position:relative;z-index:10}
+.hdr-i{
+  display:flex;align-items:center;
+  justify-content:space-between;gap:8px;
+  padding:.55rem 1rem}
+.hdr-s{font:500 11px/1 var(--m);color:var(--t3);
+  transition:color .3s}
+.hdr-s.live{color:#22c55e}
+.hdr-s.err{color:#f87171}
 
-.spin{animation:spin .9s linear infinite}
+/* ── BUTTON ── */
+.btn{
+  background:rgba(59,125,248,.1);
+  border:1px solid rgba(59,125,248,.25);
+  color:#60a5fa;padding:6px 13px;
+  border-radius:8px;font:500 12px/1 var(--m);
+  cursor:pointer;display:flex;align-items:center;gap:6px;
+  touch-action:manipulation;
+  transition:background .12s,transform .1s;
+  user-select:none;-webkit-user-select:none}
+.btn:active{background:rgba(59,125,248,.25);transform:scale(.97)}
+.btn svg{width:13px;height:13px;flex-shrink:0}
+.spin{animation:spin .75s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.wrap{max-width:1100px;margin:0 auto;padding:.8rem 1rem 4rem}
+/* ── SCROLL AREA ── */
+.wrap{
+  padding:.7rem 1rem calc(1.5rem + var(--safe-bot));
+  max-width:960px;margin:0 auto}
 
-/* ── DIAGRAM ── */
-.diagram-wrap{
-  background:linear-gradient(135deg,#0d1930,#0a1422 50%,#0d1930);
-  border:1px solid var(--border);border-radius:18px;
-  overflow:hidden;
-  position:relative;margin-bottom:1rem;
-}
-.diagram-wrap::before{
+/* ── SCENE ── */
+.scene{
+  background:linear-gradient(160deg,#0c1a30,#08111f 55%,#0c1a30);
+  border:1px solid var(--b1);border-radius:16px;
+  overflow:hidden;position:relative;
+  margin-bottom:.85rem}
+.scene::before{
   content:'';position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(ellipse at 12% 50%,rgba(59,125,248,0.06) 0%,transparent 50%),
-             radial-gradient(ellipse at 88% 50%,rgba(0,212,184,0.05) 0%,transparent 50%);
-}
-#sceneSvg{display:block;width:100%;height:auto}
+  background:
+    radial-gradient(ellipse at 12% 50%,rgba(59,125,248,.06) 0,transparent 50%),
+    radial-gradient(ellipse at 88% 50%,rgba(0,212,184,.05) 0,transparent 50%)}
+#svg{width:100%;height:auto;display:block;
+  /* Prevent text selection on long-press */
+  -webkit-user-select:none;user-select:none}
 
 /* ── GRID ── */
-.grid{display:grid;gap:.85rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-.panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.1rem}
-.panel-hdr{display:flex;align-items:center;gap:7px;margin-bottom:.8rem}
-.panel-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
-.panel-title{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
-.srow{display:flex;align-items:center;gap:9px;padding:6px 6px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;border-radius:6px;transition:background .15s}
-.srow:last-child{border-bottom:none}
-.srow:hover{background:rgba(255,255,255,0.03)}
-.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.spct{font-size:10px;font-family:var(--mono);color:var(--muted);width:26px;text-align:right;flex-shrink:0}
-.sname{font-size:12px;color:var(--text2);flex:1}
-.sval{font-size:13px;font-weight:500;font-family:var(--mono);color:var(--text)}
-.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-.mc{background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;cursor:pointer;transition:border-color .2s}
-.mc:hover{border-color:var(--border2)}
-.mc-label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
-.mc-val{font-size:19px;font-weight:600;font-family:var(--mono);color:var(--text);line-height:1}
-.mc-unit{font-size:10px;color:var(--muted);margin-left:2px;font-weight:400}
-.scop-card{background:linear-gradient(135deg,rgba(0,212,184,0.08),rgba(0,212,184,0.02));border:1px solid rgba(0,212,184,0.18);border-radius:9px;padding:12px 13px;display:flex;align-items:center;gap:12px;margin-bottom:7px;cursor:pointer;transition:border-color .2s}
-.scop-card:hover{border-color:rgba(0,212,184,0.32)}
-.scop-icon{width:40px;height:40px;border-radius:9px;background:rgba(0,212,184,0.1);border:1px solid rgba(0,212,184,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
-.scop-label{font-size:9px;font-weight:600;color:#00d4b8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
-.scop-num{font-size:26px;font-weight:700;font-family:var(--mono);color:#00d4b8;line-height:1}
-.scop-sub{font-size:10px;color:var(--muted);margin-top:2px}
-.brine-row{display:flex;gap:7px}
-.bpill{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;cursor:pointer;transition:border-color .2s}
-.bpill:hover{border-color:var(--border2)}
-.bpill-label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
-.bpill-val{font-size:16px;font-weight:600;font-family:var(--mono);color:var(--accent2)}
-.bpill-unit{font-size:9px;color:var(--muted)}
+.grid{display:grid;gap:.7rem;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+
+/* ── PANEL ── */
+.panel{background:var(--s1);border:1px solid var(--b1);
+  border-radius:var(--r);padding:.85rem .95rem}
+.ph{display:flex;align-items:center;gap:6px;margin-bottom:.7rem}
+.phd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.pt{font:600 9px/1 var(--f);color:var(--t3);
+  letter-spacing:.12em;text-transform:uppercase}
+
+/* ── SENSOR ROWS ── */
+.sr{display:flex;align-items:center;gap:9px;
+  padding:5.5px 4px;
+  border-bottom:1px solid rgba(255,255,255,.032);
+  border-radius:6px;cursor:pointer;
+  touch-action:manipulation;transition:background .1s}
+.sr:last-child{border-bottom:none}
+.sr:active{background:rgba(255,255,255,.045)}
+.sd{width:7px;height:7px;border-radius:50%;flex-shrink:0;
+  transition:box-shadow .4s}
+.sp{font:400 10px/1 var(--m);color:var(--t3);
+  width:26px;text-align:right;flex-shrink:0}
+.sn{font:400 12px/1 var(--f);color:var(--t2);flex:1}
+.sv{font:500 14px/1 var(--m);color:var(--t1)}
+
+/* ── METRIC CARDS ── */
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.mc{background:var(--s2);border:1px solid var(--b1);
+  border-radius:10px;padding:10px 11px;
+  cursor:pointer;touch-action:manipulation;
+  transition:border-color .12s}
+.mc:active{border-color:var(--b2)}
+.ml{font:600 9px/1 var(--f);color:var(--t3);
+  letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.mv{font:600 19px/1 var(--m);color:var(--t1)}
+.mu{font:400 10px/1 var(--m);color:var(--t3);margin-left:2px}
+
+/* ── SCOP CARD ── */
+.scop-c{
+  background:linear-gradient(135deg,
+    rgba(0,212,184,.09),rgba(0,212,184,.02));
+  border:1px solid rgba(0,212,184,.17);
+  border-radius:10px;padding:12px 13px;
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:7px;cursor:pointer;
+  touch-action:manipulation;
+  transition:border-color .12s}
+.scop-c:active{border-color:rgba(0,212,184,.35)}
+.scop-i{width:40px;height:40px;border-radius:9px;flex-shrink:0;
+  background:rgba(0,212,184,.1);
+  border:1px solid rgba(0,212,184,.18);
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px}
+.scop-l{font:600 9px/1 var(--f);color:var(--teal);
+  letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+.scop-v{font:700 26px/1 var(--m);color:var(--teal)}
+.scop-m{font:400 11px/1 var(--f);color:var(--t2);margin-top:4px}
+
+/* ── BRINE PILLS ── */
+.br{display:flex;gap:6px}
+.bp{flex:1;background:var(--s2);border:1px solid var(--b1);
+  border-radius:10px;padding:9px 11px;
+  cursor:pointer;touch-action:manipulation;
+  transition:border-color .12s}
+.bp:active{border-color:var(--b2)}
+.bl{font:600 9px/1 var(--f);color:var(--t3);
+  letter-spacing:.09em;text-transform:uppercase;margin-bottom:3px}
+.bv{font:600 16px/1 var(--m);color:var(--teal)}
+.bu{font:400 9px/1 var(--m);color:var(--t3)}
 
 /* ── TOOLTIP ── */
-.tt{position:fixed;z-index:999;background:#1a2840;border:1px solid rgba(255,255,255,0.11);border-radius:11px;padding:11px 13px;min-width:185px;max-width:215px;pointer-events:none;opacity:0;transition:opacity .15s;box-shadow:0 12px 40px rgba(0,0,0,0.55)}
-.tt.show{opacity:1}
-.tt-title{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
-.tt-val{font-size:19px;font-weight:600;font-family:var(--mono);color:var(--text);margin-bottom:9px}
-.tt-svg{width:100%;height:44px;display:block}
-.tt-range{font-size:9px;font-family:var(--mono);color:var(--muted);display:flex;justify-content:space-between;margin-top:3px}
-.tt-hint{font-size:9px;color:var(--muted);text-align:center;margin-top:5px;opacity:.65}
+.tt{position:fixed;z-index:999;
+  background:#16243e;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;padding:11px 13px;
+  min-width:178px;pointer-events:none;
+  opacity:0;transition:opacity .14s;
+  box-shadow:0 16px 48px rgba(0,0,0,.65)}
+.tt.on{opacity:1}
+.tt-t{font:600 9px/1 var(--f);color:var(--t3);
+  text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.tt-v{font:600 19px/1 var(--m);color:var(--t1);margin-bottom:9px}
+.tt-g{width:100%;height:40px;display:block}
+.tt-r{display:flex;justify-content:space-between;
+  margin-top:3px;font:400 9px/1 var(--m);color:var(--t3)}
+.tt-h{font:400 9px/1 var(--f);color:var(--t3);
+  text-align:center;margin-top:5px;opacity:.6}
 
 /* ── CONFIG ── */
-.cfg-section{margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-.cfg-toggle{width:100%;padding:.8rem 1.1rem;background:none;border:none;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left;-webkit-tap-highlight-color:rgba(255,255,255,0.1);touch-action:manipulation}
-.cfg-toggle:hover{color:var(--text)}
-.cfg-toggle svg{width:13px;height:13px;flex-shrink:0;transition:transform .2s;color:var(--muted)}
-.cfg-toggle.open svg{transform:rotate(180deg)}
-.cfg-body{display:none;padding:0 1.1rem 1.1rem;border-top:1px solid var(--border)}
-.cfg-body.open{display:block}
-.cfg-field{display:flex;flex-direction:column;gap:4px;margin-top:.8rem}
-.cfg-label{font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.06em}
-.cfg-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 10px;outline:none;transition:border-color .2s;width:100%}
-.cfg-input:focus{border-color:rgba(59,125,248,0.5)}
-.cfg-hint{font-size:11px;color:var(--muted);margin-top:.7rem;line-height:1.6;padding-top:.7rem;border-top:1px solid var(--border)}
-.errmsg{font-size:11px;font-family:var(--mono);color:#f87171;padding:.65rem 1.1rem;display:none;line-height:1.6;background:rgba(248,113,113,0.05);border-top:1px solid rgba(248,113,113,0.12)}
+.cfg{background:var(--s1);border:1px solid var(--b1);
+  border-radius:var(--r);overflow:hidden;margin-top:.7rem}
+.cft{width:100%;padding:.75rem .95rem;background:none;border:none;
+  color:var(--t2);font:400 12px/1 var(--f);
+  cursor:pointer;display:flex;align-items:center;
+  justify-content:space-between;gap:8px;text-align:left;
+  touch-action:manipulation;-webkit-user-select:none}
+.cft svg{width:13px;height:13px;color:var(--t3);
+  flex-shrink:0;transition:transform .2s}
+.cft.open svg{transform:rotate(180deg)}
+.cfb{display:none;padding:0 .95rem .95rem;
+  border-top:1px solid var(--b1)}
+.cfb.open{display:block}
+.cff{display:flex;flex-direction:column;gap:4px;margin-top:.7rem}
+.cfl{font:500 10px/1 var(--f);color:var(--t3);letter-spacing:.06em}
+.cfi{background:var(--bg);border:1px solid var(--b1);
+  border-radius:8px;color:var(--t1);
+  font:400 12px/1 var(--m);padding:8px 10px;
+  outline:none;width:100%;
+  /* Prevent iOS zoom on input focus */
+  font-size:16px;
+  transition:border-color .2s}
+.cfi:focus{border-color:rgba(59,125,248,.5)}
+.cfh{font:400 11px/1.6 var(--f);color:var(--t3);
+  margin-top:.7rem;padding-top:.7rem;
+  border-top:1px solid var(--b1)}
+.err{font:400 11px/1.6 var(--m);color:#f87171;
+  padding:.6rem .95rem;display:none;
+  background:rgba(248,113,113,.05);
+  border-top:1px solid rgba(248,113,113,.12)}
 
-@media(max-width:430px){
-  .wrap{padding:.5rem .75rem 4rem}
-  .grid{grid-template-columns:1fr;gap:.65rem}
-  .mc-val{font-size:16px}
-  .scop-num{font-size:20px}
-  .hdr-inner{padding:.5rem .85rem}
-  .panel{padding:.85rem .95rem}
+/* ── RESPONSIVE ── */
+@media(max-width:390px){
+  .wrap{padding:.6rem .75rem calc(1.5rem + var(--safe-bot))}
+  .mv{font-size:17px}.scop-v{font-size:22px}.bv{font-size:15px}
+  .panel,.cfg{border-radius:12px}
+}
+@media(prefers-color-scheme:light){
+  /* Keep dark – this is an intentional dark UI */
+  :root{color-scheme:dark}
 }
 </style>
 </head>
 <body>
 
 <div class="hdr">
-  <div class="hdr-inner">
-    <span class="hdr-status" id="statusTxt">Klar</span>
-    <button class="rbtn" onclick="fetchHomey()" id="refreshBtn">
-      <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
+  <div class="hdr-i">
+    <span class="hdr-s" id="sts">Klar</span>
+    <button class="btn" id="rbtn" onclick="doFetch()">
+      <svg id="rico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5
+                 M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
       </svg>
       Oppdater
     </button>
@@ -144,739 +242,1041 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 </div>
 
 <div class="tt" id="tt">
-  <div class="tt-title" id="ttTitle"></div>
-  <div class="tt-val"   id="ttVal"></div>
-  <svg class="tt-svg" id="ttSvg" viewBox="0 0 170 44" preserveAspectRatio="none"></svg>
-  <div class="tt-range"><span id="ttMin"></span><span id="ttMax"></span></div>
-  <div class="tt-hint">Siste 24 timer</div>
+  <div class="tt-t" id="ttt"></div>
+  <div class="tt-v" id="ttv"></div>
+  <svg class="tt-g" id="ttg"
+       viewBox="0 0 170 40" preserveAspectRatio="none"></svg>
+  <div class="tt-r">
+    <span id="ttn"></span><span id="ttx"></span>
+  </div>
+  <div class="tt-h" id="tth"></div>
 </div>
 
 <div class="wrap">
-  <div class="diagram-wrap">
-    <svg id="sceneSvg" viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="scene">
+    <svg id="svg" viewBox="0 0 680 355"
+         xmlns="http://www.w3.org/2000/svg"
+         preserveAspectRatio="xMidYMid meet"
+         aria-hidden="true"></svg>
   </div>
+
   <div class="grid">
+    <!-- Tank levels -->
     <div class="panel">
-      <div class="panel-hdr"><div class="panel-dot" style="background:#3b7df8"></div><div class="panel-title">Akkumulatortank · 500 L</div></div>
-      <div id="tankRows"></div>
-    </div>
-    <div class="panel">
-      <div class="panel-hdr"><div class="panel-dot" style="background:#60a5fa"></div><div class="panel-title">Tanknøkkeltall</div></div>
-      <div class="mgrid">
-        <div class="mc" id="mc-snitt"><div class="mc-label">Snitt</div><div class="mc-val" id="vSnitt">–<span class="mc-unit">°C</span></div></div>
-        <div class="mc" id="mc-energi"><div class="mc-label">Energi</div><div class="mc-val" id="vEnergi">–<span class="mc-unit">kWh</span></div></div>
-        <div class="mc" id="mc-dtb"><div class="mc-label">ΔT Topp–Bunn</div><div class="mc-val" id="vDTB">–<span class="mc-unit">K</span></div></div>
-        <div class="mc" id="mc-dvp"><div class="mc-label">ΔT VP</div><div class="mc-val" id="vDVP">–<span class="mc-unit">K</span></div></div>
+      <div class="ph">
+        <div class="phd" style="background:#3b7df8"></div>
+        <div class="pt">Akkumulatortank · 500 L</div>
       </div>
+      <div id="rows"></div>
     </div>
+
+    <!-- Tank metrics -->
     <div class="panel">
-      <div class="panel-hdr"><div class="panel-dot" style="background:#00d4b8"></div><div class="panel-title">NIBE S1256 · 8 kW</div></div>
-      <div class="scop-card" id="mc-scop">
-        <div class="scop-icon">⚡</div>
-        <div>
-          <div class="scop-label">Årsytelse SCOP</div>
-          <div class="scop-num" id="vSCOP">–</div>
-          <div class="scop-sub">kWh produsert / kWh forbrukt</div>
+      <div class="ph">
+        <div class="phd" style="background:#60a5fa"></div>
+        <div class="pt">Tanknøkkeltall</div>
+      </div>
+      <div class="mg">
+        <div class="mc" id="mSnitt">
+          <div class="ml">Snitt</div>
+          <div class="mv" id="vSnitt">–<span class="mu">°C</span></div>
+        </div>
+        <div class="mc" id="mEnergi">
+          <div class="ml">Energi</div>
+          <div class="mv" id="vEnergi">–<span class="mu">kWh</span></div>
+        </div>
+        <div class="mc" id="mDtb">
+          <div class="ml">ΔT Topp–Bunn</div>
+          <div class="mv" id="vDtb">–<span class="mu">K</span></div>
+        </div>
+        <div class="mc" id="mDvp">
+          <div class="ml">ΔT VP</div>
+          <div class="mv" id="vDvp">–<span class="mu">K</span></div>
         </div>
       </div>
-      <div class="brine-row">
-        <div class="bpill" id="mc-brineIn"><div class="bpill-label">Brine inn · BT10</div><div class="bpill-val" id="vBrineIn">–<span class="bpill-unit"> °C</span></div></div>
-        <div class="bpill" id="mc-brineOut"><div class="bpill-label">Brine ut · BT11</div><div class="bpill-val" id="vBrineOut">–<span class="bpill-unit"> °C</span></div></div>
+    </div>
+
+    <!-- NIBE -->
+    <div class="panel">
+      <div class="ph">
+        <div class="phd" style="background:#00d4b8"></div>
+        <div class="pt">NIBE S1256 · 8 kW</div>
+      </div>
+      <div class="scop-c" id="mScop">
+        <div class="scop-i">⚡</div>
+        <div>
+          <div class="scop-l">Årsytelse SCOP</div>
+          <div class="scop-v" id="vScop">–</div>
+          <div class="scop-m" id="vMod">–</div>
+        </div>
+      </div>
+      <div class="br">
+        <div class="bp" id="mBrineIn">
+          <div class="bl">Brine inn · BT10</div>
+          <div class="bv" id="vBrineIn">–<span class="bu"> °C</span></div>
+        </div>
+        <div class="bp" id="mBrineOut">
+          <div class="bl">Brine ut · BT11</div>
+          <div class="bv" id="vBrineOut">–<span class="bu"> °C</span></div>
+        </div>
       </div>
     </div>
   </div>
-  <div class="cfg-section">
-    <button class="cfg-toggle" id="cfgToggle" onclick="toggleCfg()" ontouchend="event.preventDefault();toggleCfg()">
+
+  <div class="cfg">
+    <button class="cft" id="cft"
+      onclick="tCfg()"
+      ontouchend="event.preventDefault();tCfg()">
       <span>⚙ Tilkobling · Homey ID og API Key</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
     </button>
-    <div class="cfg-body" id="cfgBody">
-      <div class="cfg-field"><label class="cfg-label">Homey ID</label><input class="cfg-input" id="homeyId" type="text" placeholder="abc123.connect.athom.com" autocomplete="off"/></div>
-      <div class="cfg-field"><label class="cfg-label">API Key</label><input class="cfg-input" id="apiKey" type="password" placeholder="Lim inn API Key" autocomplete="off"/></div>
-      <div class="cfg-hint">Finn <strong style="color:#94a3b8">Homey ID</strong> og lag <strong style="color:#94a3b8">API Key</strong> på <a href="https://my.homey.app" target="_blank" style="color:#60a5fa;text-decoration:none">my.homey.app</a> → Innstillinger → API Keys → Opprett ny (kun <em>Devices: Read</em>).</div>
+    <div class="cfb" id="cfb">
+      <div class="cff">
+        <label class="cfl" for="hid">Homey ID</label>
+        <input class="cfi" id="hid" type="text"
+               inputmode="url" autocomplete="off" spellcheck="false"
+               autocorrect="off" autocapitalize="none"
+               placeholder="abc123.connect.athom.com"/>
+      </div>
+      <div class="cff">
+        <label class="cfl" for="hkey">API Key</label>
+        <input class="cfi" id="hkey" type="password"
+               autocomplete="current-password"
+               placeholder="Lim inn API Key"/>
+      </div>
+      <div class="cfh">
+        Finn på
+        <a href="https://my.homey.app" target="_blank" rel="noopener"
+           style="color:#60a5fa;text-decoration:none">my.homey.app</a>
+        → Innstillinger → API Keys → Opprett ny
+        (kun <em>Devices: Read</em>).
+      </div>
     </div>
-    <div class="errmsg" id="errMsg"></div>
+    <div class="err" id="err"></div>
   </div>
 </div>
 
 <script>
-const CAP='devicecapabilities_number.number1';
-const TANK_SENSORS=[
-  {pct:100,name:'Topp',   dev:'Akkumulator Sensor Nr.1 (Øverst)'},
-  {pct:75, name:'Tur VP', dev:'Akkumulator Sensor Nr.2 (Tur fra VP)'},
-  {pct:50, name:'Midt',   dev:'Akkumulator Sensor Nr.3'},
-  {pct:25, name:'Nedre',  dev:'Akkumulator Sensor Nr.4'},
-  {pct:0,  name:'Retur',  dev:'Akkumulator Sensor Nr.5 (Retur)'},
+'use strict';
+
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const CAP = 'devicecapabilities_number.number1';
+
+const SENSORS = [
+  {pct:100, name:'Topp',   dev:'Akkumulator Sensor Nr.1 (Øverst)'},
+  {pct:75,  name:'Tur VP', dev:'Akkumulator Sensor Nr.2 (Tur fra VP)'},
+  {pct:50,  name:'Midt',   dev:'Akkumulator Sensor Nr.3'},
+  {pct:25,  name:'Nedre',  dev:'Akkumulator Sensor Nr.4'},
+  {pct:0,   name:'Retur',  dev:'Akkumulator Sensor Nr.5 (Retur)'},
 ];
-const SCOP_DEV     = 'Nibe S1256-8kw';
-const BRINE_IN_DEV = 'Nibe Brine Inn';
-const BRINE_OUT_DEV= 'Nibe Brine Ut';
-// Nye virtuelle enheter for NIBE driftsdata (opprett i Homey som Number)
-const NIBE_SUPPLY_DEV = 'Nibe Supply Line';    // BT2 – turtemperatur
-const NIBE_POWER_DEV  = 'Nibe System Power';   // System power consumption
-const NIBE_DHW_DEV    = 'Nibe Hot Water';      // Hot water demand
-const REF=25,KWH=0.5815,MAX_HIST=288;
-const H={topp:[],turVP:[],midt:[],nedre:[],retur:[],snitt:[],energi:[],dtb:[],dvp:[],scop:[],brineIn:[],brineOut:[]};
-function ph(k,v){if(v==null)return;H[k].push(v);if(H[k].length>MAX_HIST)H[k].shift()}
-function r1(v){return Math.round(v*10)/10}
-function r2(v){return Math.round(v*100)/100}
 
-function tCol(t){
-  if(t===null)return'#2a3a50';
-  const s=[{v:0,c:[56,189,248]},{v:25,c:[52,211,153]},{v:40,c:[251,146,60]},{v:58,c:[239,68,68]},{v:75,c:[153,27,27]}];
-  let a=s[0],b=s[s.length-1];
-  for(let i=0;i<s.length-1;i++){if(t>=s[i].v&&t<s[i+1].v){a=s[i];b=s[i+1];break}}
-  const f=Math.min(1,Math.max(0,(t-a.v)/(b.v-a.v)));
-  return`rgb(${Math.round(a.c[0]+(b.c[0]-a.c[0])*f)},${Math.round(a.c[1]+(b.c[1]-a.c[1])*f)},${Math.round(a.c[2]+(b.c[2]-a.c[2])*f)})`;
+const DEV = {
+  scop    : 'Nibe S1256-8kw',
+  brineIn : 'Nibe Brine Inn',
+  brineOut: 'Nibe Brine Ut',
+  supply  : 'Nibe Supply Line',
+  power   : 'Nibe System Power',
+  hotWater: 'Nibe Hot Water',
+};
+
+const REF = 25, KWH = 0.5815;
+const MAX_PTS = 48;   // ~4 hours at 5-min intervals
+const LS_KEY  = 'vs4';
+
+// ═══════════════════════════════════════════
+// HISTORY  (localStorage persistence)
+// ═══════════════════════════════════════════
+const H = {
+  t100:[], t75:[], t50:[], t25:[], t0:[],
+  snitt:[], energi:[], dtb:[], dvp:[],
+  scop:[], brineIn:[], brineOut:[],
+};
+
+const r1 = v => Math.round(v * 10) / 10;
+const r2 = v => Math.round(v * 100) / 100;
+
+function ph(k, v) {
+  if (v == null || !isFinite(v)) return;
+  H[k].push(r1(v));
+  if (H[k].length > MAX_PTS) H[k].shift();
 }
-function lc(c,a){const m=c.match(/\d+/g).map(Number);return`rgb(${Math.min(255,m[0]+a)},${Math.min(255,m[1]+a)},${Math.min(255,m[2]+a)})`}
-function dc(c,a){const m=c.match(/\d+/g).map(Number);return`rgb(${Math.max(0,m[0]-a)},${Math.max(0,m[1]-a)},${Math.max(0,m[2]-a)})`}
 
-// TOOLTIP
-let ttTO;
-function showTT(el,label,hk,unit){
-  const data=H[hk]||[],last=data.length?data[data.length-1]:null;
-  const tt=document.getElementById('tt');
-  document.getElementById('ttTitle').textContent=label;
-  document.getElementById('ttVal').textContent=last!=null?last+' '+unit:'–';
-  const svg=document.getElementById('ttSvg');
-  if(data.length>2){
-    const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||1;
-    const pts=data.map((v,i)=>`${(i/(data.length-1))*170},${44-((v-mn)/rng)*36-4}`).join(' ');
-    document.getElementById('ttMin').textContent=Math.min(...data).toFixed(1)+unit;
-    document.getElementById('ttMax').textContent=Math.max(...data).toFixed(1)+unit;
-    svg.innerHTML=`<defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b7df8" stop-opacity=".3"/><stop offset="100%" stop-color="#3b7df8" stop-opacity="0"/></linearGradient></defs><polygon points="0,44 ${pts} 170,44" fill="url(#tg)"/><polyline points="${pts}" fill="none" stroke="#3b7df8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`;
-  }else{
-    document.getElementById('ttMin').textContent='';document.getElementById('ttMax').textContent='';
-    svg.innerHTML=`<text x="85" y="26" text-anchor="middle" font-size="9" fill="#4a6080" font-family="monospace">Samler data…</text>`;
+function savH() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(H)); } catch(_) {}
+}
+
+function lodH() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    Object.keys(H).forEach(k => {
+      if (Array.isArray(d[k])) H[k] = d[k].slice(-MAX_PTS);
+    });
+  } catch(_) {}
+}
+
+// ═══════════════════════════════════════════
+// COLOR HELPERS
+// ═══════════════════════════════════════════
+const TEMP_STOPS = [
+  {v:0,  c:[56,189,248]},
+  {v:25, c:[52,211,153]},
+  {v:40, c:[251,146,60]},
+  {v:58, c:[239,68,68]},
+  {v:75, c:[153,27,27]},
+];
+
+function tCol(t) {
+  if (t == null) return '#2a3a50';
+  let a = TEMP_STOPS[0], b = TEMP_STOPS[TEMP_STOPS.length - 1];
+  for (let i = 0; i < TEMP_STOPS.length - 1; i++) {
+    if (t >= TEMP_STOPS[i].v && t < TEMP_STOPS[i+1].v) {
+      a = TEMP_STOPS[i]; b = TEMP_STOPS[i+1]; break;
+    }
   }
-  const r=el.getBoundingClientRect();
-  let lx=r.left+window.scrollX+r.width/2-97,ty=r.top+window.scrollY-136;
-  if(ty<60)ty=r.bottom+window.scrollY+8;
-  if(lx<6)lx=6;if(lx+212>window.innerWidth)lx=window.innerWidth-218;
-  tt.style.left=lx+'px';tt.style.top=ty+'px';tt.classList.add('show');clearTimeout(ttTO);
+  const f = Math.min(1, Math.max(0, (t - a.v) / (b.v - a.v)));
+  return `rgb(${Math.round(a.c[0]+(b.c[0]-a.c[0])*f)},`
+       + `${Math.round(a.c[1]+(b.c[1]-a.c[1])*f)},`
+       + `${Math.round(a.c[2]+(b.c[2]-a.c[2])*f)})`;
 }
-function hideTT(){ttTO=setTimeout(()=>document.getElementById('tt').classList.remove('show'),400)}
-function btt(el,label,hk,unit){
-  el.addEventListener('mouseenter',()=>showTT(el,label,hk,unit));
-  el.addEventListener('mouseleave',hideTT);
 
-  // Touch: vis tooltip ved langt trykk (600ms), aldri ved scroll
-  let touchTimer=null;
-  let touchMoved=false;
-  let touchStartX=0, touchStartY=0;
+const lc = (c, a) => { const m = c.match(/\d+/g).map(Number);
+  return `rgb(${Math.min(255,m[0]+a)},${Math.min(255,m[1]+a)},${Math.min(255,m[2]+a)})`; };
+const dc = (c, a) => { const m = c.match(/\d+/g).map(Number);
+  return `rgb(${Math.max(0,m[0]-a)},${Math.max(0,m[1]-a)},${Math.max(0,m[2]-a)})`; };
 
-  el.addEventListener('touchstart',e=>{
-    touchMoved=false;
-    touchStartX=e.touches[0].clientX;
-    touchStartY=e.touches[0].clientY;
-    touchTimer=setTimeout(()=>{
-      if(!touchMoved) showTT(el,label,hk,unit);
-    },600);
-  },{passive:true});  // passive:true = ikke blokkér scroll
+// ═══════════════════════════════════════════
+// TOOLTIP
+// ═══════════════════════════════════════════
+let _ttTO = null;
 
-  el.addEventListener('touchmove',e=>{
-    const dx=Math.abs(e.touches[0].clientX-touchStartX);
-    const dy=Math.abs(e.touches[0].clientY-touchStartY);
-    if(dx>6||dy>6){
-      touchMoved=true;
-      clearTimeout(touchTimer);
+function showTT(el, label, hk, unit) {
+  const data = H[hk] || [];
+  const last = data.length ? data[data.length - 1] : null;
+  document.getElementById('ttt').textContent = label;
+  document.getElementById('ttv').textContent = last != null ? `${last} ${unit}` : '–';
+
+  const g = document.getElementById('ttg');
+  const n = data.length;
+
+  if (n > 2) {
+    const mn = Math.min(...data), mx = Math.max(...data), rng = mx - mn || 1;
+    const pts = data.map((v, i) =>
+      `${(i/(n-1))*170},${40 - ((v-mn)/rng)*34 - 3}`).join(' ');
+    document.getElementById('ttn').textContent = mn.toFixed(1) + unit;
+    document.getElementById('ttx').textContent = mx.toFixed(1) + unit;
+    document.getElementById('tth').textContent =
+      `${n} målinger · siste ${Math.round(n*5/60*10)/10}t`;
+    g.innerHTML = `<defs>
+      <linearGradient id="gg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#3b7df8" stop-opacity=".25"/>
+        <stop offset="100%" stop-color="#3b7df8" stop-opacity="0"/>
+      </linearGradient></defs>
+      <polygon points="0,40 ${pts} 170,40" fill="url(#gg)"/>
+      <polyline points="${pts}" fill="none" stroke="#3b7df8"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+  } else {
+    document.getElementById('ttn').textContent = '';
+    document.getElementById('ttx').textContent = '';
+    document.getElementById('tth').textContent =
+      n === 0 ? 'Ingen data ennå' : `${n}/3 målinger – holder på…`;
+    g.innerHTML = `<text x="85" y="23" text-anchor="middle"
+      font-size="9" fill="#3d5878" font-family="monospace">Samler data…</text>`;
+  }
+
+  const r = el.getBoundingClientRect();
+  let lx = r.left + window.scrollX + r.width / 2 - 89;
+  let ty = r.top + window.scrollY - 148;
+  if (ty < 60) ty = r.bottom + window.scrollY + 8;
+  if (lx < 6) lx = 6;
+  if (lx + 192 > window.innerWidth) lx = window.innerWidth - 197;
+
+  const tt = document.getElementById('tt');
+  tt.style.cssText = `left:${lx}px;top:${ty}px`;
+  tt.classList.add('on');
+  clearTimeout(_ttTO);
+}
+
+function hideTT() {
+  _ttTO = setTimeout(
+    () => document.getElementById('tt').classList.remove('on'), 320);
+}
+
+function btt(el, label, hk, unit) {
+  el.addEventListener('mouseenter', () => showTT(el, label, hk, unit));
+  el.addEventListener('mouseleave', hideTT);
+
+  // Long-press on iOS: show only if not scrolling
+  let tmr = null, moved = false, sx = 0, sy = 0;
+
+  el.addEventListener('touchstart', e => {
+    moved = false;
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+    tmr = setTimeout(() => {
+      if (!moved) showTT(el, label, hk, unit);
+    }, 500);
+  }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+    const dx = Math.abs(e.touches[0].clientX - sx);
+    const dy = Math.abs(e.touches[0].clientY - sy);
+    if (dx > 8 || dy > 8) {
+      moved = true;
+      clearTimeout(tmr);
       hideTT();
     }
-  },{passive:true});
+  }, { passive: true });
 
-  el.addEventListener('touchend',()=>{
-    clearTimeout(touchTimer);
-    setTimeout(hideTT,3000);
-  },{passive:true});
+  el.addEventListener('touchend', () => {
+    clearTimeout(tmr);
+    setTimeout(hideTT, 2500);
+  }, { passive: true });
 }
 
-// ═══ SCENE SVG ═══════════════════════════════════════════
-function buildScene(temps,nibe){
-  const svg=document.getElementById('sceneSvg');
-  // ViewBox: 0 0 820 380
-  // Tank: narrow left, labels left of tank
-  // VP:  slimmer center
-  // Borehole: right, compact
-  const W=680,SH=380;
+// ═══════════════════════════════════════════
+// SVG SCENE
+// ═══════════════════════════════════════════
+function buildSvg(temps, nibe) {
+  // ── Layout ──────────────────────────────
+  const tCX=96, tW=68, tTop=24, tBot=330, tH=tBot-tTop, tRx=12, eRy=10;
+  const lblX=14, dotX=tCX-tW/2-3;
+  const vpX=248, vpY=46, vpW=110, vpH=252;
+  const vpRX = vpX + vpW;
+  const wCX=590, wBotY=330, wW=30;
+  const p1x=wCX-10, p2x=wCX+10;
 
-  // TANK geometry
-  const tCX=100, tW=72, tTop=28, tBot=348, tH=tBot-tTop, tRx=13, eRy=11;
-  const lblX=16, dotX=tCX-tW/2-3;
+  // ── Fill logic ──────────────────────────
+  const vld = temps.filter(t => t != null);
+  const snitt = vld.length ? vld.reduce((a,b) => a+b, 0)/vld.length : 30;
+  const returT = temps[4] ?? 25;
+  const turVP  = nibe.supply;
+  const pwr    = nibe.power ?? 0;
 
-  // VP geometry – slim for mobile
-  const vpX=258, vpY=50, vpW=118, vpH=268;
+  // VP heating tank = running (>0.1 kW) AND supply line significantly warmer than return
+  const vpHeat = pwr > 0.1 && turVP != null && turVP > (returT + 3);
 
-  // Borehole – much closer to VP
-  const wCX=610, wBoreTop=75, wBoreBot=348, wW=32;
-  // Pipe connection points on VP right side
-  const boY=vpY+vpH*0.30;  // brine out exits VP
-  const biY=vpY+vpH*0.68;  // brine in enters VP
-  // Flange sits at wBoreTop
-  const flangeY=wBoreTop;
-  // Pipe stubs go from flange downward slightly
-  const stubTop=flangeY-42;
-
-  // Tank fill – adapts based on NIBE operating state
-  // System power unit = kW (0.5 = 500W), threshold >0.1 kW = running
-  // VP heating tank = power>0.1 AND supplyLine > returTemp+3°C
-  // VP making DHW   = power>0.1 AND supplyLine ≈ returTemp (heat goes to DHW, not tank)
-  // VP off          = power≤0.1
-  const valid=temps.filter(t=>t!==null);
-  const snitt=valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:32;
-  const returT  = temps[4]!==null ? temps[4] : 25;
-  const turVP   = nibe.supplyLine !== null ? nibe.supplyLine : null;
-  const powerKW = nibe.powerConsumption !== null ? nibe.powerConsumption : 0;
-
-  // VP runs AND supply line is significantly warmer than return → heating tank
-  const vpRunning     = powerKW > 0.1;
-  const heatingTank   = vpRunning && turVP !== null && turVP > (returT + 3);
-
-  let fillFrac;
-  if (heatingTank) {
-    // Dynamic: snitt relative to VP output temperature
-    // 0% = snitt equals retur, 100% = snitt equals turVP
-    const range = turVP - returT;
-    fillFrac = range > 1
-      ? Math.min(.96, Math.max(.04, (snitt - returT) / range))
+  let fillF;
+  if (vpHeat) {
+    const rng = turVP - returT;
+    fillF = rng > 1
+      ? Math.min(.96, Math.max(.04, (snitt - returT) / rng))
       : 0.5;
   } else {
-    // Static: 25°C = 0%, 40°C = 100%
-    fillFrac = Math.min(.96, Math.max(.04, (snitt - 25) / (40 - 25)));
+    // Static scale: 25°C=0%, 40°C=100%
+    fillF = Math.min(.96, Math.max(.04, (snitt - 25) / 15));
   }
-  const fill = fillFrac;
-  const fillY=tBot-tH*fill;
-  const wB=tCol(snitt),wL=lc(wB,55),wD=dc(wB,35),wS=lc(wB,80);
 
-  // Pipe Y on tank
-  const hotY=tTop+30, coldY=tBot-30;
+  const fillY = tBot - tH * fillF;
+  const wB = tCol(snitt), wL = lc(wB, 55), wD = dc(wB, 35), wS = lc(wB, 75);
 
-  let s=`<defs>
-  <clipPath id="tc"><rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" rx="${tRx}"/></clipPath>
+  // ── Pipe Y positions ────────────────────
+  const hotY = tTop + 27, coldY = tBot - 27;
+  const boY  = vpY + vpH * 0.30;
+  const biY  = vpY + vpH * 0.68;
+
+  // Geo pipe endpoints
+  const geoEndY  = wBotY - 42;
+  const pipeDeep = geoEndY + 20;
+  const R = 15;
+
+  const flangeTopY  = geoEndY;
+  const flangeThick = 12;
+  const groundY     = flangeTopY + flangeThick + 6;
+
+  // ── Build SVG string ────────────────────
+  let s = `<defs>
+  <clipPath id="tc">
+    <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" rx="${tRx}"/>
+  </clipPath>
+
+  <!-- Tank steel gradient -->
   <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#0e2440"/><stop offset="22%" stop-color="#1a3d60"/>
-    <stop offset="50%" stop-color="#1e4870"/><stop offset="78%" stop-color="#1a3d60"/>
+    <stop offset="0%"   stop-color="#0e2440"/>
+    <stop offset="22%"  stop-color="#1a3d60"/>
+    <stop offset="50%"  stop-color="#1e4870"/>
+    <stop offset="78%"  stop-color="#1a3d60"/>
     <stop offset="100%" stop-color="#0a1830"/>
   </linearGradient>
   <linearGradient id="ss" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
-    <stop offset="28%" stop-color="#fff" stop-opacity=".26"/>
-    <stop offset="52%" stop-color="#fff" stop-opacity=".04"/>
+    <stop offset="0%"   stop-color="#fff" stop-opacity="0"/>
+    <stop offset="28%"  stop-color="#fff" stop-opacity=".22"/>
+    <stop offset="52%"  stop-color="#fff" stop-opacity=".04"/>
     <stop offset="100%" stop-color="#000" stop-opacity=".1"/>
   </linearGradient>
+
+  <!-- Water gradient -->
   <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="${wL}"/>
-    <stop offset="55%" stop-color="${wB}"/>
+    <stop offset="0%"   stop-color="${wL}"/>
+    <stop offset="55%"  stop-color="${wB}"/>
     <stop offset="100%" stop-color="${wD}"/>
   </linearGradient>
   <linearGradient id="ws" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
-    <stop offset="20%" stop-color="#fff" stop-opacity=".17"/>
-    <stop offset="55%" stop-color="#fff" stop-opacity=".03"/>
-    <stop offset="100%" stop-color="#000" stop-opacity=".14"/>
+    <stop offset="0%"   stop-color="#fff" stop-opacity="0"/>
+    <stop offset="20%"  stop-color="#fff" stop-opacity=".15"/>
+    <stop offset="55%"  stop-color="#fff" stop-opacity=".03"/>
+    <stop offset="100%" stop-color="#000" stop-opacity=".13"/>
   </linearGradient>
   <linearGradient id="tf" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#000" stop-opacity=".16"/><stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    <stop offset="0%"   stop-color="#000" stop-opacity=".14"/>
+    <stop offset="100%" stop-color="#000" stop-opacity="0"/>
   </linearGradient>
   <linearGradient id="rt" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#4a7a9a"/><stop offset="55%" stop-color="#6ab0cc"/><stop offset="100%" stop-color="#2a5a78"/>
-  </linearGradient>
-  <linearGradient id="rb" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#1a4a68"/><stop offset="60%" stop-color="#5a9abc"/><stop offset="100%" stop-color="#102838"/>
+    <stop offset="0%"   stop-color="#4a7a9a"/>
+    <stop offset="55%"  stop-color="#6ab0cc"/>
+    <stop offset="100%" stop-color="#2a5a78"/>
   </linearGradient>
   <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#3a7a9a"/><stop offset="100%" stop-color="#1a4a68"/>
+    <stop offset="0%"   stop-color="#3a7a9a"/>
+    <stop offset="100%" stop-color="#1a4a68"/>
   </linearGradient>
-  <!-- 3D tube gradients – cross-section shine (x1/x2 = horizontal) -->
-  <linearGradient id="hpg" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#fed7aa"/><stop offset="20%" stop-color="#f97316"/>
-    <stop offset="60%" stop-color="#c2410c"/><stop offset="100%" stop-color="#7c2d12"/>
-  </linearGradient>
-  <linearGradient id="hpg3d" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%"   stop-color="#fff" stop-opacity=".0"/>
-    <stop offset="18%"  stop-color="#fff" stop-opacity=".35"/>
-    <stop offset="45%"  stop-color="#fff" stop-opacity=".08"/>
-    <stop offset="100%" stop-color="#000" stop-opacity=".22"/>
-  </linearGradient>
-  <linearGradient id="cpg" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%" stop-color="#bae6fd"/><stop offset="20%" stop-color="#38bdf8"/>
-    <stop offset="60%" stop-color="#0369a1"/><stop offset="100%" stop-color="#0c4a6e"/>
-  </linearGradient>
-  <linearGradient id="cpg3d" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%"   stop-color="#fff" stop-opacity=".0"/>
-    <stop offset="18%"  stop-color="#fff" stop-opacity=".35"/>
-    <stop offset="45%"  stop-color="#fff" stop-opacity=".08"/>
-    <stop offset="100%" stop-color="#000" stop-opacity=".22"/>
-  </linearGradient>
-  <!-- gpg = brine OUT (cooler, dark green) uniform color -->
-  <linearGradient id="gpg" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%"   stop-color="#065f46"/>
-    <stop offset="22%"  stop-color="#059669"/>
-    <stop offset="50%"  stop-color="#047857"/>
-    <stop offset="78%"  stop-color="#065f46"/>
-    <stop offset="100%" stop-color="#022c22"/>
-  </linearGradient>
-  <!-- gpgr = brine IN (warmer, bright cyan) uniform color -->
-  <linearGradient id="gpgr" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%"   stop-color="#0f766e"/>
-    <stop offset="22%"  stop-color="#14b8a6"/>
-    <stop offset="50%"  stop-color="#2dd4bf"/>
-    <stop offset="78%"  stop-color="#14b8a6"/>
-    <stop offset="100%" stop-color="#0d9488"/>
-  </linearGradient>
-  <linearGradient id="gpg3d" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%"   stop-color="#fff" stop-opacity=".0"/>
-    <stop offset="18%"  stop-color="#fff" stop-opacity=".32"/>
-    <stop offset="45%"  stop-color="#fff" stop-opacity=".07"/>
-    <stop offset="100%" stop-color="#000" stop-opacity=".25"/>
-  </linearGradient>
-  <linearGradient id="vpG" x1="0" y1="0" x2="1" y2="0">
-    <stop offset="0%" stop-color="#0c1e36"/><stop offset="18%" stop-color="#152d4c"/>
-    <stop offset="50%" stop-color="#1a3858"/><stop offset="82%" stop-color="#152d4c"/>
+
+  <!-- Heat pump gradient -->
+  <linearGradient id="vpg" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#0c1e36"/>
+    <stop offset="18%"  stop-color="#152d4c"/>
+    <stop offset="50%"  stop-color="#1a3858"/>
+    <stop offset="82%"  stop-color="#152d4c"/>
     <stop offset="100%" stop-color="#091420"/>
   </linearGradient>
-  <filter id="glow"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-  <filter id="sdw"><feDropShadow dx="0" dy="5" stdDeviation="10" flood-color="#000" flood-opacity=".45"/></filter>
+
+  <!-- 3D pipe gradients (cross-section lighting) -->
+  <linearGradient id="hpg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#fed7aa"/>
+    <stop offset="20%"  stop-color="#f97316"/>
+    <stop offset="65%"  stop-color="#c2410c"/>
+    <stop offset="100%" stop-color="#7c2d12"/>
+  </linearGradient>
+  <linearGradient id="cpg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#bae6fd"/>
+    <stop offset="20%"  stop-color="#38bdf8"/>
+    <stop offset="65%"  stop-color="#0369a1"/>
+    <stop offset="100%" stop-color="#0c4a6e"/>
+  </linearGradient>
+  <!-- Brine OUT (cooler, dark green) -->
+  <linearGradient id="gpO" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#34d399"/>
+    <stop offset="25%"  stop-color="#059669"/>
+    <stop offset="70%"  stop-color="#065f46"/>
+    <stop offset="100%" stop-color="#022c22"/>
+  </linearGradient>
+  <!-- Brine IN (warmer, bright cyan) -->
+  <linearGradient id="gpI" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%"   stop-color="#022c22"/>
+    <stop offset="30%"  stop-color="#0d9488"/>
+    <stop offset="65%"  stop-color="#2dd4bf"/>
+    <stop offset="100%" stop-color="#99f6e4"/>
+  </linearGradient>
+
+  <!-- Filters -->
+  <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+    <feGaussianBlur stdDeviation="1.8" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="sdw" x="-15%" y="-10%" width="130%" height="130%">
+    <feDropShadow dx="0" dy="4" stdDeviation="7"
+      flood-color="#000" flood-opacity=".38"/>
+  </filter>
 </defs>`;
 
-  // ── GEO PIPES ────────────────────────────────────────────
-  // Brine OUT: from VP right → curves down to LEFT pipe stub on borehole
-  const vpRX=vpX+vpW;
-  const p1x=wCX-10, p2x=wCX+10; // two pipe centres
+  // ── GEO PIPES ──────────────────────────────────────────────
+  // OUT: VP right-upper → right borehole pipe (p2x), rounded 90° bend down
+  const oPath = `M${vpRX},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${pipeDeep}`;
+  // IN: left borehole pipe (p1x) → VP right-lower, rounded 90° bend up
+  const iPath = `M${p1x},${pipeDeep} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
 
-  // Geo pipes – strict 90-degree elbows, no curves, consistent color throughout
-  const geoEndY = wBoreBot - 50;   // top of flange
-  const pipeDeep = geoEndY + 18;   // pipes go 18px INTO flange (no white dot gap)
-  const bendR = 14;                 // elbow offset
+  // Pipe shadows (offset for 3D depth)
+  s += `<path d="${oPath}" fill="none" stroke="#022c22"
+         stroke-width="13" stroke-linecap="round"
+         opacity=".25" transform="translate(2,3)"/>`;
+  s += `<path d="${iPath}" fill="none" stroke="#0f766e"
+         stroke-width="13" stroke-linecap="round"
+         opacity=".25" transform="translate(2,3)"/>`;
+  // Pipe fill
+  s += `<path d="${oPath}" fill="none" stroke="url(#gpO)"
+         stroke-width="11" stroke-linecap="round"/>`;
+  s += `<path d="${iPath}" fill="none" stroke="url(#gpI)"
+         stroke-width="11" stroke-linecap="round"/>`;
+  // Pipe specular shine
+  s += `<path d="${oPath}" fill="none" stroke="#fff"
+         stroke-width="3" stroke-linecap="round" opacity=".18"/>`;
+  s += `<path d="${iPath}" fill="none" stroke="#fff"
+         stroke-width="3" stroke-linecap="round" opacity=".18"/>`;
 
-  // BRINE OUT (dark green): VP upper port → right → 90° down → into flange
-  // OUT: horizontal → rounded 90° bend → straight down into flange
-  const R = 18;
-  const outPath = `M${vpRX},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${pipeDeep}`;
-  s+=`<path d="${outPath}" fill="none" stroke="#022c22" stroke-width="13" stroke-linecap="round" opacity=".3" transform="translate(2,3)"/>`;
-  s+=`<path d="${outPath}" fill="none" stroke="url(#gpg)"  stroke-width="11" stroke-linecap="round"/>`;
-  s+=`<path d="${outPath}" fill="none" stroke="#fff"        stroke-width="3.5" stroke-linecap="round" opacity=".22"/>`;
-
-  // IN: straight up from flange → rounded 90° bend → horizontal to VP
-  const inPath = `M${p1x},${pipeDeep} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
-  s+=`<path d="${inPath}" fill="none" stroke="#0f766e" stroke-width="13" stroke-linecap="round" opacity=".3" transform="translate(2,3)"/>`;
-  s+=`<path d="${inPath}" fill="none" stroke="url(#gpgr)" stroke-width="11" stroke-linecap="round"/>`;
-  s+=`<path d="${inPath}" fill="none" stroke="#fff"       stroke-width="3.5" stroke-linecap="round" opacity=".22"/>`;
-
-  // Flow arrows along horizontal segments
-  for(let i=0;i<2;i++){
-    const ax=vpRX+20+i*55;
-    s+=`<polygon points="${ax},${boY-4} ${ax+8},${boY} ${ax},${boY+4}" fill="#059669" opacity=".8"/>`;
-    s+=`<polygon points="${ax+8},${biY-4} ${ax},${biY} ${ax+8},${biY+4}" fill="#2dd4bf" opacity=".85"/>`;
+  // Flow direction arrows
+  const bMid = vpRX + (wCX - vpRX) / 2 - 10;
+  for (let i = 0; i < 2; i++) {
+    const ax = vpRX + 16 + i * 52;
+    s += `<polygon points="${ax},${boY-4} ${ax+8},${boY} ${ax},${boY+4}"
+           fill="#059669" opacity=".8"/>`;
+    s += `<polygon points="${ax+8},${biY-4} ${ax},${biY} ${ax+8},${biY+4}"
+           fill="#2dd4bf" opacity=".8"/>`;
   }
 
-  // Brine temp labels centred on horizontal pipe segments
-  const lblMid = vpRX + (p2x - vpRX) / 2;
-  const boTxt=nibe.brineOut!==null?`${nibe.brineOut.toFixed(1)} °C`:'–';
-  const biTxt=nibe.brineIn !==null?`${nibe.brineIn.toFixed(1)} °C` :'–';
-  s+=`<text x="${lblMid}" y="${boY-11}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#059669" font-weight="600">${boTxt}</text>`;
-  s+=`<text x="${lblMid}" y="${biY+20}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#2dd4bf" font-weight="600">${biTxt}</text>`;
-  s+=`<text x="${lblMid}" y="${boY-23}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#047857" letter-spacing="1" opacity=".9">BRINE UT</text>`;
-  s+=`<text x="${lblMid}" y="${biY+32}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#0d9488" letter-spacing="1" opacity=".9">BRINE INN</text>`;
+  // Brine temperature labels
+  const boTxt = nibe.brineOut != null ? `${nibe.brineOut.toFixed(1)} °C` : '–';
+  const biTxt = nibe.brineIn  != null ? `${nibe.brineIn.toFixed(1)} °C`  : '–';
+  s += `<text x="${bMid}" y="${boY-13}" text-anchor="middle"
+         font-size="11" font-family="Inter,sans-serif"
+         fill="#059669" font-weight="600">${boTxt}</text>`;
+  s += `<text x="${bMid}" y="${biY+19}" text-anchor="middle"
+         font-size="11" font-family="Inter,sans-serif"
+         fill="#2dd4bf" font-weight="600">${biTxt}</text>`;
+  s += `<text x="${bMid}" y="${boY-25}" text-anchor="middle"
+         font-size="8" font-family="Inter,sans-serif"
+         fill="#047857" letter-spacing="1" opacity=".85">BRINE UT</text>`;
+  s += `<text x="${bMid}" y="${biY+30}" text-anchor="middle"
+         font-size="8" font-family="Inter,sans-serif"
+         fill="#0d9488" letter-spacing="1" opacity=".85">BRINE INN</text>`;
 
-  // ── HOT & COLD PIPES (tank → VP) ─────────────────────────
-  const tRX=tCX+tW/2;
-  // 3D hot pipe: base + top-shine
-  s+=`<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="url(#hpg)" stroke-width="11" stroke-linecap="round"/>`;
-  s+=`<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".28"/>`;
-  s+=`<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#7c2d12" stroke-width="11" stroke-linecap="round" opacity=".35" transform="translate(0,3)"/>`;
-  // 3D cold pipe
-  s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="url(#cpg)" stroke-width="11" stroke-linecap="round"/>`;
-  s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".28"/>`;
-  s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#0c4a6e" stroke-width="11" stroke-linecap="round" opacity=".35" transform="translate(0,3)"/>`;
+  // ── HOT & COLD PIPES ───────────────────────────────────────
+  const tRX = tCX + tW/2;
 
-  // Flow arrows – hot goes tank←VP (left), cold goes tank→VP (right)
-  for(let i=0;i<2;i++){
-    const ax=tRX+25+i*50;
-    // Varm TUR: strøm fra VP mot tank → pil peker venstre
-    s+=`<polygon points="${ax+8},${hotY-4} ${ax},${hotY} ${ax+8},${hotY+4}" fill="#f97316" opacity=".85"/>`;
-    // Kald Retur: strøm fra tank mot VP → pil peker høyre
-    s+=`<polygon points="${ax},${coldY-4} ${ax+8},${coldY} ${ax},${coldY+4}" fill="#38bdf8" opacity=".85"/>`;
+  // Shadows
+  s += `<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#7c2d12"
+         stroke-width="13" stroke-linecap="round"
+         opacity=".25" transform="translate(0,3)"/>`;
+  s += `<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#0c4a6e"
+         stroke-width="13" stroke-linecap="round"
+         opacity=".25" transform="translate(0,3)"/>`;
+  // Fill
+  s += `<path d="M${tRX},${hotY} H${vpX}" fill="none"
+         stroke="url(#hpg)" stroke-width="11" stroke-linecap="round"/>`;
+  s += `<path d="M${vpX},${coldY} H${tRX}" fill="none"
+         stroke="url(#cpg)" stroke-width="11" stroke-linecap="round"/>`;
+  // Shine
+  s += `<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#fff"
+         stroke-width="3" stroke-linecap="round" opacity=".2"/>`;
+  s += `<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#fff"
+         stroke-width="3" stroke-linecap="round" opacity=".2"/>`;
+
+  // Arrows: hot tank←VP, cold tank→VP
+  const pmid = tRX + (vpX - tRX) / 2;
+  for (let i = 0; i < 2; i++) {
+    const ax = tRX + 20 + i * 48;
+    s += `<polygon points="${ax+8},${hotY-4} ${ax},${hotY} ${ax+8},${hotY+4}"
+           fill="#f97316" opacity=".85"/>`;
+    s += `<polygon points="${ax},${coldY-4} ${ax+8},${coldY} ${ax},${coldY+4}"
+           fill="#38bdf8" opacity=".85"/>`;
   }
 
-  // Pipe temp labels between tank and VP
-  const pmid=tRX+(vpX-tRX)/2;
-  const hTxt=temps[0]!==null?`${temps[0].toFixed(1)} °C`:'–';
-  const cTxt=temps[4]!==null?`${temps[4].toFixed(1)} °C`:'–';
-  s+=`<text x="${pmid}" y="${hotY-11}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#f97316" font-weight="600">${hTxt}</text>`;
-  s+=`<text x="${pmid}" y="${hotY-23}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#8a3a10" letter-spacing="1">VARM TUR</text>`;
-  s+=`<text x="${pmid}" y="${coldY+18}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#38bdf8" font-weight="600">${cTxt}</text>`;
-  s+=`<text x="${pmid}" y="${coldY+30}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#1a608a" letter-spacing="1">KALD RETUR</text>`;
+  // Pipe labels
+  const hTxt = temps[0] != null ? `${temps[0].toFixed(1)} °C` : '–';
+  const cTxt = temps[4] != null ? `${temps[4].toFixed(1)} °C` : '–';
+  s += `<text x="${pmid}" y="${hotY-12}" text-anchor="middle"
+         font-size="11" font-family="Inter,sans-serif"
+         fill="#f97316" font-weight="600">${hTxt}</text>`;
+  s += `<text x="${pmid}" y="${hotY-24}" text-anchor="middle"
+         font-size="8" font-family="Inter,sans-serif"
+         fill="#9a4a20" letter-spacing="1">VARM TUR</text>`;
+  s += `<text x="${pmid}" y="${coldY+18}" text-anchor="middle"
+         font-size="11" font-family="Inter,sans-serif"
+         fill="#38bdf8" font-weight="600">${cTxt}</text>`;
+  s += `<text x="${pmid}" y="${coldY+29}" text-anchor="middle"
+         font-size="8" font-family="Inter,sans-serif"
+         fill="#1a608a" letter-spacing="1">KALD RETUR</text>`;
 
-  // Pipe connection nubs on VP
-  s+=`<rect x="${vpX-6}" y="${hotY-5}" width="8" height="10" rx="2" fill="#2a4a6a" stroke="#1a3a5a"/>`;
-  s+=`<rect x="${vpX-6}" y="${coldY-5}" width="8" height="10" rx="2" fill="#1a3a5a" stroke="#0a2840"/>`;
-  s+=`<rect x="${vpRX-2}" y="${boY-5}" width="8" height="10" rx="2" fill="#083828" stroke="#052018"/>`;
-  s+=`<rect x="${vpRX-2}" y="${biY-5}" width="8" height="10" rx="2" fill="#083828" stroke="#052018"/>`;
+  // Pipe connection ports on VP
+  s += `<rect x="${vpX-6}" y="${hotY-5}" width="8" height="10"
+         rx="2" fill="#2a4a6a" stroke="#1a3a5a"/>`;
+  s += `<rect x="${vpX-6}" y="${coldY-5}" width="8" height="10"
+         rx="2" fill="#1a3a5a" stroke="#0a2840"/>`;
+  s += `<rect x="${vpRX-2}" y="${boY-5}" width="8" height="10"
+         rx="2" fill="#083828" stroke="#052018"/>`;
+  s += `<rect x="${vpRX-2}" y="${biY-5}" width="8" height="10"
+         rx="2" fill="#083828" stroke="#052018"/>`;
 
-  // ── HEAT PUMP – slim modern unit ─────────────────────────
-  // Main casing
-  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="16" fill="url(#vpG)" stroke="rgba(255,255,255,0.07)" stroke-width="1.2" filter="url(#sdw)"/>`;
-  // Subtle brushed lines
-  for(let i=0;i<14;i++){
-    s+=`<line x1="${vpX+7}" y1="${vpY+14+i*18}" x2="${vpX+vpW-7}" y2="${vpY+14+i*18}" stroke="#fff" stroke-width=".35" opacity="${.015+i*.002}"/>`;
+  // ── HEAT PUMP ──────────────────────────────────────────────
+  s += `<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="14"
+         fill="url(#vpg)" stroke="rgba(255,255,255,.07)"
+         stroke-width="1.2" filter="url(#sdw)"/>`;
+
+  // Brushed metal lines
+  for (let i = 0; i < 13; i++) {
+    s += `<line x1="${vpX+7}" y1="${vpY+13+i*18}"
+           x2="${vpX+vpW-7}" y2="${vpY+13+i*18}"
+           stroke="#fff" stroke-width=".3"
+           opacity="${.013+i*.0012}"/>`;
   }
-  // Left specular
-  s+=`<rect x="${vpX+5}" y="${vpY+16}" width="9" height="${vpH-32}" rx="4" fill="#fff" fill-opacity=".04"/>`;
 
-  // Top band – logo
-  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="38" rx="14" fill="rgba(0,0,0,0.2)"/>`;
-  s+=`<rect x="${vpX}" y="${vpY+22}" width="${vpW}" height="16" fill="rgba(0,0,0,0.2)"/>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+24}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#bcd4ee" font-weight="700" letter-spacing="2.5">NIBE</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+36}" text-anchor="middle" font-size="7" font-family="Inter,sans-serif" fill="#4a7090" letter-spacing="1.5">S1256 · 8kW</text>`;
+  // Left specular stripe
+  s += `<rect x="${vpX+5}" y="${vpY+15}" width="8" height="${vpH-30}"
+         rx="3.5" fill="#fff" fill-opacity=".04"/>`;
 
-  // Display screen – no compressor circle, just screen
-  s+=`<rect x="${vpX+10}" y="${vpY+46}" width="${vpW-20}" height="88" rx="7" fill="#040c18" stroke="rgba(59,125,248,0.18)" stroke-width="1"/>`;
-  s+=`<rect x="${vpX+12}" y="${vpY+48}" width="${vpW-24}" height="84" rx="6" fill="#050e1c"/>`;
-  const scopDisp=nibe.scop!==null?nibe.scop.toFixed(2):'–';
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+70}" text-anchor="middle" font-size="7" font-family="Inter,sans-serif" fill="#2a5a8a" letter-spacing="2.5">SCOP</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+100}" text-anchor="middle" font-size="26" font-family="JetBrains Mono,monospace" fill="#00d4b8" font-weight="600" filter="url(#glow)">${scopDisp}</text>`;
-  // ÅRSYTELSE label removed per user request
+  // Logo band
+  s += `<rect x="${vpX}" y="${vpY}" width="${vpW}" height="34"
+         rx="14" fill="rgba(0,0,0,.2)"/>`;
+  s += `<rect x="${vpX}" y="${vpY+20}" width="${vpW}" height="14"
+         fill="rgba(0,0,0,.2)"/>`;
+  s += `<text x="${vpX+vpW/2}" y="${vpY+21}" text-anchor="middle"
+         font-size="11" font-family="Inter,sans-serif"
+         fill="#bcd4ee" font-weight="700" letter-spacing="2.5">NIBE</text>`;
+  s += `<text x="${vpX+vpW/2}" y="${vpY+32}" text-anchor="middle"
+         font-size="6.5" font-family="Inter,sans-serif"
+         fill="#4a7090" letter-spacing="2">S1256 · 8kW</text>`;
 
-  // LED bar – 8 diodes across VP front, SCOP-driven
-  // SCOP range: 2.5 (min) to 5.0 (max) → 0–8 LEDs lit
-  // Colors: red=1, orange=2-3, yellow=4-5, green=6-7, bright-green=8
+  // SCOP display screen
+  s += `<rect x="${vpX+10}" y="${vpY+42}" width="${vpW-20}" height="78"
+         rx="6" fill="#040c18" stroke="rgba(59,125,248,.16)" stroke-width="1"/>`;
+  s += `<rect x="${vpX+12}" y="${vpY+44}" width="${vpW-24}" height="74"
+         rx="5" fill="#050e1c"/>`;
+  s += `<text x="${vpX+vpW/2}" y="${vpY+62}" text-anchor="middle"
+         font-size="7" font-family="Inter,sans-serif"
+         fill="#2a5a8a" letter-spacing="2">SCOP</text>`;
+  s += `<text x="${vpX+vpW/2}" y="${vpY+90}" text-anchor="middle"
+         font-size="27" font-family="JetBrains Mono,monospace"
+         fill="#00d4b8" font-weight="600"
+         filter="url(#glow)">${nibe.scop != null ? r2(nibe.scop).toFixed(2) : '–'}</text>`;
+
+  // LED bar – 6 diodes, SCOP-driven (2.5=min, 5.0=max)
   {
-    const scopVal = nibe.scop !== null ? nibe.scop : 0;
-    const ledCount = 6;
-    const scopMin = 2.5, scopMax = 5.0;
-    const litCount = scopVal <= scopMin ? 0
-      : scopVal >= scopMax ? ledCount
-      : Math.round(((scopVal - scopMin) / (scopMax - scopMin)) * ledCount);
-
-    // Space evenly across VP width with margin
-    const ledMargin = 10;
-    const ledAreaW = vpW - ledMargin * 2;
-    const ledSpacing = ledAreaW / (ledCount - 1);
-    const ledY = vpY + 148;
-    const ledR = 3.4;
-
-    // LED color based on how many are lit (fraction of max)
-    // All lit = bright green, few lit = red. Each LED gets the color of the final lit level.
-    function ledColor(litFrac) {
-      if (litFrac <= 0)   return '#ef4444';  // 0     = red
-      if (litFrac <= 0.33) return '#f97316'; // 1-2   = orange
-      if (litFrac <= 0.5)  return '#eab308'; // 3     = yellow
-      if (litFrac <= 0.67) return '#84cc16'; // 4     = lime
-      if (litFrac <= 0.83) return '#22c55e'; // 5     = green
-      return '#00ffaa';                       // 6     = bright green
-    }
-    const litFrac = litCount / ledCount;
-    const activeCol = ledColor(litFrac);
-
-    for (let i = 0; i < ledCount; i++) {
-      const lx = vpX + ledMargin + i * ledSpacing;
-      const lit = i < litCount;
-      if (lit) {
-        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="${activeCol}" opacity=".95" filter="url(#glow)"/>`;
-        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR*0.45}" fill="#fff" opacity=".55"/>`;
+    const sMin=2.5, sMax=5.0, nL=6;
+    const sv = nibe.scop ?? 0;
+    const lit = sv <= sMin ? 0 : sv >= sMax ? nL
+      : Math.round(((sv-sMin)/(sMax-sMin))*nL);
+    const lf = lit / nL;
+    const aCol = lf<=0?'#ef4444':lf<=.33?'#f97316':lf<=.5?'#eab308'
+               : lf<=.67?'#84cc16':lf<=.83?'#22c55e':'#00ffaa';
+    const marg=11, aw=vpW-marg*2, sp=aw/(nL-1), ly=vpY+132, lr=3.1;
+    for (let i=0; i<nL; i++) {
+      const lx = vpX + marg + i*sp;
+      if (i < lit) {
+        s += `<circle cx="${lx}" cy="${ly}" r="${lr}"
+               fill="${aCol}" opacity=".95" filter="url(#glow)"/>`;
+        s += `<circle cx="${lx}" cy="${ly}" r="${lr*.4}"
+               fill="#fff" opacity=".5"/>`;
       } else {
-        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="#1a3050" opacity=".6"/>`;
-        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="none" stroke="#2a4a70" stroke-width=".8" opacity=".5"/>`;
+        s += `<circle cx="${lx}" cy="${ly}" r="${lr}"
+               fill="#1a3050" opacity=".55"/>`;
+        s += `<circle cx="${lx}" cy="${ly}" r="${lr}"
+               fill="none" stroke="#2a4a70"
+               stroke-width=".65" opacity=".4"/>`;
       }
     }
   }
 
-  // Internals zone – just subtle panel, no circle
-  s+=`<rect x="${vpX+8}" y="${vpY+156}" width="${vpW-16}" height="${vpH-172}" rx="8" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
-  // Cross-hatch pattern suggesting internals
-  for(let i=0;i<5;i++){
-    s+=`<line x1="${vpX+12}" y1="${vpY+168+i*18}" x2="${vpX+vpW-12}" y2="${vpY+168+i*18}" stroke="rgba(59,125,248,0.08)" stroke-width="1"/>`;
-  }
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle" font-size="6" font-family="Inter,sans-serif" fill="#1a4a6a" letter-spacing="2">KOMPRESSOR</text>`;
-
-  // VP shine
-  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="16" fill="url(#ss)" opacity=".45"/>`;
-
-  // ── BOREHOLE ────────────────────────────────────────────
-
-  // ── BOREHOLE ILLUSTRATION ──────────────────────────────
-  // Flange is at BOTTOM – pipes come from above and go INTO the flange/ground
-  // flangeY is where the flange top sits (borehole geometry defines this)
-  const flangeTopY  = wBoreBot - 50;   // flange top edge
-  const flangeThick = 14;
-  const flangeBotY  = flangeTopY + flangeThick;
-  const groundLevel = flangeBotY + 6;
-
-  // Ground / earth below flange
-  s+=`<rect x="${wCX-48}" y="${groundLevel}" width="96" height="${SH-groundLevel+2}" rx="0" fill="#111a08" opacity=".6"/>`;
-  // Ground top edge
-  s+=`<ellipse cx="${wCX}" cy="${groundLevel}" rx="48" ry="9" fill="#1a2a0a" opacity=".7"/>`;
-
-  // Grass blades on ground surface
-  for(let i=0;i<16;i++){
-    const gx=wCX-44+i*6, gh=4+Math.sin(i*1.9)*3;
-    s+=`<line x1="${gx}" y1="${groundLevel}" x2="${gx+2}" y2="${groundLevel-gh}" stroke="#2d5a18" stroke-width="1.5" stroke-linecap="round" opacity="${.4+i*.025}"/>`;
+  // Internals panel
+  s += `<rect x="${vpX+8}" y="${vpY+146}" width="${vpW-16}" height="${vpH-162}"
+         rx="7" fill="rgba(0,0,0,.2)"
+         stroke="rgba(255,255,255,.04)" stroke-width="1"/>`;
+  for (let i=0; i<4; i++) {
+    s += `<line x1="${vpX+14}" y1="${vpY+158+i*17}"
+           x2="${vpX+vpW-14}" y2="${vpY+158+i*17}"
+           stroke="rgba(59,125,248,.06)" stroke-width="1"/>`;
   }
 
-  // Black pipes removed – turkis/geo pipes connect directly into flange
+  // Operating mode text on VP
+  const mStr  = vpHeat ? 'VARMER TANK' : pwr>0.1 ? 'VARMTVANN' : 'AVSLÅTT';
+  const mCol  = vpHeat ? '#22c55e' : pwr>0.1 ? '#f59e0b' : '#3d5878';
+  s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle"
+         font-size="6.5" font-family="Inter,sans-serif"
+         fill="${mCol}" letter-spacing="2">${mStr}</text>`;
 
-  // Yellow flange plate – the termination cap at ground level
+  // VP shine overlay
+  s += `<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}"
+         rx="14" fill="url(#ss)" opacity=".38"/>`;
+
+  // ── BOREHOLE ───────────────────────────────────────────────
+  // Ground fill
+  s += `<ellipse cx="${wCX}" cy="${groundY}" rx="50" ry="9"
+         fill="#131f08" opacity=".62"/>`;
+  // Grass
+  for (let i=0; i<16; i++) {
+    const gx = wCX - 44 + i*6;
+    const gh = 4 + Math.sin(i*1.88)*2.8;
+    s += `<line x1="${gx}" y1="${groundY}"
+           x2="${gx+2}" y2="${groundY-gh}"
+           stroke="#2d5a18" stroke-width="1.4"
+           stroke-linecap="round"
+           opacity="${.38+i*.025}"/>`;
+  }
+
+  // Flange shadow
+  s += `<ellipse cx="${wCX}" cy="${flangeTopY+flangeThick+5}"
+         rx="34" ry="5.5" fill="#000" fill-opacity=".35"/>`;
+  // Flange dark underside
+  s += `<rect x="${wCX-32}" y="${flangeTopY+6}" width="64" height="${flangeThick}"
+         rx="6" fill="#92400e" stroke="#78350f" stroke-width="1"/>`;
+  // Flange top face
+  s += `<rect x="${wCX-32}" y="${flangeTopY}" width="64" height="${flangeThick}"
+         rx="6" fill="#fbbf24" stroke="#d97706" stroke-width="1.2"/>`;
+  // Flange shine
+  s += `<rect x="${wCX-24}" y="${flangeTopY+1}" width="48" height="5"
+         rx="3" fill="#fde68a" opacity=".48"/>`;
+
+  // Center hole
+  s += `<ellipse cx="${wCX}" cy="${flangeTopY+6}" rx="15" ry="5"
+         fill="#92400e" stroke="#78350f"/>`;
+  s += `<ellipse cx="${wCX}" cy="${flangeTopY+5}" rx="15" ry="5"
+         fill="#7c2d12" opacity=".8"/>`;
+
+  // Brine pipe sections through flange
+  s += `<rect x="${p2x-5}" y="${flangeTopY-2}" width="10" height="${flangeThick+4}"
+         rx="3" fill="#047857" stroke="#065f46" stroke-width="1"/>`;
+  s += `<rect x="${p2x-2}" y="${flangeTopY}" width="3.5" height="${flangeThick}"
+         rx="1.5" fill="#34d399" fill-opacity=".28"/>`;
+  s += `<rect x="${p1x-5}" y="${flangeTopY-2}" width="10" height="${flangeThick+4}"
+         rx="3" fill="#0d9488" stroke="#0f766e" stroke-width="1"/>`;
+  s += `<rect x="${p1x-2}" y="${flangeTopY}" width="3.5" height="${flangeThick}"
+         rx="1.5" fill="#5eead4" fill-opacity=".28"/>`;
+
+  // Bolts
+  for (const bx of [wCX-24, wCX+24]) {
+    s += `<circle cx="${bx}" cy="${flangeTopY+6}" r="3.8"
+           fill="#d1d5db" stroke="#9ca3af" stroke-width=".75"/>`;
+    s += `<circle cx="${bx}" cy="${flangeTopY+6}" r="1.7" fill="#6b7280"/>`;
+    s += `<line x1="${bx-1.2}" y1="${flangeTopY+6}"
+           x2="${bx+1.2}" y2="${flangeTopY+6}"
+           stroke="#374151" stroke-width=".8"/>`;
+    s += `<line x1="${bx}" y1="${flangeTopY+4.7}"
+           x2="${bx}" y2="${flangeTopY+7.3}"
+           stroke="#374151" stroke-width=".8"/>`;
+  }
+
+  // Borehole labels (below flange on grass)
+  s += `<text x="${wCX}" y="${groundY+20}" text-anchor="middle"
+         font-size="8.5" font-family="Inter,sans-serif"
+         fill="#3a8a6a" letter-spacing="1.5" opacity=".85">GEOBRØNN</text>`;
+  s += `<text x="${wCX}" y="${groundY+31}" text-anchor="middle"
+         font-size="7.5" font-family="Inter,sans-serif"
+         fill="#2a5a4a" opacity=".65">250 m</text>`;
+
+  // ── ACCUMULATOR TANK ──────────────────────────────────────
   // Drop shadow
-  s+=`<ellipse cx="${wCX}" cy="${flangeBotY+5}" rx="36" ry="6" fill="#000" fill-opacity=".4"/>`;
-  // Bottom face (darker)
-  s+=`<rect x="${wCX-34}" y="${flangeTopY+6}" width="68" height="${flangeThick}" rx="7" fill="#92400e" stroke="#78350f" stroke-width="1"/>`;
-  // Top face (bright yellow)
-  s+=`<rect x="${wCX-34}" y="${flangeTopY}" width="68" height="${flangeThick}" rx="7" fill="#fbbf24" stroke="#d97706" stroke-width="1.4"/>`;
-  // Top highlight shine
-  s+=`<rect x="${wCX-26}" y="${flangeTopY+1}" width="52" height="5" rx="3.5" fill="#fde68a" opacity=".55"/>`;
+  s += `<ellipse cx="${tCX}" cy="${tBot+eRy+10}" rx="${tW/2-5}" ry="4"
+         fill="#000" fill-opacity=".2"/>`;
 
-  // Turkis pipe cross-sections pierce through flange top – coloured tubes, no white caps
-  // OUT pipe (right, dark green) visible through flange
-  s+=`<rect x="${p2x-5.5}" y="${flangeTopY-2}" width="11" height="${flangeThick+4}" rx="3" fill="#047857" stroke="#065f46" stroke-width="1"/>`;
-  s+=`<rect x="${p2x-2.5}" y="${flangeTopY}" width="4"  height="${flangeThick}" rx="2" fill="#34d399" fill-opacity=".3"/>`;
-  // IN pipe (left, bright cyan) visible through flange
-  s+=`<rect x="${p1x-5.5}" y="${flangeTopY-2}" width="11" height="${flangeThick+4}" rx="3" fill="#0d9488" stroke="#0f766e" stroke-width="1"/>`;
-  s+=`<rect x="${p1x-2.5}" y="${flangeTopY}" width="4"  height="${flangeThick}" rx="2" fill="#5eead4" fill-opacity=".3"/>`;
+  // Tank body
+  s += `<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}"
+         rx="${tRx}" fill="url(#sg)"
+         stroke="rgba(255,255,255,.055)" stroke-width="1.1"
+         filter="url(#sdw)"/>`;
 
-  // Bolts – only 2 visible bolts at sides (not overlapping pipes)
-  const bPositions=[wCX-26, wCX+26];
-  for(const bx of bPositions){
-    s+=`<circle cx="${bx}" cy="${flangeTopY+7}" r="4.5" fill="#d1d5db" stroke="#9ca3af" stroke-width="1"/>`;
-    s+=`<circle cx="${bx}" cy="${flangeTopY+7}" r="2" fill="#6b7280"/>`;
-    s+=`<line x1="${bx-1.4}" y1="${flangeTopY+7}" x2="${bx+1.4}" y2="${flangeTopY+7}" stroke="#374151" stroke-width=".9"/>`;
-    s+=`<line x1="${bx}" y1="${flangeTopY+4.8}" x2="${bx}" y2="${flangeTopY+9.2}" stroke="#374151" stroke-width=".9"/>`;
-  }
-
-  // Depth indicator removed
-
-  // Borehole label BELOW flange, on the grass
-  s+=`<text x="${wCX}" y="${groundLevel+22}" text-anchor="middle" font-size="8.5" font-family="Inter,sans-serif" fill="#3a8a6a" letter-spacing="1.5" opacity=".85">GEOBRØNN</text>`;
-  s+=`<text x="${wCX}" y="${groundLevel+33}" text-anchor="middle" font-size="7.5" font-family="Inter,sans-serif" fill="#2a5a4a" opacity=".65">250 m</text>`;
-
-  // ── ACCUMULATOR TANK ─────────────────────────────────────
-  // bottom shadow removed
-  s+=`<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" rx="${tRx}" fill="url(#sg)" stroke="rgba(255,255,255,0.06)" stroke-width="1.1" filter="url(#sdw)"/>`;
-  s+=`<g clip-path="url(#tc)">
-    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#wg)"/>
-    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#ws)"/>
-    <ellipse cx="${tCX}" cy="${fillY}" rx="${tW/2-1}" ry="6" fill="${wS}" fill-opacity=".42"/>
-    <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" fill="url(#tf)"/>
-    <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" fill="url(#ss)"/>
+  // Water (clipped)
+  s += `<g clip-path="url(#tc)">
+    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}"
+      fill="url(#wg)"/>
+    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}"
+      fill="url(#ws)"/>
+    <ellipse cx="${tCX}" cy="${fillY}" rx="${tW/2-1}" ry="6"
+      fill="${wS}" fill-opacity=".38"/>
+    <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}"
+      fill="url(#tf)"/>
+    <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}"
+      fill="url(#ss)"/>
   </g>`;
-  // Integrated rounded caps – no floating ellipses
-  // Top dome cap (same steel gradient, seamless)
-  s+=`<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${eRy*2}" rx="${tW/2}" fill="url(#sg)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`;
-  s+=`<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${eRy*2}" rx="${tW/2}" fill="url(#ss)" opacity=".5"/>`;
-  // Top dome highlight
-  s+=`<ellipse cx="${tCX}" cy="${tTop+eRy*.7}" rx="${tW/2-8}" ry="${eRy*.45}" fill="#fff" fill-opacity=".08"/>`;
+
+  // Top dome (seamless cap)
+  s += `<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}"
+         height="${eRy*2}" rx="${tW/2}"
+         fill="url(#sg)" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`;
+  s += `<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}"
+         height="${eRy*2}" rx="${tW/2}"
+         fill="url(#ss)" opacity=".5"/>`;
+  s += `<ellipse cx="${tCX}" cy="${tTop+eRy*.7}"
+         rx="${tW/2-8}" ry="${eRy*.4}"
+         fill="#fff" fill-opacity=".06"/>`;
 
   // Reinforcement bands
-  [tTop+tH*.25,tTop+tH*.5,tTop+tH*.75].forEach(by=>{
-    s+=`<rect x="${tCX-tW/2+2}" y="${by-3}" width="${tW-4}" height="6" rx="2" fill="url(#bg2)" stroke="rgba(255,255,255,0.05)" stroke-width=".5" opacity=".7"/>`;
-  });
-  s+=`<rect x="${tCX-tW/2+7}" y="${tTop+eRy}" width="9" height="${tH-eRy*2}" rx="3.5" fill="#fff" fill-opacity=".045"/>`;
-
-  // No separate bottom cap – tank body rect rx handles rounding
-
-  // Sensor dots + labels – all left, aligned
-  TANK_SENSORS.forEach((sen,i)=>{
-    const sy=tTop+(1-sen.pct/100)*tH, t=temps[i], col=tCol(t);
-    s+=`<line x1="${dotX}" y1="${sy}" x2="${lblX+32}" y2="${sy}" stroke="${col}" stroke-width="1.1" stroke-dasharray="3,2.5" opacity=".7"/>`;
-    s+=`<circle cx="${dotX}" cy="${sy}" r="4" fill="${col}" stroke="#0b1220" stroke-width="1.3"/>`;
-    s+=`<circle cx="${dotX}" cy="${sy}" r="1.8" fill="#fff" fill-opacity=".38"/>`;
-    const lbl=t!==null?t.toFixed(1)+'°':'–';
-    s+=`<text x="${lblX+30}" y="${sy+4}" text-anchor="end" font-size="10.5" font-family="JetBrains Mono,monospace" fill="${col}" font-weight="500">${lbl}</text>`;
+  [tTop+tH*.25, tTop+tH*.5, tTop+tH*.75].forEach(by => {
+    s += `<rect x="${tCX-tW/2+2}" y="${by-3}" width="${tW-4}" height="5.5"
+           rx="2" fill="url(#bg2)"
+           stroke="rgba(255,255,255,.05)" stroke-width=".5" opacity=".7"/>`;
   });
 
-  // Tank label
-  s+=`<text x="${tCX}" y="${tTop-14}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#3a6a90" letter-spacing="2" opacity=".8">AKKUMULATORTANK</text>`;
-  s+=`<text x="${tCX}" y="${tTop-5}" text-anchor="middle" font-size="7.5" font-family="Inter,sans-serif" fill="#2a5070" opacity=".6">500 L</text>`;
+  // Left specular stripe
+  s += `<rect x="${tCX-tW/2+7}" y="${tTop+eRy}" width="7" height="${tH-eRy*2}"
+         rx="3" fill="#fff" fill-opacity=".04"/>`;
 
-  svg.innerHTML=s;
+  // Bottom dome (seamless cap)
+  s += `<rect x="${tCX-tW/2}" y="${tBot-eRy}" width="${tW}"
+         height="${eRy*2}" rx="${tW/2}"
+         fill="${fillF > .12 ? wD : 'url(#sg)'}"
+         stroke="rgba(255,255,255,.055)" stroke-width="1"/>`;
+  s += `<ellipse cx="${tCX}" cy="${tBot+eRy*.3}"
+         rx="${tW/2-9}" ry="${eRy*.36}"
+         fill="${fillF > .12 ? wB : '#4a8aaa'}" fill-opacity=".14"/>`;
+
+  // Sensor markers + labels (all left side, aligned column)
+  SENSORS.forEach((sen, i) => {
+    const sy  = tTop + (1 - sen.pct/100) * tH;
+    const t   = temps[i];
+    const col = tCol(t);
+    s += `<line x1="${dotX}" y1="${sy}" x2="${lblX+28}" y2="${sy}"
+           stroke="${col}" stroke-width="1.1"
+           stroke-dasharray="3,2.5" opacity=".7"/>`;
+    s += `<circle cx="${dotX}" cy="${sy}" r="4"
+           fill="${col}" stroke="#08111f" stroke-width="1.2"/>`;
+    s += `<circle cx="${dotX}" cy="${sy}" r="1.8"
+           fill="#fff" fill-opacity=".36"/>`;
+    s += `<text x="${lblX+26}" y="${sy+4}" text-anchor="end"
+           font-size="10.5" font-family="JetBrains Mono,monospace"
+           fill="${col}" font-weight="500">${t != null ? t.toFixed(1)+'°' : '–'}</text>`;
+  });
+
+  // Tank labels
+  s += `<text x="${tCX}" y="${tTop-15}" text-anchor="middle"
+         font-size="8" font-family="Inter,sans-serif"
+         fill="#3a6a90" letter-spacing="2" opacity=".8">AKKUMULATORTANK</text>`;
+  s += `<text x="${tCX}" y="${tTop-5}" text-anchor="middle"
+         font-size="7.5" font-family="Inter,sans-serif"
+         fill="#2a5070" opacity=".6">500 L</text>`;
+
+  document.getElementById('svg').innerHTML = s;
 }
 
-// ═══ RENDER PANELS ═══════════════════════════════════════
-function renderPanels(temps,nibe){
-  const tr=document.getElementById('tankRows');
-  tr.innerHTML='';
-  TANK_SENSORS.forEach((s,i)=>{
-    const t=temps[i],col=tCol(t);
-    const d=document.createElement('div');d.className='srow';
-    d.innerHTML=`<div class="sdot" style="background:${col};box-shadow:0 0 5px ${col}55"></div>
-      <div class="spct">${s.pct}%</div><div class="sname">${s.name}</div>
-      <div class="sval">${t!==null?t.toFixed(1)+' °C':'–'}</div>`;
-    btt(d,s.name,['topp','turVP','midt','nedre','retur'][i],'°C');
-    tr.appendChild(d);
+// ═══════════════════════════════════════════
+// RENDER PANELS
+// ═══════════════════════════════════════════
+function renderPanels(temps, nibe) {
+  // Sensor rows
+  const rows = document.getElementById('rows');
+  rows.innerHTML = '';
+  const HK = ['t100','t75','t50','t25','t0'];
+  SENSORS.forEach((sen, i) => {
+    const t = temps[i], col = tCol(t);
+    const d = document.createElement('div');
+    d.className = 'sr';
+    d.innerHTML =
+      `<div class="sd" style="background:${col};box-shadow:0 0 5px ${col}44"></div>`+
+      `<div class="sp">${sen.pct}%</div>`+
+      `<div class="sn">${sen.name}</div>`+
+      `<div class="sv">${t != null ? t.toFixed(1)+'\u202F°C' : '–'}</div>`;
+    btt(d, sen.name, HK[i], '°C');
+    rows.appendChild(d);
   });
-  const valid=temps.filter(t=>t!==null);
-  const snitt=valid.length?r1(valid.reduce((a,b)=>a+b,0)/valid.length):null;
-  const topp=temps[0],bunn=temps[4],turVP=temps[1];
-  const energi=snitt!==null?r1(Math.max(0,KWH*(snitt-REF))):null;
-  const dtb=(topp!==null&&bunn!==null)?r1(topp-bunn):null;
-  const dvp=(turVP!==null&&bunn!==null)?r1(turVP-bunn):null;
-  document.getElementById('vSnitt').innerHTML =snitt !==null?snitt.toFixed(1) +'<span class="mc-unit">°C</span>' :'–';
-  document.getElementById('vEnergi').innerHTML=energi!==null?energi.toFixed(1)+'<span class="mc-unit">kWh</span>':'–';
-  document.getElementById('vDTB').innerHTML   =dtb   !==null?dtb.toFixed(1)  +'<span class="mc-unit">K</span>'  :'–';
-  document.getElementById('vDVP').innerHTML   =dvp   !==null?dvp.toFixed(1)  +'<span class="mc-unit">K</span>'  :'–';
-  document.getElementById('vSCOP').textContent    =nibe.scop    !==null?r2(nibe.scop).toFixed(2):'–';
-  document.getElementById('vBrineIn').innerHTML   =nibe.brineIn !==null?nibe.brineIn.toFixed(1) +'<span class="bpill-unit"> °C</span>':'–';
-  document.getElementById('vBrineOut').innerHTML  =nibe.brineOut!==null?nibe.brineOut.toFixed(1)+'<span class="bpill-unit"> °C</span>':'–';
-  btt(document.getElementById('mc-snitt'), 'Snitttemperatur','snitt','°C');
-  btt(document.getElementById('mc-energi'),'Energi i tank','energi','kWh');
-  btt(document.getElementById('mc-dtb'),   'ΔT Topp–Bunn','dtb','K');
-  btt(document.getElementById('mc-dvp'),   'ΔT VP','dvp','K');
-  btt(document.getElementById('mc-scop'),  'SCOP Årsytelse','scop','');
-  btt(document.getElementById('mc-brineIn'), 'Brine inn BT10','brineIn','°C');
-  btt(document.getElementById('mc-brineOut'),'Brine ut BT11','brineOut','°C');
-  document.getElementById('statusTxt').textContent='Oppdatert '+new Date().toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  // Tank metrics
+  const vld    = temps.filter(t => t != null);
+  const snitt  = vld.length ? r1(vld.reduce((a,b) => a+b, 0)/vld.length) : null;
+  const topp   = temps[0], bunn = temps[4], vp = temps[1];
+  const energi = snitt != null ? r1(Math.max(0, KWH*(snitt-REF))) : null;
+  const dtb    = (topp != null && bunn != null) ? r1(topp-bunn) : null;
+  const dvp    = (vp != null && bunn != null)   ? r1(vp-bunn)   : null;
+
+  const fmt = (v, dec=1) => v != null ? v.toFixed(dec) : null;
+  const setM = (id, val, unit) => {
+    document.getElementById(id).innerHTML = val != null
+      ? `${val}<span class="mu">${unit}</span>` : '–';
+  };
+  setM('vSnitt',  fmt(snitt),  '\u202F°C');
+  setM('vEnergi', fmt(energi), '\u202FkWh');
+  setM('vDtb',    fmt(dtb),    '\u202FK');
+  setM('vDvp',    fmt(dvp),    '\u202FK');
+
+  // NIBE
+  const sc = nibe.scop;
+  document.getElementById('vScop').textContent =
+    sc != null ? r2(sc).toFixed(2) : '–';
+
+  const pwr  = nibe.power ?? 0;
+  const tVP  = nibe.supply;
+  const rT   = temps[4] ?? 25;
+  const vpH  = pwr > 0.1 && tVP != null && tVP > (rT + 3);
+  document.getElementById('vMod').textContent =
+    vpH     ? '🟢 Varmer akkumulatortank' :
+    pwr>0.1 ? '🟡 Produserer varmtvann'  :
+              '⚫ Avslått';
+
+  const fmtB = (v, id) => {
+    document.getElementById(id).innerHTML = v != null
+      ? `${v.toFixed(1)}<span class="bu">\u202F°C</span>` : '–';
+  };
+  fmtB(nibe.brineIn,  'vBrineIn');
+  fmtB(nibe.brineOut, 'vBrineOut');
+
+  // Bind tooltips
+  btt(document.getElementById('mSnitt'),   'Snitt temperatur', 'snitt',   '°C');
+  btt(document.getElementById('mEnergi'),  'Energi i tank',    'energi',  'kWh');
+  btt(document.getElementById('mDtb'),     'ΔT Topp–Bunn',     'dtb',     'K');
+  btt(document.getElementById('mDvp'),     'ΔT VP',            'dvp',     'K');
+  btt(document.getElementById('mScop'),    'SCOP årsytelse',   'scop',    '');
+  btt(document.getElementById('mBrineIn'), 'Brine inn BT10',   'brineIn', '°C');
+  btt(document.getElementById('mBrineOut'),'Brine ut BT11',    'brineOut','°C');
 }
 
-function render(temps,nibe,isLive){
-  if(isLive){
-    ph('topp',temps[0]);ph('turVP',temps[1]);ph('midt',temps[2]);ph('nedre',temps[3]);ph('retur',temps[4]);
-    const v=temps.filter(t=>t!==null);
-    if(v.length){const sn=r1(v.reduce((a,b)=>a+b,0)/v.length);ph('snitt',sn);ph('energi',r1(Math.max(0,KWH*(sn-REF))));}
-    if(temps[0]!==null&&temps[4]!==null)ph('dtb',r1(temps[0]-temps[4]));
-    if(temps[1]!==null&&temps[4]!==null)ph('dvp',r1(temps[1]-temps[4]));
-    ph('scop',nibe.scop);ph('brineIn',nibe.brineIn);ph('brineOut',nibe.brineOut);
+// ═══════════════════════════════════════════
+// RENDER (main entry point)
+// ═══════════════════════════════════════════
+function render(temps, nibe, isLive) {
+  if (isLive) {
+    ph('t100', temps[0]); ph('t75', temps[1]); ph('t50', temps[2]);
+    ph('t25',  temps[3]); ph('t0',  temps[4]);
+    const vld = temps.filter(t => t != null);
+    if (vld.length) {
+      const sn = r1(vld.reduce((a,b) => a+b, 0) / vld.length);
+      ph('snitt', sn);
+      ph('energi', r1(Math.max(0, KWH*(sn-REF))));
+    }
+    if (temps[0] != null && temps[4] != null) ph('dtb', r1(temps[0]-temps[4]));
+    if (temps[1] != null && temps[4] != null) ph('dvp', r1(temps[1]-temps[4]));
+    ph('scop',     nibe.scop);
+    ph('brineIn',  nibe.brineIn);
+    ph('brineOut', nibe.brineOut);
   }
-  buildScene(temps,nibe);
-  renderPanels(temps,nibe);
+  buildSvg(temps, nibe);
+  renderPanels(temps, nibe);
 }
 
-function toggleCfg(){
-  const b=document.getElementById('cfgBody'),t=document.getElementById('cfgToggle');
-  b.classList.toggle('open');t.classList.toggle('open');
-}
-function sv(k,v){try{localStorage.setItem(k,v)}catch(e){}}
-function lv(k){try{return localStorage.getItem(k)}catch(e){return null}}
-function saveConfig(){sv('hId',document.getElementById('homeyId').value.trim());sv('hKey',document.getElementById('apiKey').value.trim())}
-function loadConfig(){const i=lv('hId'),k=lv('hKey');if(i)document.getElementById('homeyId').value=i;if(k)document.getElementById('apiKey').value=k}
-function setSpinner(a){const i=document.getElementById('refreshIcon');a?i.classList.add('spin'):i.classList.remove('spin')}
-
-// ═══ HISTORIKK – localStorage + Homey Insights for SCOP ═══
-// Homey logger ikke Device Capabilities i Insights.
-// Tank-sensorer lagres i localStorage ved hver oppdatering.
-// SCOP hentes fra Homey Insights (Logic-variabel).
-
-const LS_KEY = 'varmesystem_history_v2';
-
-function saveHistory() {
-  try {
-    const toSave = {};
-    Object.keys(H).forEach(k => { toSave[k] = H[k].slice(-MAX_HIST); });
-    localStorage.setItem(LS_KEY, JSON.stringify(toSave));
-  } catch(e) { console.warn('History save failed:', e.message); }
-}
-
-function loadHistory() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return;
-    const saved = JSON.parse(raw);
-    Object.keys(saved).forEach(k => {
-      if (H[k] !== undefined && Array.isArray(saved[k])) {
-        H[k] = saved[k].slice(-MAX_HIST);
-      }
-    });
-    console.log('History restored from localStorage');
-  } catch(e) { console.warn('History load failed:', e.message); }
-}
-
-let insightsLoaded = false;
-let lastHId = '';
+// ═══════════════════════════════════════════
+// SCOP INSIGHTS (from Homey Logic variable)
+// ═══════════════════════════════════════════
+let _scopDone = false, _lastHid = '';
 
 async function loadScopInsights(base, key) {
-  const currentHId = document.getElementById('homeyId').value.trim();
-  if (lastHId && lastHId !== currentHId) {
-    insightsLoaded = false;
+  const curHid = document.getElementById('hid').value.trim();
+  if (_lastHid && _lastHid !== curHid) {
+    _scopDone = false;
     Object.keys(H).forEach(k => H[k] = []);
-    localStorage.removeItem(LS_KEY);
+    try { localStorage.removeItem(LS_KEY); } catch(_) {}
   }
-  lastHId = currentHId;
-  if (insightsLoaded) return;
-  try {
-    const logsRes = await fetch(`${base}/api/manager/insights/log`, {
-      headers:{'Authorization':'Bearer '+key}
-    });
-    if (!logsRes.ok) return;
-    const logs = await logsRes.json();
+  _lastHid = curHid;
+  if (_scopDone) return;
 
-    // SCOP er en Logic-variabel med ownerUri=homey:manager:logic og title=SCOP
+  try {
+    const r = await fetch(`${base}/api/manager/insights/log`,
+      { headers: {'Authorization':'Bearer '+key} });
+    if (!r.ok) { _scopDone=true; return; }
+    const logs = await r.json();
+
     const scopLog = Object.values(logs).find(l =>
       l.ownerUri === 'homey:manager:logic' &&
       l.type === 'number' &&
-      l.title === 'SCOP'
-    );
-    if (!scopLog) { console.log('SCOP Insights-logg ikke funnet'); insightsLoaded=true; return; }
+      l.title === 'SCOP');
+    if (!scopLog) { _scopDone=true; return; }
 
-    // Hent entries – uri og id er fulle strenger
     const uri = encodeURIComponent(scopLog.uri);
     const id  = encodeURIComponent(scopLog.id);
-    const res = await fetch(
+    const r2 = await fetch(
       `${base}/api/manager/insights/log/${uri}/${id}/entry?resolution=last24Hours`,
-      { headers:{'Authorization':'Bearer '+key} }
-    );
-    if (!res.ok) { insightsLoaded=true; return; }
-    const entries = await res.json();
-    if (!Array.isArray(entries) || entries.length === 0) { insightsLoaded=true; return; }
+      { headers: {'Authorization':'Bearer '+key} });
+    if (!r2.ok) { _scopDone=true; return; }
 
-    const insightScop = entries
+    const entries = await r2.json();
+    if (!Array.isArray(entries) || !entries.length) { _scopDone=true; return; }
+
+    const data = entries
       .filter(e => typeof e.v === 'number' && isFinite(e.v))
       .map(e => r2(e.v));
-
-    if (insightScop.length > H.scop.length) {
-      H.scop = insightScop.slice(-MAX_HIST);
-      console.log(`SCOP: ${H.scop.length} punkter lastet fra Homey Insights`);
-    }
-    insightsLoaded = true;
-  } catch(e) {
-    console.warn('SCOP Insights load failed (non-fatal):', e.message);
-    insightsLoaded = true;
-  }
+    if (data.length > H.scop.length) H.scop = data.slice(-MAX_PTS);
+    _scopDone = true;
+  } catch(_) { _scopDone = true; }
 }
 
-async function fetchHomey(){
-  saveConfig();
-  const hId=document.getElementById('homeyId').value.trim(),key=document.getElementById('apiKey').value.trim();
-  const err=document.getElementById('errMsg');err.style.display='none';
-  if(!hId||!key){
-    err.style.display='block';err.innerHTML='Fyll inn Homey ID og API Key under ⚙ Tilkobling.';
-    document.getElementById('cfgBody').classList.add('open');document.getElementById('cfgToggle').classList.add('open');
+// ═══════════════════════════════════════════
+// HOMEY FETCH
+// ═══════════════════════════════════════════
+const sv  = (k,v) => { try { localStorage.setItem(k,v); } catch(_) {} };
+const lv  = k => { try { return localStorage.getItem(k); } catch(_) { return null; } };
+const savCfg = () => {
+  sv('hid',  document.getElementById('hid').value.trim());
+  sv('hkey', document.getElementById('hkey').value.trim());
+};
+const lodCfg = () => {
+  const i=lv('hid'), k=lv('hkey');
+  if (i) document.getElementById('hid').value  = i;
+  if (k) document.getElementById('hkey').value = k;
+};
+
+function setSpin(on) {
+  const el = document.getElementById('rico');
+  on ? el.classList.add('spin') : el.classList.remove('spin');
+}
+
+function setStatus(txt, type) {
+  const el = document.getElementById('sts');
+  el.textContent = txt;
+  el.className = 'hdr-s' + (type ? ' '+type : '');
+}
+
+async function doFetch() {
+  savCfg();
+  const hid  = document.getElementById('hid').value.trim();
+  const key  = document.getElementById('hkey').value.trim();
+  const errEl = document.getElementById('err');
+  errEl.style.display = 'none';
+
+  if (!hid || !key) {
+    errEl.style.display = 'block';
+    errEl.innerHTML = 'Fyll inn Homey ID og API Key under ⚙ Tilkobling.';
+    document.getElementById('cfb').classList.add('open');
+    document.getElementById('cft').classList.add('open');
     return;
   }
-  setSpinner(true);
-  const base=hId.includes('.')?`https://${hId}`:`https://${hId}.connect.athom.com`;
-  try{
-    const res=await fetch(`${base}/api/manager/devices/device`,{headers:{'Authorization':'Bearer '+key}});
-    if(res.status===401)throw new Error('401 – API Key ugyldig eller utløpt');
-    if(res.status===403)throw new Error('403 – Mangler rettigheter');
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const devs=Object.values(await res.json());
 
-    // Load SCOP from Homey Insights (once per session)
+  setSpin(true);
+  const base = hid.includes('.') ? `https://${hid}` : `https://${hid}.connect.athom.com`;
+
+  try {
+    const res = await fetch(`${base}/api/manager/devices/device`,
+      { headers: {'Authorization':'Bearer '+key} });
+    if (res.status === 401) throw new Error('401 – API Key ugyldig eller utløpt');
+    if (res.status === 403) throw new Error('403 – Mangler rettigheter');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const devs = Object.values(await res.json());
+
+    const gv = name => {
+      const d = devs.find(x => x.name === name);
+      if (!d) return null;
+      const c = d.capabilitiesObj?.[CAP];
+      return (c && typeof c.value === 'number') ? r1(c.value) : null;
+    };
+
+    const temps = SENSORS.map(s => gv(s.dev));
+    const nibe  = {
+      scop    : gv(DEV.scop),
+      brineIn : gv(DEV.brineIn),
+      brineOut: gv(DEV.brineOut),
+      supply  : gv(DEV.supply),
+      power   : gv(DEV.power),
+      hotWater: gv(DEV.hotWater),
+    };
+
     await loadScopInsights(base, key);
+    render(temps, nibe, true);
+    savH();
 
-    const temps=TANK_SENSORS.map(s=>{const d=devs.find(x=>x.name===s.dev);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null});
-    const gv=name=>{const d=devs.find(x=>x.name===name);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null};
-    render(temps,{
-      scop:             gv(SCOP_DEV),
-      brineIn:          gv(BRINE_IN_DEV),
-      brineOut:         gv(BRINE_OUT_DEV),
-      supplyLine:       gv(NIBE_SUPPLY_DEV),
-      powerConsumption: gv(NIBE_POWER_DEV),
-      hotWaterDemand:   gv(NIBE_DHW_DEV),
-    }, true);  // isLive=true → push to history
-    saveHistory();
-    document.getElementById('statusTxt').textContent='Live · '+new Date().toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit'});
-  }catch(e){
-    document.getElementById('statusTxt').textContent='Tilkoblingsfeil';
-    err.style.display='block';err.innerHTML=`<strong>Feil:</strong> ${e.message}`;
-  }finally{setSpinner(false)}
+    const pts = H.t100.length;
+    const pStr = pts > 0 ? ` · ${pts}p` : '';
+    setStatus('Live · '+new Date().toLocaleTimeString('nb-NO',
+      {hour:'2-digit',minute:'2-digit'})+pStr, 'live');
+
+  } catch(e) {
+    setStatus('Tilkoblingsfeil', 'err');
+    errEl.style.display = 'block';
+    errEl.innerHTML = `<strong>Feil:</strong> ${e.message}`;
+  } finally {
+    setSpin(false);
+  }
 }
 
-setInterval(fetchHomey,5*60*1000);
-loadConfig();
-loadHistory();  // restore history from localStorage immediately
-render([58.4,49.2,40.1,33.7,29.3],{scop:3.84,brineIn:8.2,brineOut:2.1,supplyLine:55.0,powerConsumption:3.2,hotWaterDemand:0}, false);  // demo, no history (power in kW)
-document.getElementById('statusTxt').textContent='Demo · Fyll inn tilkobling';
-setTimeout(fetchHomey,500);
+// ── Config toggle ──
+function tCfg() {
+  const b = document.getElementById('cfb');
+  const t = document.getElementById('cft');
+  b.classList.toggle('open');
+  t.classList.toggle('open');
+}
+
+// ── Auto-refresh ──
+setInterval(doFetch, 5 * 60 * 1000);
+
+// ── Startup ──
+lodCfg();
+lodH();
+render(
+  [58.4, 49.2, 40.1, 33.7, 29.3],
+  { scop:3.84, brineIn:8.2, brineOut:2.1,
+    supply:55, power:3.2, hotWater:0 },
+  false
+);
+setStatus('Demo · Fyll inn tilkobling');
+setTimeout(doFetch, 400);
 </script>
 </body>
 </html>
