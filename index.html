@@ -2,605 +2,679 @@
 <html lang="nb">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="theme-color" content="#0a0f1a"/>
-<title>Akkumulatortank</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<meta name="theme-color" content="#0b1220"/>
+<title>Varmesystem</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
-  :root {
-    --bg:       #0a0f1a;
-    --surface:  #111827;
-    --card:     #161e2e;
-    --border:   rgba(255,255,255,0.07);
-    --text:     #e8edf5;
-    --muted:    #6b7c99;
-    --accent:   #3b82f6;
-    --mono:     'DM Mono', monospace;
-    --sans:     'DM Sans', sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
-  }
-  .header {
-    padding: 1.2rem 1.5rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .header-left h1 {
-    font-size: 15px;
-    font-weight: 500;
-    letter-spacing: .02em;
-    color: var(--text);
-  }
-  .header-left p {
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 2px;
-    font-family: var(--mono);
-  }
-  .refresh-btn {
-    background: rgba(59,130,246,0.12);
-    border: 1px solid rgba(59,130,246,0.3);
-    color: #60a5fa;
-    padding: 7px 14px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-family: var(--mono);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: background .2s;
-    white-space: nowrap;
-  }
-  .refresh-btn:hover { background: rgba(59,130,246,0.22); }
-  .refresh-btn svg { width: 13px; height: 13px; }
-  .status-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--muted); flex-shrink: 0;
-    transition: background .4s;
-  }
-  .status-dot.ok { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
-  .status-dot.err { background: #ef4444; }
-  .layout {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    padding: 1.5rem;
-    align-items: flex-start;
-    justify-content: center;
-  }
-  .tank-col {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-  }
-  .tank-label {
-    font-size: 10px;
-    font-family: var(--mono);
-    color: var(--muted);
-    letter-spacing: .1em;
-    text-transform: uppercase;
-  }
-  .right-col {
-    flex: 1;
-    min-width: 220px;
-    max-width: 340px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .sec-title {
-    font-size: 9px;
-    font-family: var(--mono);
-    color: var(--muted);
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-  .scard {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 9px 14px;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    margin-bottom: 6px;
-    transition: border-color .2s;
-  }
-  .scard:last-child { margin-bottom: 0; }
-  .scard:hover { border-color: rgba(255,255,255,0.14); }
-  .spct {
-    font-size: 10px;
-    font-family: var(--mono);
-    color: var(--muted);
-    width: 30px;
-    text-align: right;
-    flex-shrink: 0;
-  }
-  .sname {
-    font-size: 13px;
-    color: #94a3b8;
-    flex: 1;
-  }
-  .stemp {
-    font-size: 15px;
-    font-weight: 500;
-    font-family: var(--mono);
-    color: var(--text);
-  }
-  .sdot {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .mgrid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .mcard {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 14px;
-  }
-  .mlabel {
-    font-size: 9px;
-    font-family: var(--mono);
-    color: var(--muted);
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  .mval {
-    font-size: 24px;
-    font-weight: 500;
-    font-family: var(--mono);
-    color: var(--text);
-    line-height: 1;
-  }
-  .munit {
-    font-size: 11px;
-    color: var(--muted);
-    margin-left: 3px;
-  }
-  .updated {
-    font-size: 10px;
-    font-family: var(--mono);
-    color: var(--muted);
-    text-align: center;
-  }
-  .config-row {
-    padding: 0.8rem 1.5rem 1rem;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-    border-top: 1px solid var(--border);
-    margin-top: 0.5rem;
-  }
-  .config-row input {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 7px 11px;
-    outline: none;
-    transition: border-color .2s;
-  }
-  .config-row input:focus { border-color: rgba(59,130,246,0.5); }
-  #ipInput { width: 145px; }
-  #tokInput { flex: 1; min-width: 160px; max-width: 280px; }
-  .config-row label {
-    font-size: 10px;
-    font-family: var(--mono);
-    color: var(--muted);
-    margin-right: -4px;
-  }
-  .err-msg {
-    font-size: 11px;
-    font-family: var(--mono);
-    color: #f87171;
-    padding: 0 1.5rem 0.8rem;
-    display: none;
-    line-height: 1.6;
-  }
-  .spin { animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+:root{
+  --bg:#0b1220;--bg2:#0f1828;--card:#141f32;--card2:#192540;
+  --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.1);
+  --text:#e2eaf8;--text2:#8ba0c0;--muted:#4a6080;
+  --accent:#3b7df8;--accent2:#00d4b8;
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;--r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
-  @media (max-width: 520px) {
-    .layout { padding: 1rem; gap: 16px; }
-    .header { padding: 1rem; }
-    .config-row { padding: 0.7rem 1rem 0.8rem; }
-    .err-msg { padding: 0 1rem 0.7rem; }
-    .mval { font-size: 20px; }
-  }
+/* ── NO HEADER – floating refresh button in bottom-right corner ── */
+.rbtn{
+  background:rgba(15,24,40,0.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid rgba(59,125,248,0.28);
+  color:#60a5fa;padding:7px 15px;border-radius:40px;font-size:12px;
+  font-family:var(--mono);cursor:pointer;display:flex;align-items:center;gap:7px;
+  transition:all .2s;white-space:nowrap;font-weight:500;
+  box-shadow:0 4px 20px rgba(0,0,0,0.45);
+}
+.rbtn:hover{background:rgba(20,32,56,0.98);border-color:rgba(59,125,248,0.5)}
+.rbtn svg{width:13px;height:13px;flex-shrink:0}
+
+.spin{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.wrap{max-width:1100px;margin:0 auto;padding:calc(.6rem + env(safe-area-inset-top,0px)) 1rem 5rem}
+
+/* ── DIAGRAM ── */
+.diagram-wrap{
+  background:linear-gradient(135deg,#0d1930,#0a1422 50%,#0d1930);
+  border:1px solid var(--border);border-radius:18px;
+  overflow-x:auto;overflow-y:hidden;
+  position:relative;margin-bottom:1.25rem;
+  -webkit-overflow-scrolling:touch;
+}
+.diagram-wrap::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 15% 50%,rgba(59,125,248,0.05) 0%,transparent 55%),
+             radial-gradient(ellipse at 85% 50%,rgba(0,212,184,0.04) 0%,transparent 55%);
+}
+#sceneSvg{display:block;min-width:680px;width:100%}
+
+/* ── GRID ── */
+.grid{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.1rem}
+.panel-hdr{display:flex;align-items:center;gap:7px;margin-bottom:.8rem}
+.panel-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.panel-title{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+.srow{display:flex;align-items:center;gap:9px;padding:6px 6px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;border-radius:6px;transition:background .15s}
+.srow:last-child{border-bottom:none}
+.srow:hover{background:rgba(255,255,255,0.03)}
+.sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.spct{font-size:10px;font-family:var(--mono);color:var(--muted);width:26px;text-align:right;flex-shrink:0}
+.sname{font-size:12px;color:var(--text2);flex:1}
+.sval{font-size:13px;font-weight:500;font-family:var(--mono);color:var(--text)}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.mc{background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;cursor:pointer;transition:border-color .2s}
+.mc:hover{border-color:var(--border2)}
+.mc-label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.mc-val{font-size:19px;font-weight:600;font-family:var(--mono);color:var(--text);line-height:1}
+.mc-unit{font-size:10px;color:var(--muted);margin-left:2px;font-weight:400}
+.scop-card{background:linear-gradient(135deg,rgba(0,212,184,0.08),rgba(0,212,184,0.02));border:1px solid rgba(0,212,184,0.18);border-radius:9px;padding:12px 13px;display:flex;align-items:center;gap:12px;margin-bottom:7px;cursor:pointer;transition:border-color .2s}
+.scop-card:hover{border-color:rgba(0,212,184,0.32)}
+.scop-icon{width:40px;height:40px;border-radius:9px;background:rgba(0,212,184,0.1);border:1px solid rgba(0,212,184,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.scop-label{font-size:9px;font-weight:600;color:#00d4b8;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+.scop-num{font-size:26px;font-weight:700;font-family:var(--mono);color:#00d4b8;line-height:1}
+.scop-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.brine-row{display:flex;gap:7px}
+.bpill{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;cursor:pointer;transition:border-color .2s}
+.bpill:hover{border-color:var(--border2)}
+.bpill-label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+.bpill-val{font-size:16px;font-weight:600;font-family:var(--mono);color:var(--accent2)}
+.bpill-unit{font-size:9px;color:var(--muted)}
+
+/* ── TOOLTIP ── */
+.tt{position:fixed;z-index:999;background:#1a2840;border:1px solid rgba(255,255,255,0.11);border-radius:11px;padding:11px 13px;min-width:185px;max-width:215px;pointer-events:none;opacity:0;transition:opacity .15s;box-shadow:0 12px 40px rgba(0,0,0,0.55)}
+.tt.show{opacity:1}
+.tt-title{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px}
+.tt-val{font-size:19px;font-weight:600;font-family:var(--mono);color:var(--text);margin-bottom:9px}
+.tt-svg{width:100%;height:44px;display:block}
+.tt-range{font-size:9px;font-family:var(--mono);color:var(--muted);display:flex;justify-content:space-between;margin-top:3px}
+.tt-hint{font-size:9px;color:var(--muted);text-align:center;margin-top:5px;opacity:.65}
+
+/* ── CONFIG ── */
+.cfg-section{margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.cfg-toggle{width:100%;padding:.8rem 1.1rem;background:none;border:none;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;text-align:left}
+.cfg-toggle:hover{color:var(--text)}
+.cfg-toggle svg{width:13px;height:13px;flex-shrink:0;transition:transform .2s;color:var(--muted)}
+.cfg-toggle.open svg{transform:rotate(180deg)}
+.cfg-body{display:none;padding:0 1.1rem 1.1rem;border-top:1px solid var(--border)}
+.cfg-body.open{display:block}
+.cfg-field{display:flex;flex-direction:column;gap:4px;margin-top:.8rem}
+.cfg-label{font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.06em}
+.cfg-input{background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 10px;outline:none;transition:border-color .2s;width:100%}
+.cfg-input:focus{border-color:rgba(59,125,248,0.5)}
+.cfg-hint{font-size:11px;color:var(--muted);margin-top:.7rem;line-height:1.6;padding-top:.7rem;border-top:1px solid var(--border)}
+.errmsg{font-size:11px;font-family:var(--mono);color:#f87171;padding:.65rem 1.1rem;display:none;line-height:1.6;background:rgba(248,113,113,0.05);border-top:1px solid rgba(248,113,113,0.12)}
+
+@media(max-width:580px){
+  .wrap{padding:0 0 5rem}
+  .grid{grid-template-columns:1fr;gap:.7rem}
+  .panel{border-radius:0;border-left:none;border-right:none;padding:.9rem 1rem}
+  .diagram-wrap{border-radius:0;border-left:none;border-right:none;margin-bottom:.7rem}
+  .mc-val{font-size:17px}
+  .scop-num{font-size:22px}
+  .cfg-section{border-radius:0;border-left:none;border-right:none}
+  .rbtn{top:calc(.7rem + env(safe-area-inset-top,0px));right:1rem}
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
-    <h1>Akkumulatortank</h1>
-    <p id="statusTxt">Klar</p>
-  </div>
-  <button class="refresh-btn" onclick="fetchHomey()" id="refreshBtn">
-    <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<div style="position:fixed;top:calc(.9rem + env(safe-area-inset-top,0px));right:calc(1rem + max(0px,(100vw - 1100px)/2));z-index:300;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+  <button class="rbtn" onclick="fetchHomey()" id="refreshBtn" style="position:static">
+    <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
     </svg>
     Oppdater
   </button>
+  <span id="statusTxt" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#4a6080;text-align:right;padding-right:2px"></span>
 </div>
 
-<div class="layout">
-  <div class="tank-col">
-    <div class="tank-label">500 liter</div>
-    <svg id="tankSvg" viewBox="-80 0 280 440" xmlns="http://www.w3.org/2000/svg"
-         style="width:250px;height:418px;overflow:visible;display:block"></svg>
-    <div class="updated" id="upd"></div>
-  </div>
+<div class="tt" id="tt">
+  <div class="tt-title" id="ttTitle"></div>
+  <div class="tt-val"   id="ttVal"></div>
+  <svg class="tt-svg" id="ttSvg" viewBox="0 0 170 44" preserveAspectRatio="none"></svg>
+  <div class="tt-range"><span id="ttMin"></span><span id="ttMax"></span></div>
+  <div class="tt-hint">Siste 24 timer</div>
+</div>
 
-  <div class="right-col">
-    <div class="sec-title">Temperaturnivåer</div>
-    <div id="scards"></div>
-    <div class="sec-title" style="margin-top:6px">Nøkkeltall</div>
-    <div class="mgrid">
-      <div class="mcard">
-        <div class="mlabel">Snitt</div>
-        <div class="mval" id="vSnitt">–<span class="munit">°C</span></div>
+<div class="wrap">
+  <div class="diagram-wrap">
+    <svg id="sceneSvg" viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-dot" style="background:#3b7df8"></div><div class="panel-title">Akkumulatortank · 500 L</div></div>
+      <div id="tankRows"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-dot" style="background:#60a5fa"></div><div class="panel-title">Tanknøkkeltall</div></div>
+      <div class="mgrid">
+        <div class="mc" id="mc-snitt"><div class="mc-label">Snitt</div><div class="mc-val" id="vSnitt">–<span class="mc-unit">°C</span></div></div>
+        <div class="mc" id="mc-energi"><div class="mc-label">Energi</div><div class="mc-val" id="vEnergi">–<span class="mc-unit">kWh</span></div></div>
+        <div class="mc" id="mc-dtb"><div class="mc-label">ΔT Topp–Bunn</div><div class="mc-val" id="vDTB">–<span class="mc-unit">K</span></div></div>
+        <div class="mc" id="mc-dvp"><div class="mc-label">ΔT VP</div><div class="mc-val" id="vDVP">–<span class="mc-unit">K</span></div></div>
       </div>
-      <div class="mcard">
-        <div class="mlabel">Energi</div>
-        <div class="mval" id="vEnergi">–<span class="munit">kWh</span></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><div class="panel-dot" style="background:#00d4b8"></div><div class="panel-title">NIBE S1256 · 8 kW</div></div>
+      <div class="scop-card" id="mc-scop">
+        <div class="scop-icon">⚡</div>
+        <div>
+          <div class="scop-label">Årsytelse SCOP</div>
+          <div class="scop-num" id="vSCOP">–</div>
+          <div class="scop-sub">kWh produsert / kWh forbrukt</div>
+        </div>
       </div>
-      <div class="mcard">
-        <div class="mlabel">ΔT Topp–Bunn</div>
-        <div class="mval" id="vDTB">–<span class="munit">K</span></div>
-      </div>
-      <div class="mcard">
-        <div class="mlabel">ΔT VP</div>
-        <div class="mval" id="vDVP">–<span class="munit">K</span></div>
+      <div class="brine-row">
+        <div class="bpill" id="mc-brineIn"><div class="bpill-label">Brine inn · BT10</div><div class="bpill-val" id="vBrineIn">–<span class="bpill-unit"> °C</span></div></div>
+        <div class="bpill" id="mc-brineOut"><div class="bpill-label">Brine ut · BT11</div><div class="bpill-val" id="vBrineOut">–<span class="bpill-unit"> °C</span></div></div>
       </div>
     </div>
   </div>
-</div>
-
-<div class="err-msg" id="errMsg"></div>
-
-<div class="config-row">
-  <label>Homey ID</label>
-  <input id="homeyId" type="text" placeholder="abc123.connect.athom.com" autocomplete="off" style="width:210px"/>
-  <label>API Key</label>
-  <input id="apiKey" type="text" placeholder="Lim inn API Key her" autocomplete="off" style="flex:1;min-width:180px;max-width:320px"/>
-</div>
-<div style="padding:0 1.5rem 0.8rem;font-size:11px;color:#6b7c99;font-family:'DM Mono',monospace;line-height:1.7">
-  Homey ID finner du på <strong style="color:#94a3b8">my.homey.app → din Homey → innstillinger</strong> (f.eks. <em>abc123.connect.athom.com</em>).
-  API Key lager du under <strong style="color:#94a3b8">Innstillinger → API Keys → Opprett ny</strong>.
+  <div class="cfg-section">
+    <button class="cfg-toggle" id="cfgToggle" onclick="toggleCfg()">
+      <span>⚙ Tilkobling · Homey ID og API Key</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="cfg-body" id="cfgBody">
+      <div class="cfg-field"><label class="cfg-label">Homey ID</label><input class="cfg-input" id="homeyId" type="text" placeholder="abc123.connect.athom.com" autocomplete="off"/></div>
+      <div class="cfg-field"><label class="cfg-label">API Key</label><input class="cfg-input" id="apiKey" type="password" placeholder="Lim inn API Key" autocomplete="off"/></div>
+      <div class="cfg-hint">Finn <strong style="color:#94a3b8">Homey ID</strong> og lag <strong style="color:#94a3b8">API Key</strong> på <a href="https://my.homey.app" target="_blank" style="color:#60a5fa;text-decoration:none">my.homey.app</a> → Innstillinger → API Keys → Opprett ny (kun <em>Devices: Read</em>).</div>
+    </div>
+    <div class="errmsg" id="errMsg"></div>
+  </div>
 </div>
 
 <script>
-const SENSORS = [
-  { pct:100, name:'Topp',   dev:'Akkumulator Sensor Nr.1 (Øverst)'    },
-  { pct:75,  name:'Tur VP', dev:'Akkumulator Sensor Nr.2 (Tur fra VP)' },
-  { pct:50,  name:'Midt',   dev:'Akkumulator Sensor Nr.3'              },
-  { pct:25,  name:'Nedre',  dev:'Akkumulator Sensor Nr.4'              },
-  { pct:0,   name:'Retur',  dev:'Akkumulator Sensor Nr.5 (Retur)'      },
+const CAP='devicecapabilities_number.number1';
+const TANK_SENSORS=[
+  {pct:100,name:'Topp',   dev:'Akkumulator Sensor Nr.1 (Øverst)'},
+  {pct:75, name:'Tur VP', dev:'Akkumulator Sensor Nr.2 (Tur fra VP)'},
+  {pct:50, name:'Midt',   dev:'Akkumulator Sensor Nr.3'},
+  {pct:25, name:'Nedre',  dev:'Akkumulator Sensor Nr.4'},
+  {pct:0,  name:'Retur',  dev:'Akkumulator Sensor Nr.5 (Retur)'},
 ];
-const REF = 25, KWH = 0.5815;
-const CAP = 'devicecapabilities_number.number1';
+const SCOP_DEV='NIBE COP', BRINE_IN_DEV='Nibe Brine Inn', BRINE_OUT_DEV='Nibe Brine Ut';
+const REF=25,KWH=0.5815,MAX_HIST=288;
+const H={topp:[],turVP:[],midt:[],nedre:[],retur:[],snitt:[],energi:[],dtb:[],dvp:[],scop:[],brineIn:[],brineOut:[]};
+function ph(k,v){if(v==null)return;H[k].push(v);if(H[k].length>MAX_HIST)H[k].shift()}
+function r1(v){return Math.round(v*10)/10}
+function r2(v){return Math.round(v*100)/100}
 
-function r1(v) { return Math.round(v * 10) / 10; }
+function tCol(t){
+  if(t===null)return'#2a3a50';
+  const s=[{v:0,c:[56,189,248]},{v:25,c:[52,211,153]},{v:40,c:[251,146,60]},{v:58,c:[239,68,68]},{v:75,c:[153,27,27]}];
+  let a=s[0],b=s[s.length-1];
+  for(let i=0;i<s.length-1;i++){if(t>=s[i].v&&t<s[i+1].v){a=s[i];b=s[i+1];break}}
+  const f=Math.min(1,Math.max(0,(t-a.v)/(b.v-a.v)));
+  return`rgb(${Math.round(a.c[0]+(b.c[0]-a.c[0])*f)},${Math.round(a.c[1]+(b.c[1]-a.c[1])*f)},${Math.round(a.c[2]+(b.c[2]-a.c[2])*f)})`;
+}
+function lc(c,a){const m=c.match(/\d+/g).map(Number);return`rgb(${Math.min(255,m[0]+a)},${Math.min(255,m[1]+a)},${Math.min(255,m[2]+a)})`}
+function dc(c,a){const m=c.match(/\d+/g).map(Number);return`rgb(${Math.max(0,m[0]-a)},${Math.max(0,m[1]-a)},${Math.max(0,m[2]-a)})`}
 
-function tempColor(t) {
-  if (t === null) return '#334155';
-  const stops = [
-    { v:15, c:[41,128,185]   },
-    { v:30, c:[39,174,96]    },
-    { v:45, c:[243,156,18]   },
-    { v:60, c:[231,76,60]    },
-    { v:80, c:[146,43,33]    },
-  ];
-  let a = stops[0], b = stops[stops.length-1];
-  for (let i = 0; i < stops.length-1; i++) {
-    if (t >= stops[i].v && t < stops[i+1].v) { a = stops[i]; b = stops[i+1]; break; }
+// TOOLTIP
+let ttTO;
+function showTT(el,label,hk,unit){
+  const data=H[hk]||[],last=data.length?data[data.length-1]:null;
+  const tt=document.getElementById('tt');
+  document.getElementById('ttTitle').textContent=label;
+  document.getElementById('ttVal').textContent=last!=null?last+' '+unit:'–';
+  const svg=document.getElementById('ttSvg');
+  if(data.length>2){
+    const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||1;
+    const pts=data.map((v,i)=>`${(i/(data.length-1))*170},${44-((v-mn)/rng)*36-4}`).join(' ');
+    document.getElementById('ttMin').textContent=Math.min(...data).toFixed(1)+unit;
+    document.getElementById('ttMax').textContent=Math.max(...data).toFixed(1)+unit;
+    svg.innerHTML=`<defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b7df8" stop-opacity=".3"/><stop offset="100%" stop-color="#3b7df8" stop-opacity="0"/></linearGradient></defs><polygon points="0,44 ${pts} 170,44" fill="url(#tg)"/><polyline points="${pts}" fill="none" stroke="#3b7df8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }else{
+    document.getElementById('ttMin').textContent='';document.getElementById('ttMax').textContent='';
+    svg.innerHTML=`<text x="85" y="26" text-anchor="middle" font-size="9" fill="#4a6080" font-family="monospace">Samler data…</text>`;
   }
-  const f = Math.min(1, Math.max(0, (t - a.v) / (b.v - a.v)));
-  const r = Math.round(a.c[0] + (b.c[0]-a.c[0])*f);
-  const g = Math.round(a.c[1] + (b.c[1]-a.c[1])*f);
-  const bl= Math.round(a.c[2] + (b.c[2]-a.c[2])*f);
-  return `rgb(${r},${g},${bl})`;
+  const r=el.getBoundingClientRect();
+  let lx=r.left+window.scrollX+r.width/2-97,ty=r.top+window.scrollY-136;
+  if(ty<60)ty=r.bottom+window.scrollY+8;
+  if(lx<6)lx=6;if(lx+212>window.innerWidth)lx=window.innerWidth-218;
+  tt.style.left=lx+'px';tt.style.top=ty+'px';tt.classList.add('show');clearTimeout(ttTO);
+}
+function hideTT(){ttTO=setTimeout(()=>document.getElementById('tt').classList.remove('show'),400)}
+function btt(el,label,hk,unit){
+  el.addEventListener('mouseenter',()=>showTT(el,label,hk,unit));
+  el.addEventListener('mouseleave',hideTT);
+  el.addEventListener('touchstart',e=>{e.preventDefault();showTT(el,label,hk,unit)},{passive:false});
+  el.addEventListener('touchend',()=>setTimeout(hideTT,2500));
 }
 
-function lightenRgb(css, amt) {
-  const m = css.match(/\d+/g).map(Number);
-  return `rgb(${Math.min(255,m[0]+amt)},${Math.min(255,m[1]+amt)},${Math.min(255,m[2]+amt)})`;
-}
-function darkenRgb(css, amt) {
-  const m = css.match(/\d+/g).map(Number);
-  return `rgb(${Math.max(0,m[0]-amt)},${Math.max(0,m[1]-amt)},${Math.max(0,m[2]-amt)})`;
-}
+// ═══ SCENE SVG ═══════════════════════════════════════════
+function buildScene(temps,nibe){
+  const svg=document.getElementById('sceneSvg');
+  // ViewBox: 0 0 820 380
+  // Tank: narrow left, labels left of tank
+  // VP:  slimmer center
+  // Borehole: right, compact
+  const W=820,SH=380;
 
-function buildTank(temps) {
-  const svg = document.getElementById('tankSvg');
-  const cx = 100;
-  const bx = 16, bw = 168;
-  const bTop = 24, bBot = 408, bH = bBot - bTop;
-  const rx = 22, ellRy = 20;
+  // TANK geometry
+  const tCX=105, tW=76, tTop=28, tBot=352, tH=tBot-tTop, tRx=14, eRy=12;
+  // label column – fixed X so all temps align
+  const lblX=18, dotX=tCX-tW/2-3;
 
-  const valid = temps.filter(t => t !== null);
-  const snitt = valid.length ? valid.reduce((a,b)=>a+b,0)/valid.length : 28;
-  const fillFrac = Math.min(0.96, Math.max(0.04, (snitt - 15) / 70));
-  const fillY = bBot - bH * fillFrac;
+  // VP geometry – slimmer
+  const vpX=270, vpY=55, vpW=140, vpH=268;
 
-  const wBase  = tempColor(snitt);
-  const wLight = lightenRgb(wBase, 50);
-  const wDark  = darkenRgb(wBase, 30);
-  const wSurf  = lightenRgb(wBase, 70);
+  // Borehole geometry
+  const wCX=730, wBoreTop=80, wBoreBot=352, wW=34;
+  // Pipe connection points on VP right side
+  const boY=vpY+vpH*0.30;  // brine out exits VP
+  const biY=vpY+vpH*0.68;  // brine in enters VP
+  // Flange sits at wBoreTop
+  const flangeY=wBoreTop;
+  // Pipe stubs go from flange downward slightly
+  const stubTop=flangeY-42;
 
-  let s = `<defs>
-    <clipPath id="bc"><rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" rx="${rx}"/></clipPath>
-    <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%"   stop-color="#1e3a4a"/>
-      <stop offset="12%"  stop-color="#2d5a72"/>
-      <stop offset="30%"  stop-color="#3d7a9a"/>
-      <stop offset="50%"  stop-color="#4a8fb0"/>
-      <stop offset="68%"  stop-color="#3a7090"/>
-      <stop offset="88%"  stop-color="#255070"/>
-      <stop offset="100%" stop-color="#142a38"/>
-    </linearGradient>
-    <linearGradient id="shineL" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%"   stop-color="#fff" stop-opacity="0"/>
-      <stop offset="22%"  stop-color="#fff" stop-opacity="0.18"/>
-      <stop offset="42%"  stop-color="#fff" stop-opacity="0.38"/>
-      <stop offset="58%"  stop-color="#fff" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#000" stop-opacity="0.1"/>
-    </linearGradient>
-    <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="${wLight}"/>
-      <stop offset="60%"  stop-color="${wBase}"/>
-      <stop offset="100%" stop-color="${wDark}"/>
-    </linearGradient>
-    <linearGradient id="ws" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%"   stop-color="#fff" stop-opacity="0"/>
-      <stop offset="28%"  stop-color="#fff" stop-opacity="0.18"/>
-      <stop offset="55%"  stop-color="#fff" stop-opacity="0.04"/>
-      <stop offset="100%" stop-color="#000" stop-opacity="0.18"/>
-    </linearGradient>
-    <linearGradient id="topFade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#000" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="rimTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#5a8aaa"/>
-      <stop offset="40%"  stop-color="#7ab0cc"/>
-      <stop offset="100%" stop-color="#2a5a78"/>
-    </linearGradient>
-    <linearGradient id="rimBot" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#2a5a78"/>
-      <stop offset="55%"  stop-color="#6aaac8"/>
-      <stop offset="100%" stop-color="#1a3a50"/>
-    </linearGradient>
-    <linearGradient id="bandG" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#3a7a9a"/>
-      <stop offset="50%"  stop-color="#5aaac8"/>
-      <stop offset="100%" stop-color="#2a5a78"/>
-    </linearGradient>
-  </defs>`;
+  // Tank fill: 0% = snitt equals retur (bunn), 100% = snitt equals topp
+  const valid=temps.filter(t=>t!==null);
+  const snitt=valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:32;
+  const toppT = temps[0]!==null ? temps[0] : snitt+10;
+  const returT = temps[4]!==null ? temps[4] : snitt-10;
+  const tempRange = toppT - returT;
+  const fillFrac = tempRange > 0.5
+    ? Math.min(.96, Math.max(.04, (snitt - returT) / tempRange))
+    : 0.5;  // fallback if sensors equal
+  const fill = fillFrac;
+  const fillY=tBot-tH*fill;
+  const wB=tCol(snitt),wL=lc(wB,55),wD=dc(wB,35),wS=lc(wB,80);
 
+  // Pipe Y on tank
+  const hotY=tTop+32, coldY=tBot-32;
+
+  let s=`<defs>
+  <clipPath id="tc"><rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" rx="${tRx}"/></clipPath>
+  <linearGradient id="sg" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#0e2440"/><stop offset="22%" stop-color="#1a3d60"/>
+    <stop offset="50%" stop-color="#1e4870"/><stop offset="78%" stop-color="#1a3d60"/>
+    <stop offset="100%" stop-color="#0a1830"/>
+  </linearGradient>
+  <linearGradient id="ss" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="28%" stop-color="#fff" stop-opacity=".26"/>
+    <stop offset="52%" stop-color="#fff" stop-opacity=".04"/>
+    <stop offset="100%" stop-color="#000" stop-opacity=".1"/>
+  </linearGradient>
+  <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="${wL}"/>
+    <stop offset="55%" stop-color="${wB}"/>
+    <stop offset="100%" stop-color="${wD}"/>
+  </linearGradient>
+  <linearGradient id="ws" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+    <stop offset="20%" stop-color="#fff" stop-opacity=".17"/>
+    <stop offset="55%" stop-color="#fff" stop-opacity=".03"/>
+    <stop offset="100%" stop-color="#000" stop-opacity=".14"/>
+  </linearGradient>
+  <linearGradient id="tf" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#000" stop-opacity=".16"/><stop offset="100%" stop-color="#000" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="rt" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#4a7a9a"/><stop offset="55%" stop-color="#6ab0cc"/><stop offset="100%" stop-color="#2a5a78"/>
+  </linearGradient>
+  <linearGradient id="rb" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#1a4a68"/><stop offset="60%" stop-color="#5a9abc"/><stop offset="100%" stop-color="#102838"/>
+  </linearGradient>
+  <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#3a7a9a"/><stop offset="100%" stop-color="#1a4a68"/>
+  </linearGradient>
+  <!-- 3D tube gradients – cross-section shine (x1/x2 = horizontal) -->
+  <linearGradient id="hpg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#fed7aa"/><stop offset="20%" stop-color="#f97316"/>
+    <stop offset="60%" stop-color="#c2410c"/><stop offset="100%" stop-color="#7c2d12"/>
+  </linearGradient>
+  <linearGradient id="hpg3d" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#fff" stop-opacity=".0"/>
+    <stop offset="18%"  stop-color="#fff" stop-opacity=".35"/>
+    <stop offset="45%"  stop-color="#fff" stop-opacity=".08"/>
+    <stop offset="100%" stop-color="#000" stop-opacity=".22"/>
+  </linearGradient>
+  <linearGradient id="cpg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#bae6fd"/><stop offset="20%" stop-color="#38bdf8"/>
+    <stop offset="60%" stop-color="#0369a1"/><stop offset="100%" stop-color="#0c4a6e"/>
+  </linearGradient>
+  <linearGradient id="cpg3d" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#fff" stop-opacity=".0"/>
+    <stop offset="18%"  stop-color="#fff" stop-opacity=".35"/>
+    <stop offset="45%"  stop-color="#fff" stop-opacity=".08"/>
+    <stop offset="100%" stop-color="#000" stop-opacity=".22"/>
+  </linearGradient>
+  <!-- gpg = brine OUT (cooler, dark green) uniform color -->
+  <linearGradient id="gpg" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#065f46"/>
+    <stop offset="22%"  stop-color="#059669"/>
+    <stop offset="50%"  stop-color="#047857"/>
+    <stop offset="78%"  stop-color="#065f46"/>
+    <stop offset="100%" stop-color="#022c22"/>
+  </linearGradient>
+  <!-- gpgr = brine IN (warmer, bright cyan) uniform color -->
+  <linearGradient id="gpgr" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#0f766e"/>
+    <stop offset="22%"  stop-color="#14b8a6"/>
+    <stop offset="50%"  stop-color="#2dd4bf"/>
+    <stop offset="78%"  stop-color="#14b8a6"/>
+    <stop offset="100%" stop-color="#0d9488"/>
+  </linearGradient>
+  <linearGradient id="gpg3d" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#fff" stop-opacity=".0"/>
+    <stop offset="18%"  stop-color="#fff" stop-opacity=".32"/>
+    <stop offset="45%"  stop-color="#fff" stop-opacity=".07"/>
+    <stop offset="100%" stop-color="#000" stop-opacity=".25"/>
+  </linearGradient>
+  <linearGradient id="vpG" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#0c1e36"/><stop offset="18%" stop-color="#152d4c"/>
+    <stop offset="50%" stop-color="#1a3858"/><stop offset="82%" stop-color="#152d4c"/>
+    <stop offset="100%" stop-color="#091420"/>
+  </linearGradient>
+  <filter id="glow"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="sdw"><feDropShadow dx="0" dy="5" stdDeviation="10" flood-color="#000" flood-opacity=".45"/></filter>
+</defs>`;
+
+  // ── GEO PIPES ────────────────────────────────────────────
+  // Brine OUT: from VP right → curves down to LEFT pipe stub on borehole
+  const vpRX=vpX+vpW;
+  const p1x=wCX-10, p2x=wCX+10; // two pipe centres
+
+  // Geo pipes – strict 90-degree elbows, no curves, consistent color throughout
+  const geoEndY = wBoreBot - 50;   // top of flange
+  const pipeDeep = geoEndY + 18;   // pipes go 18px INTO flange (no white dot gap)
+  const bendR = 14;                 // elbow offset
+
+  // BRINE OUT (dark green): VP upper port → right → 90° down → into flange
+  // OUT: horizontal → rounded 90° bend → straight down into flange
+  const R = 18;
+  const outPath = `M${vpRX},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${pipeDeep}`;
+  s+=`<path d="${outPath}" fill="none" stroke="#022c22" stroke-width="13" stroke-linecap="round" opacity=".3" transform="translate(2,3)"/>`;
+  s+=`<path d="${outPath}" fill="none" stroke="url(#gpg)"  stroke-width="11" stroke-linecap="round"/>`;
+  s+=`<path d="${outPath}" fill="none" stroke="#fff"        stroke-width="3.5" stroke-linecap="round" opacity=".22"/>`;
+
+  // IN: straight up from flange → rounded 90° bend → horizontal to VP
+  const inPath = `M${p1x},${pipeDeep} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
+  s+=`<path d="${inPath}" fill="none" stroke="#0f766e" stroke-width="13" stroke-linecap="round" opacity=".3" transform="translate(2,3)"/>`;
+  s+=`<path d="${inPath}" fill="none" stroke="url(#gpgr)" stroke-width="11" stroke-linecap="round"/>`;
+  s+=`<path d="${inPath}" fill="none" stroke="#fff"       stroke-width="3.5" stroke-linecap="round" opacity=".22"/>`;
+
+  // Flow arrows along horizontal segments
+  for(let i=0;i<2;i++){
+    const ax=vpRX+20+i*55;
+    s+=`<polygon points="${ax},${boY-4} ${ax+8},${boY} ${ax},${boY+4}" fill="#059669" opacity=".8"/>`;
+    s+=`<polygon points="${ax+8},${biY-4} ${ax},${biY} ${ax+8},${biY+4}" fill="#2dd4bf" opacity=".85"/>`;
+  }
+
+  // Brine temp labels centred on horizontal pipe segments
+  const lblMid = vpRX + (p2x - vpRX) / 2;
+  const boTxt=nibe.brineOut!==null?`${nibe.brineOut.toFixed(1)} °C`:'–';
+  const biTxt=nibe.brineIn !==null?`${nibe.brineIn.toFixed(1)} °C` :'–';
+  s+=`<text x="${lblMid}" y="${boY-11}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#059669" font-weight="600">${boTxt}</text>`;
+  s+=`<text x="${lblMid}" y="${biY+20}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#2dd4bf" font-weight="600">${biTxt}</text>`;
+  s+=`<text x="${lblMid}" y="${boY-23}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#047857" letter-spacing="1" opacity=".9">BRINE UT</text>`;
+  s+=`<text x="${lblMid}" y="${biY+32}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#0d9488" letter-spacing="1" opacity=".9">BRINE INN</text>`;
+
+  // ── HOT & COLD PIPES (tank → VP) ─────────────────────────
+  const tRX=tCX+tW/2;
+  // 3D hot pipe: base + top-shine
+  s+=`<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="url(#hpg)" stroke-width="11" stroke-linecap="round"/>`;
+  s+=`<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".28"/>`;
+  s+=`<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#7c2d12" stroke-width="11" stroke-linecap="round" opacity=".35" transform="translate(0,3)"/>`;
+  // 3D cold pipe
+  s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="url(#cpg)" stroke-width="11" stroke-linecap="round"/>`;
+  s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".28"/>`;
+  s+=`<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#0c4a6e" stroke-width="11" stroke-linecap="round" opacity=".35" transform="translate(0,3)"/>`;
+
+  // Flow arrows
+  for(let i=0;i<2;i++){
+    const ax=tRX+20+i*50;
+    s+=`<polygon points="${ax},${hotY-4} ${ax+8},${hotY} ${ax},${hotY+4}" fill="#f97316" opacity=".8"/>`;
+    s+=`<polygon points="${ax+8},${coldY-4} ${ax},${coldY} ${ax+8},${coldY+4}" fill="#38bdf8" opacity=".8"/>`;
+  }
+
+  // Pipe temp labels between tank and VP
+  const pmid=tRX+(vpX-tRX)/2;
+  const hTxt=temps[0]!==null?`${temps[0].toFixed(1)} °C`:'–';
+  const cTxt=temps[4]!==null?`${temps[4].toFixed(1)} °C`:'–';
+  s+=`<text x="${pmid}" y="${hotY-11}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#f97316" font-weight="600">${hTxt}</text>`;
+  s+=`<text x="${pmid}" y="${hotY-23}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#8a3a10" letter-spacing="1">VARM TUR</text>`;
+  s+=`<text x="${pmid}" y="${coldY+18}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#38bdf8" font-weight="600">${cTxt}</text>`;
+  s+=`<text x="${pmid}" y="${coldY+30}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#1a608a" letter-spacing="1">KALD RETUR</text>`;
+
+  // Pipe connection nubs on VP
+  s+=`<rect x="${vpX-6}" y="${hotY-5}" width="8" height="10" rx="2" fill="#2a4a6a" stroke="#1a3a5a"/>`;
+  s+=`<rect x="${vpX-6}" y="${coldY-5}" width="8" height="10" rx="2" fill="#1a3a5a" stroke="#0a2840"/>`;
+  s+=`<rect x="${vpRX-2}" y="${boY-5}" width="8" height="10" rx="2" fill="#083828" stroke="#052018"/>`;
+  s+=`<rect x="${vpRX-2}" y="${biY-5}" width="8" height="10" rx="2" fill="#083828" stroke="#052018"/>`;
+
+  // ── HEAT PUMP – slim modern unit ─────────────────────────
+  // Main casing
+  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="16" fill="url(#vpG)" stroke="rgba(255,255,255,0.07)" stroke-width="1.2" filter="url(#sdw)"/>`;
+  // Subtle brushed lines
+  for(let i=0;i<14;i++){
+    s+=`<line x1="${vpX+10}" y1="${vpY+16+i*18}" x2="${vpX+vpW-10}" y2="${vpY+16+i*18}" stroke="#fff" stroke-width=".35" opacity="${.015+i*.002}"/>`;
+  }
+  // Left specular
+  s+=`<rect x="${vpX+7}" y="${vpY+18}" width="11" height="${vpH-36}" rx="5" fill="#fff" fill-opacity=".04"/>`;
+
+  // Top band – logo
+  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="40" rx="16" fill="rgba(0,0,0,0.2)"/>`;
+  s+=`<rect x="${vpX}" y="${vpY+24}" width="${vpW}" height="16" fill="rgba(0,0,0,0.2)"/>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+24}" text-anchor="middle" font-size="12" font-family="Inter,sans-serif" fill="#bcd4ee" font-weight="700" letter-spacing="3.5">NIBE</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+36}" text-anchor="middle" font-size="7.5" font-family="Inter,sans-serif" fill="#4a7090" letter-spacing="2">S1256 · 8kW</text>`;
+
+  // Display screen – no compressor circle, just screen
+  s+=`<rect x="${vpX+14}" y="${vpY+46}" width="${vpW-28}" height="88" rx="7" fill="#040c18" stroke="rgba(59,125,248,0.18)" stroke-width="1"/>`;
+  s+=`<rect x="${vpX+16}" y="${vpY+48}" width="${vpW-32}" height="84" rx="6" fill="#050e1c"/>`;
+  const scopDisp=nibe.scop!==null?nibe.scop.toFixed(2):'–';
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+70}" text-anchor="middle" font-size="7" font-family="Inter,sans-serif" fill="#2a5a8a" letter-spacing="2.5">SCOP</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+102}" text-anchor="middle" font-size="30" font-family="JetBrains Mono,monospace" fill="#00d4b8" font-weight="600" filter="url(#glow)">${scopDisp}</text>`;
+  // ÅRSYTELSE label removed per user request
+
+  // LEDs
+  s+=`<circle cx="${vpX+26}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
+  s+=`<circle cx="${vpX+37}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
+  s+=`<circle cx="${vpX+48}" cy="${vpY+144}" r="3.2" fill="#f59e0b" opacity=".8"/>`;
+
+  // Internals zone – just subtle panel, no circle
+  s+=`<rect x="${vpX+12}" y="${vpY+156}" width="${vpW-24}" height="${vpH-172}" rx="8" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
+  // Cross-hatch pattern suggesting internals
+  for(let i=0;i<5;i++){
+    s+=`<line x1="${vpX+18}" y1="${vpY+168+i*18}" x2="${vpX+vpW-18}" y2="${vpY+168+i*18}" stroke="rgba(59,125,248,0.08)" stroke-width="1"/>`;
+  }
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle" font-size="6.5" font-family="Inter,sans-serif" fill="#1a4a6a" letter-spacing="2.5">KOMPRESSOR</text>`;
+
+  // VP shine
+  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="16" fill="url(#ss)" opacity=".45"/>`;
+
+  // ── BOREHOLE ────────────────────────────────────────────
+
+  // ── BOREHOLE ILLUSTRATION ──────────────────────────────
+  // Flange is at BOTTOM – pipes come from above and go INTO the flange/ground
+  // flangeY is where the flange top sits (borehole geometry defines this)
+  const flangeTopY  = wBoreBot - 50;   // flange top edge
+  const flangeThick = 14;
+  const flangeBotY  = flangeTopY + flangeThick;
+  const groundLevel = flangeBotY + 6;
+
+  // Ground / earth below flange
+  s+=`<rect x="${wCX-48}" y="${groundLevel}" width="96" height="${SH-groundLevel+2}" rx="0" fill="#111a08" opacity=".6"/>`;
+  // Ground top edge
+  s+=`<ellipse cx="${wCX}" cy="${groundLevel}" rx="48" ry="9" fill="#1a2a0a" opacity=".7"/>`;
+
+  // Grass blades on ground surface
+  for(let i=0;i<16;i++){
+    const gx=wCX-44+i*6, gh=4+Math.sin(i*1.9)*3;
+    s+=`<line x1="${gx}" y1="${groundLevel}" x2="${gx+2}" y2="${groundLevel-gh}" stroke="#2d5a18" stroke-width="1.5" stroke-linecap="round" opacity="${.4+i*.025}"/>`;
+  }
+
+  // Black pipes removed – turkis/geo pipes connect directly into flange
+
+  // Yellow flange plate – the termination cap at ground level
   // Drop shadow
-  s += `<ellipse cx="${cx}" cy="${bBot+14}" rx="${bw/2-6}" ry="7" fill="#000" fill-opacity="0.32"/>`;
+  s+=`<ellipse cx="${wCX}" cy="${flangeBotY+5}" rx="36" ry="6" fill="#000" fill-opacity=".4"/>`;
+  // Bottom face (darker)
+  s+=`<rect x="${wCX-34}" y="${flangeTopY+6}" width="68" height="${flangeThick}" rx="7" fill="#92400e" stroke="#78350f" stroke-width="1"/>`;
+  // Top face (bright yellow)
+  s+=`<rect x="${wCX-34}" y="${flangeTopY}" width="68" height="${flangeThick}" rx="7" fill="#fbbf24" stroke="#d97706" stroke-width="1.4"/>`;
+  // Top highlight shine
+  s+=`<rect x="${wCX-26}" y="${flangeTopY+1}" width="52" height="5" rx="3.5" fill="#fde68a" opacity=".55"/>`;
 
-  // Tank body – steel
-  s += `<rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" rx="${rx}" fill="url(#sg)" stroke="#1a4060" stroke-width="1.5"/>`;
+  // Turkis pipe cross-sections pierce through flange top – coloured tubes, no white caps
+  // OUT pipe (right, dark green) visible through flange
+  s+=`<rect x="${p2x-5.5}" y="${flangeTopY-2}" width="11" height="${flangeThick+4}" rx="3" fill="#047857" stroke="#065f46" stroke-width="1"/>`;
+  s+=`<rect x="${p2x-2.5}" y="${flangeTopY}" width="4"  height="${flangeThick}" rx="2" fill="#34d399" fill-opacity=".3"/>`;
+  // IN pipe (left, bright cyan) visible through flange
+  s+=`<rect x="${p1x-5.5}" y="${flangeTopY-2}" width="11" height="${flangeThick+4}" rx="3" fill="#0d9488" stroke="#0f766e" stroke-width="1"/>`;
+  s+=`<rect x="${p1x-2.5}" y="${flangeTopY}" width="4"  height="${flangeThick}" rx="2" fill="#5eead4" fill-opacity=".3"/>`;
 
-  // Water inside (clipped)
-  s += `<g clip-path="url(#bc)">
-    <rect x="${bx}" y="${fillY}" width="${bw}" height="${bBot-fillY}" fill="url(#wg)"/>
-    <rect x="${bx}" y="${fillY}" width="${bw}" height="${bBot-fillY}" fill="url(#ws)"/>
-    <ellipse cx="${cx}" cy="${fillY}" rx="${bw/2-1}" ry="10" fill="${wSurf}" fill-opacity="0.55"/>
-    <rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" fill="url(#topFade)"/>
-    <rect x="${bx}" y="${bTop}" width="${bw}" height="${bH}" fill="url(#shineL)"/>
-  </g>`;
-
-  // Top ellipse (rim) – drawn before bottom so bottom sits on top visually
-  s += `<ellipse cx="${cx}" cy="${bTop}" rx="${bw/2}" ry="${ellRy}" fill="url(#rimTop)" stroke="#1a4060" stroke-width="1.2"/>`;
-
-  // Horizontal reinforcement bands
-  const bands = [bTop + bH*0.24, bTop + bH*0.50, bTop + bH*0.76];
-  for (const by of bands) {
-    s += `<rect x="${bx+2}" y="${by-4.5}" width="${bw-4}" height="8" rx="3" fill="url(#bandG)" stroke="#1a4060" stroke-width="0.7" opacity="0.8"/>`;
-    s += `<rect x="${bx+8}" y="${by-3}" width="${bw-16}" height="5" rx="2" fill="#5aaac8" fill-opacity="0.18"/>`;
+  // Bolts – only 2 visible bolts at sides (not overlapping pipes)
+  const bPositions=[wCX-26, wCX+26];
+  for(const bx of bPositions){
+    s+=`<circle cx="${bx}" cy="${flangeTopY+7}" r="4.5" fill="#d1d5db" stroke="#9ca3af" stroke-width="1"/>`;
+    s+=`<circle cx="${bx}" cy="${flangeTopY+7}" r="2" fill="#6b7280"/>`;
+    s+=`<line x1="${bx-1.4}" y1="${flangeTopY+7}" x2="${bx+1.4}" y2="${flangeTopY+7}" stroke="#374151" stroke-width=".9"/>`;
+    s+=`<line x1="${bx}" y1="${flangeTopY+4.8}" x2="${bx}" y2="${flangeTopY+9.2}" stroke="#374151" stroke-width=".9"/>`;
   }
 
-  // Specular highlight stripe on body
-  s += `<rect x="${bx+14}" y="${bTop+ellRy}" width="18" height="${bH-ellRy*2}" rx="6" fill="#fff" fill-opacity="0.07"/>`;
+  // Depth indicator removed
 
-  // Bottom ellipse – drawn last so it sits visually in front (3D base)
-  // Shadow ring behind bottom cap
-  s += `<ellipse cx="${cx}" cy="${bBot+ellRy-4}" rx="${bw/2-2}" ry="${ellRy*0.55}" fill="#000" fill-opacity="0.28"/>`;
-  // Bottom cap fill (water color if filled to bottom, else steel)
-  const botFilled = fillFrac > 0.12;
-  s += `<ellipse cx="${cx}" cy="${bBot}" rx="${bw/2}" ry="${ellRy}" fill="${botFilled ? wDark : 'url(#rimBot)'}" stroke="#1a4060" stroke-width="1.2"/>`;
-  // Rim highlight on bottom cap
-  s += `<ellipse cx="${cx}" cy="${bBot-3}" rx="${bw/2-6}" ry="${ellRy*0.55}" fill="${botFilled ? wBase : '#5aaac8'}" fill-opacity="0.22"/>`;
-  // Outer edge catch-light
-  s += `<ellipse cx="${cx}" cy="${bBot}" rx="${bw/2}" ry="${ellRy}" fill="none" stroke="#4a9abf" stroke-width="0.8" opacity="0.4"/>`;
+  // Borehole label BELOW flange, on the grass
+  s+=`<text x="${wCX}" y="${groundLevel+22}" text-anchor="middle" font-size="8.5" font-family="Inter,sans-serif" fill="#3a8a6a" letter-spacing="1.5" opacity=".85">GEOBRØNN</text>`;
+  s+=`<text x="${wCX}" y="${groundLevel+33}" text-anchor="middle" font-size="7.5" font-family="Inter,sans-serif" fill="#2a5a4a" opacity=".65">250 m</text>`;
 
-  // Sensor connectors – ALL on the left, labels pinned to same X column
-  const dotX    = bx - 4;   // where dot sits (tank edge)
-  const lineEnd = bx - 20;  // where dashed line ends
-  const labelX  = bx - 58;  // fixed X for ALL labels → perfect vertical alignment
+  // ── ACCUMULATOR TANK ─────────────────────────────────────
+  // bottom shadow removed
+  s+=`<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" rx="${tRx}" fill="url(#sg)" stroke="rgba(255,255,255,0.06)" stroke-width="1.1" filter="url(#sdw)"/>`;
+  s+=`<g clip-path="url(#tc)">
+    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#wg)"/>
+    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#ws)"/>
+    <ellipse cx="${tCX}" cy="${fillY}" rx="${tW/2-1}" ry="6" fill="${wS}" fill-opacity=".42"/>
+    <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" fill="url(#tf)"/>
+    <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" fill="url(#ss)"/>
+  </g>`;
+  // Integrated rounded caps – no floating ellipses
+  // Top dome cap (same steel gradient, seamless)
+  s+=`<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${eRy*2}" rx="${tW/2}" fill="url(#sg)" stroke="rgba(255,255,255,0.07)" stroke-width="1"/>`;
+  s+=`<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${eRy*2}" rx="${tW/2}" fill="url(#ss)" opacity=".5"/>`;
+  // Top dome highlight
+  s+=`<ellipse cx="${tCX}" cy="${tTop+eRy*.7}" rx="${tW/2-8}" ry="${eRy*.45}" fill="#fff" fill-opacity=".08"/>`;
 
-  SENSORS.forEach((sen, i) => {
-    const sy  = bTop + (1 - sen.pct/100) * bH;
-    const t   = temps[i];
-    const col = tempColor(t);
+  // Reinforcement bands
+  [tTop+tH*.25,tTop+tH*.5,tTop+tH*.75].forEach(by=>{
+    s+=`<rect x="${tCX-tW/2+2}" y="${by-3}" width="${tW-4}" height="6" rx="2" fill="url(#bg2)" stroke="rgba(255,255,255,0.05)" stroke-width=".5" opacity=".7"/>`;
+  });
+  s+=`<rect x="${tCX-tW/2+7}" y="${tTop+eRy}" width="9" height="${tH-eRy*2}" rx="3.5" fill="#fff" fill-opacity=".045"/>`;
 
-    s += `<line x1="${dotX}" y1="${sy}" x2="${labelX + 2}" y2="${sy}"
-           stroke="${col}" stroke-width="1.4" stroke-dasharray="4,3" opacity="0.85"/>`;
-    s += `<circle cx="${dotX}" cy="${sy}" r="5"
-           fill="${col}" stroke="#0a0f1a" stroke-width="1.6"/>`;
-    s += `<circle cx="${dotX}" cy="${sy}" r="2.5"
-           fill="#fff" fill-opacity="0.5"/>`;
+  // No separate bottom cap – tank body rect rx handles rounding
 
-    const label = t !== null ? t.toFixed(1) + '°' : '–';
-    s += `<text x="${labelX}" y="${sy + 4}" text-anchor="end"
-           font-size="12" font-family="'DM Mono',monospace"
-           fill="${col}" font-weight="500">${label}</text>`;
+  // Sensor dots + labels – all left, aligned
+  TANK_SENSORS.forEach((sen,i)=>{
+    const sy=tTop+(1-sen.pct/100)*tH, t=temps[i], col=tCol(t);
+    s+=`<line x1="${dotX}" y1="${sy}" x2="${lblX+32}" y2="${sy}" stroke="${col}" stroke-width="1.1" stroke-dasharray="3,2.5" opacity=".7"/>`;
+    s+=`<circle cx="${dotX}" cy="${sy}" r="4" fill="${col}" stroke="#0b1220" stroke-width="1.3"/>`;
+    s+=`<circle cx="${dotX}" cy="${sy}" r="1.8" fill="#fff" fill-opacity=".38"/>`;
+    const lbl=t!==null?t.toFixed(1)+'°':'–';
+    s+=`<text x="${lblX+30}" y="${sy+4}" text-anchor="end" font-size="10.5" font-family="JetBrains Mono,monospace" fill="${col}" font-weight="500">${lbl}</text>`;
   });
 
-  // Outer rim highlight
-  s += `<rect x="${bx+1}" y="${bTop}" width="${bw-2}" height="${bH}"
-         rx="${rx}" fill="none" stroke="#fff" stroke-width="1" opacity="0.07"/>`;
+  // Tank label
+  s+=`<text x="${tCX}" y="${tTop-14}" text-anchor="middle" font-size="8" font-family="Inter,sans-serif" fill="#3a6a90" letter-spacing="2" opacity=".8">AKKUMULATORTANK</text>`;
+  s+=`<text x="${tCX}" y="${tTop-5}" text-anchor="middle" font-size="7.5" font-family="Inter,sans-serif" fill="#2a5070" opacity=".6">500 L</text>`;
 
-  svg.innerHTML = s;
+  svg.innerHTML=s;
 }
 
-function render(temps) {
-  buildTank(temps);
-
-  const cards = document.getElementById('scards');
-  cards.innerHTML = '';
-  SENSORS.forEach((s, i) => {
-    const t = temps[i];
-    const col = tempColor(t);
-    const div = document.createElement('div');
-    div.className = 'scard';
-    div.innerHTML = `
-      <div class="sdot" style="background:${col}; box-shadow:0 0 5px ${col}88"></div>
-      <div class="spct">${s.pct}%</div>
-      <div class="sname">${s.name}</div>
-      <div class="stemp">${t !== null ? t.toFixed(1)+' °C' : '–'}</div>`;
-    cards.appendChild(div);
+// ═══ RENDER PANELS ═══════════════════════════════════════
+function renderPanels(temps,nibe){
+  const tr=document.getElementById('tankRows');
+  tr.innerHTML='';
+  TANK_SENSORS.forEach((s,i)=>{
+    const t=temps[i],col=tCol(t);
+    const d=document.createElement('div');d.className='srow';
+    d.innerHTML=`<div class="sdot" style="background:${col};box-shadow:0 0 5px ${col}55"></div>
+      <div class="spct">${s.pct}%</div><div class="sname">${s.name}</div>
+      <div class="sval">${t!==null?t.toFixed(1)+' °C':'–'}</div>`;
+    btt(d,s.name,['topp','turVP','midt','nedre','retur'][i],'°C');
+    tr.appendChild(d);
   });
-
-  const valid = temps.filter(t => t !== null);
-  const snitt  = valid.length ? r1(valid.reduce((a,b)=>a+b,0)/valid.length) : null;
-  const topp   = temps[0], bunn = temps[4], turVP = temps[1];
-  const energi = snitt !== null ? r1(Math.max(0, KWH*(snitt-REF))) : null;
-  const dtb    = (topp!==null && bunn!==null) ? r1(topp-bunn) : null;
-  const dvp    = (turVP!==null && bunn!==null) ? r1(turVP-bunn) : null;
-
-  document.getElementById('vSnitt').innerHTML  = snitt  !== null ? snitt.toFixed(1) +'<span class="munit">°C</span>'  : '–';
-  document.getElementById('vEnergi').innerHTML = energi !== null ? energi.toFixed(1)+'<span class="munit">kWh</span>' : '–';
-  document.getElementById('vDTB').innerHTML    = dtb    !== null ? dtb.toFixed(1)   +'<span class="munit">K</span>'   : '–';
-  document.getElementById('vDVP').innerHTML    = dvp    !== null ? dvp.toFixed(1)   +'<span class="munit">K</span>'   : '–';
-
-  const now = new Date();
-  document.getElementById('upd').textContent =
-    now.toLocaleTimeString('nb-NO', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const valid=temps.filter(t=>t!==null);
+  const snitt=valid.length?r1(valid.reduce((a,b)=>a+b,0)/valid.length):null;
+  const topp=temps[0],bunn=temps[4],turVP=temps[1];
+  const energi=snitt!==null?r1(Math.max(0,KWH*(snitt-REF))):null;
+  const dtb=(topp!==null&&bunn!==null)?r1(topp-bunn):null;
+  const dvp=(turVP!==null&&bunn!==null)?r1(turVP-bunn):null;
+  document.getElementById('vSnitt').innerHTML =snitt !==null?snitt.toFixed(1) +'<span class="mc-unit">°C</span>' :'–';
+  document.getElementById('vEnergi').innerHTML=energi!==null?energi.toFixed(1)+'<span class="mc-unit">kWh</span>':'–';
+  document.getElementById('vDTB').innerHTML   =dtb   !==null?dtb.toFixed(1)  +'<span class="mc-unit">K</span>'  :'–';
+  document.getElementById('vDVP').innerHTML   =dvp   !==null?dvp.toFixed(1)  +'<span class="mc-unit">K</span>'  :'–';
+  document.getElementById('vSCOP').textContent    =nibe.scop    !==null?r2(nibe.scop).toFixed(2):'–';
+  document.getElementById('vBrineIn').innerHTML   =nibe.brineIn !==null?nibe.brineIn.toFixed(1) +'<span class="bpill-unit"> °C</span>':'–';
+  document.getElementById('vBrineOut').innerHTML  =nibe.brineOut!==null?nibe.brineOut.toFixed(1)+'<span class="bpill-unit"> °C</span>':'–';
+  btt(document.getElementById('mc-snitt'), 'Snitttemperatur','snitt','°C');
+  btt(document.getElementById('mc-energi'),'Energi i tank','energi','kWh');
+  btt(document.getElementById('mc-dtb'),   'ΔT Topp–Bunn','dtb','K');
+  btt(document.getElementById('mc-dvp'),   'ΔT VP','dvp','K');
+  btt(document.getElementById('mc-scop'),  'SCOP Årsytelse','scop','');
+  btt(document.getElementById('mc-brineIn'), 'Brine inn BT10','brineIn','°C');
+  btt(document.getElementById('mc-brineOut'),'Brine ut BT11','brineOut','°C');
+  document.getElementById('statusTxt').textContent='Oppdatert '+new Date().toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 
-function setStatus(ok, txt) {
-  document.getElementById('statusTxt').textContent = txt;
+function render(temps,nibe){
+  ph('topp',temps[0]);ph('turVP',temps[1]);ph('midt',temps[2]);ph('nedre',temps[3]);ph('retur',temps[4]);
+  const v=temps.filter(t=>t!==null);
+  if(v.length){const sn=r1(v.reduce((a,b)=>a+b,0)/v.length);ph('snitt',sn);ph('energi',r1(Math.max(0,KWH*(sn-REF))));}
+  if(temps[0]!==null&&temps[4]!==null)ph('dtb',r1(temps[0]-temps[4]));
+  if(temps[1]!==null&&temps[4]!==null)ph('dvp',r1(temps[1]-temps[4]));
+  ph('scop',nibe.scop);ph('brineIn',nibe.brineIn);ph('brineOut',nibe.brineOut);
+  buildScene(temps,nibe);
+  renderPanels(temps,nibe);
 }
 
-function setSpinner(active) {
-  const icon = document.getElementById('refreshIcon');
-  if (active) icon.classList.add('spin');
-  else icon.classList.remove('spin');
-}
+function toggleCfg(){const b=document.getElementById('cfgBody'),t=document.getElementById('cfgToggle');b.classList.toggle('open');t.classList.toggle('open')}
+function sv(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function lv(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function saveConfig(){sv('hId',document.getElementById('homeyId').value.trim());sv('hKey',document.getElementById('apiKey').value.trim())}
+function loadConfig(){const i=lv('hId'),k=lv('hKey');if(i)document.getElementById('homeyId').value=i;if(k)document.getElementById('apiKey').value=k}
+function setSpinner(a){const i=document.getElementById('refreshIcon');a?i.classList.add('spin'):i.classList.remove('spin')}
 
-function saveConfig() {
-  try {
-    localStorage.setItem('homeyId', document.getElementById('homeyId').value.trim());
-    localStorage.setItem('apiKey',  document.getElementById('apiKey').value.trim());
-  } catch(e) {}
-}
-
-function loadConfig() {
-  try {
-    const id  = localStorage.getItem('homeyId');
-    const key = localStorage.getItem('apiKey');
-    if (id)  document.getElementById('homeyId').value = id;
-    if (key) document.getElementById('apiKey').value  = key;
-  } catch(e) {}
-}
-
-async function fetchHomey() {
+async function fetchHomey(){
   saveConfig();
-  const homeyId = document.getElementById('homeyId').value.trim();
-  const apiKey  = document.getElementById('apiKey').value.trim();
-  const errEl   = document.getElementById('errMsg');
-  errEl.style.display = 'none';
-
-  if (!homeyId || !apiKey) {
-    setStatus(false, 'Fyll inn Homey ID og API Key nedenfor');
-    errEl.style.display = 'block';
-    errEl.innerHTML = `Fyll inn <strong>Homey ID</strong> og <strong>API Key</strong> i feltene nedenfor.<br><br>
-<strong>Slik finner du dem:</strong><br>
-1. Gå til <a href="https://my.homey.app" style="color:#60a5fa" target="_blank">my.homey.app</a> og logg inn<br>
-2. Velg din Homey Pro<br>
-3. <strong>Homey ID</strong>: vises i URL-en eller under Innstillinger (f.eks. <em>abc123.connect.athom.com</em>)<br>
-4. <strong>API Key</strong>: Innstillinger → API Keys → Opprett ny nøkkel → kopier`;
+  const hId=document.getElementById('homeyId').value.trim(),key=document.getElementById('apiKey').value.trim();
+  const err=document.getElementById('errMsg');err.style.display='none';
+  if(!hId||!key){
+    err.style.display='block';err.innerHTML='Fyll inn Homey ID og API Key under ⚙ Tilkobling.';
+    document.getElementById('cfgBody').classList.add('open');document.getElementById('cfgToggle').classList.add('open');
     return;
   }
-
   setSpinner(true);
-  setStatus(false, 'Henter data fra Homey…');
-
-  const baseUrl = homeyId.includes('.')
-    ? `https://${homeyId}`
-    : `https://${homeyId}.connect.athom.com`;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/manager/devices/device`, {
-      headers: {
-        'Authorization': 'Bearer ' + apiKey,
-        'Content-Type':  'application/json',
-      }
-    });
-
-    if (res.status === 401) throw new Error('401 – API Key er feil eller utløpt. Opprett en ny under Innstillinger → API Keys.');
-    if (res.status === 403) throw new Error('403 – API Key mangler rettigheter. Sørg for at den har tilgang til Devices.');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-
-    const data = await res.json();
-    const devList = Object.values(data);
-
-    const temps = SENSORS.map(s => {
-      const dev = devList.find(d => d.name === s.dev);
-      if (!dev) { console.warn('Fant ikke enhet:', s.dev); return null; }
-      const cap = dev.capabilitiesObj?.[CAP];
-      return (cap && typeof cap.value === 'number') ? r1(cap.value) : null;
-    });
-
-    render(temps);
-    setStatus(true, 'Live – ' + new Date().toLocaleTimeString('nb-NO'));
-
-  } catch (e) {
-    setStatus(false, 'Tilkoblingsfeil');
-    errEl.style.display = 'block';
-    errEl.innerHTML = `<strong>Feil:</strong> ${e.message}`;
-  } finally {
-    setSpinner(false);
-  }
+  const base=hId.includes('.')?`https://${hId}`:`https://${hId}.connect.athom.com`;
+  try{
+    const res=await fetch(`${base}/api/manager/devices/device`,{headers:{'Authorization':'Bearer '+key}});
+    if(res.status===401)throw new Error('401 – API Key ugyldig eller utløpt');
+    if(res.status===403)throw new Error('403 – Mangler rettigheter');
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const devs=Object.values(await res.json());
+    const temps=TANK_SENSORS.map(s=>{const d=devs.find(x=>x.name===s.dev);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null});
+    const gv=name=>{const d=devs.find(x=>x.name===name);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null};
+    render(temps,{scop:gv(SCOP_DEV),brineIn:gv(BRINE_IN_DEV),brineOut:gv(BRINE_OUT_DEV)});
+    document.getElementById('statusTxt').textContent='Live · '+new Date().toLocaleTimeString('nb-NO',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){
+    document.getElementById('statusTxt').textContent='Tilkoblingsfeil';
+    err.style.display='block';err.innerHTML=`<strong>Feil:</strong> ${e.message}`;
+  }finally{setSpinner(false)}
 }
 
-// Autorefresh hvert 5. minutt
-setInterval(fetchHomey, 5 * 60 * 1000);
-
-// Last lagret konfig og vis demo ved oppstart
+setInterval(fetchHomey,5*60*1000);
 loadConfig();
-render([56.4, 48.2, 38.7, 32.1, 29.3]);
-setStatus(false, 'Demo – fyll inn Homey ID og API Key nedenfor');
-setTimeout(fetchHomey, 400);
+render([58.4,49.2,40.1,33.7,29.3],{scop:3.84,brineIn:8.2,brineOut:2.1});
+document.getElementById('statusTxt').textContent='Demo · Fyll inn tilkobling';
+setTimeout(fetchHomey,500);
 </script>
 </body>
 </html>
