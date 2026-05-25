@@ -21,39 +21,49 @@ html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
 /* ── NO HEADER – floating refresh button in bottom-right corner ── */
-.rbtn{
-  background:rgba(15,24,40,0.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border:1px solid rgba(59,125,248,0.28);
-  color:#60a5fa;padding:7px 15px;border-radius:40px;font-size:12px;
-  font-family:var(--mono);cursor:pointer;display:flex;align-items:center;gap:7px;
-  transition:all .2s;white-space:nowrap;font-weight:500;
-  box-shadow:0 4px 20px rgba(0,0,0,0.45);
+/* ── STICKY HEADER ── */
+.hdr{
+  background:rgba(11,18,32,0.96);
+  border-bottom:1px solid var(--border);
+  padding:env(safe-area-inset-top,0) 0 0;
 }
-.rbtn:hover{background:rgba(20,32,56,0.98);border-color:rgba(59,125,248,0.5)}
+.hdr-inner{
+  max-width:1100px;margin:0 auto;
+  padding:.6rem 1rem;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.hdr-status{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.rbtn{
+  background:rgba(59,125,248,0.1);
+  border:1px solid rgba(59,125,248,0.25);
+  color:#60a5fa;padding:6px 14px;border-radius:8px;font-size:12px;
+  font-family:var(--mono);cursor:pointer;display:flex;align-items:center;gap:6px;
+  transition:all .2s;white-space:nowrap;font-weight:500;
+}
+.rbtn:hover{background:rgba(59,125,248,0.2);border-color:rgba(59,125,248,0.4)}
 .rbtn svg{width:13px;height:13px;flex-shrink:0}
 
 .spin{animation:spin .9s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.wrap{max-width:1100px;margin:0 auto;padding:calc(.6rem + env(safe-area-inset-top,0px)) 1rem 5rem}
+.wrap{max-width:1100px;margin:0 auto;padding:.8rem 1rem 4rem}
 
 /* ── DIAGRAM ── */
 .diagram-wrap{
   background:linear-gradient(135deg,#0d1930,#0a1422 50%,#0d1930);
   border:1px solid var(--border);border-radius:18px;
-  overflow-x:auto;overflow-y:hidden;
-  position:relative;margin-bottom:1.25rem;
-  -webkit-overflow-scrolling:touch;
+  overflow:hidden;
+  position:relative;margin-bottom:1rem;
 }
 .diagram-wrap::before{
   content:'';position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(ellipse at 15% 50%,rgba(59,125,248,0.05) 0%,transparent 55%),
-             radial-gradient(ellipse at 85% 50%,rgba(0,212,184,0.04) 0%,transparent 55%);
+  background:radial-gradient(ellipse at 12% 50%,rgba(59,125,248,0.06) 0%,transparent 50%),
+             radial-gradient(ellipse at 88% 50%,rgba(0,212,184,0.05) 0%,transparent 50%);
 }
-#sceneSvg{display:block;min-width:680px;width:100%}
+#sceneSvg{display:block;width:100%;height:auto}
 
 /* ── GRID ── */
-.grid{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.grid{display:grid;gap:.85rem;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.1rem}
 .panel-hdr{display:flex;align-items:center;gap:7px;margin-bottom:.8rem}
 .panel-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
@@ -108,28 +118,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 .cfg-hint{font-size:11px;color:var(--muted);margin-top:.7rem;line-height:1.6;padding-top:.7rem;border-top:1px solid var(--border)}
 .errmsg{font-size:11px;font-family:var(--mono);color:#f87171;padding:.65rem 1.1rem;display:none;line-height:1.6;background:rgba(248,113,113,0.05);border-top:1px solid rgba(248,113,113,0.12)}
 
-@media(max-width:580px){
-  .wrap{padding:0 0 5rem}
-  .grid{grid-template-columns:1fr;gap:.7rem}
-  .panel{border-radius:0;border-left:none;border-right:none;padding:.9rem 1rem}
-  .diagram-wrap{border-radius:0;border-left:none;border-right:none;margin-bottom:.7rem}
-  .mc-val{font-size:17px}
-  .scop-num{font-size:22px}
-  .cfg-section{border-radius:0;border-left:none;border-right:none}
-  .rbtn{top:calc(.7rem + env(safe-area-inset-top,0px));right:1rem}
+@media(max-width:430px){
+  .wrap{padding:.5rem .75rem 4rem}
+  .grid{grid-template-columns:1fr;gap:.65rem}
+  .mc-val{font-size:16px}
+  .scop-num{font-size:20px}
+  .hdr-inner{padding:.5rem .85rem}
+  .panel{padding:.85rem .95rem}
 }
 </style>
 </head>
 <body>
 
-<div style="position:fixed;top:calc(.9rem + env(safe-area-inset-top,0px));right:calc(1rem + max(0px,(100vw - 1100px)/2));z-index:300;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-  <button class="rbtn" onclick="fetchHomey()" id="refreshBtn" style="position:static">
-    <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
-    </svg>
-    Oppdater
-  </button>
-  <span id="statusTxt" style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#4a6080;text-align:right;padding-right:2px"></span>
+<div class="hdr">
+  <div class="hdr-inner">
+    <span class="hdr-status" id="statusTxt">Klar</span>
+    <button class="rbtn" onclick="fetchHomey()" id="refreshBtn">
+      <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
+      </svg>
+      Oppdater
+    </button>
+  </div>
 </div>
 
 <div class="tt" id="tt">
@@ -142,7 +152,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 
 <div class="wrap">
   <div class="diagram-wrap">
-    <svg id="sceneSvg" viewBox="0 0 820 380" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+    <svg id="sceneSvg" viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
   </div>
   <div class="grid">
     <div class="panel">
@@ -254,18 +264,17 @@ function buildScene(temps,nibe){
   // Tank: narrow left, labels left of tank
   // VP:  slimmer center
   // Borehole: right, compact
-  const W=820,SH=380;
+  const W=680,SH=380;
 
   // TANK geometry
-  const tCX=105, tW=76, tTop=28, tBot=352, tH=tBot-tTop, tRx=14, eRy=12;
-  // label column – fixed X so all temps align
-  const lblX=18, dotX=tCX-tW/2-3;
+  const tCX=100, tW=72, tTop=28, tBot=348, tH=tBot-tTop, tRx=13, eRy=11;
+  const lblX=16, dotX=tCX-tW/2-3;
 
-  // VP geometry – slimmer
-  const vpX=270, vpY=55, vpW=140, vpH=268;
+  // VP geometry – slim for mobile
+  const vpX=258, vpY=50, vpW=118, vpH=268;
 
-  // Borehole geometry
-  const wCX=730, wBoreTop=80, wBoreBot=352, wW=34;
+  // Borehole – much closer to VP
+  const wCX=610, wBoreTop=75, wBoreBot=348, wW=32;
   // Pipe connection points on VP right side
   const boY=vpY+vpH*0.30;  // brine out exits VP
   const biY=vpY+vpH*0.68;  // brine in enters VP
@@ -288,7 +297,7 @@ function buildScene(temps,nibe){
   const wB=tCol(snitt),wL=lc(wB,55),wD=dc(wB,35),wS=lc(wB,80);
 
   // Pipe Y on tank
-  const hotY=tTop+32, coldY=tBot-32;
+  const hotY=tTop+30, coldY=tBot-30;
 
   let s=`<defs>
   <clipPath id="tc"><rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" rx="${tRx}"/></clipPath>
@@ -456,37 +465,37 @@ function buildScene(temps,nibe){
   s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="16" fill="url(#vpG)" stroke="rgba(255,255,255,0.07)" stroke-width="1.2" filter="url(#sdw)"/>`;
   // Subtle brushed lines
   for(let i=0;i<14;i++){
-    s+=`<line x1="${vpX+10}" y1="${vpY+16+i*18}" x2="${vpX+vpW-10}" y2="${vpY+16+i*18}" stroke="#fff" stroke-width=".35" opacity="${.015+i*.002}"/>`;
+    s+=`<line x1="${vpX+7}" y1="${vpY+14+i*18}" x2="${vpX+vpW-7}" y2="${vpY+14+i*18}" stroke="#fff" stroke-width=".35" opacity="${.015+i*.002}"/>`;
   }
   // Left specular
-  s+=`<rect x="${vpX+7}" y="${vpY+18}" width="11" height="${vpH-36}" rx="5" fill="#fff" fill-opacity=".04"/>`;
+  s+=`<rect x="${vpX+5}" y="${vpY+16}" width="9" height="${vpH-32}" rx="4" fill="#fff" fill-opacity=".04"/>`;
 
   // Top band – logo
-  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="40" rx="16" fill="rgba(0,0,0,0.2)"/>`;
-  s+=`<rect x="${vpX}" y="${vpY+24}" width="${vpW}" height="16" fill="rgba(0,0,0,0.2)"/>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+24}" text-anchor="middle" font-size="12" font-family="Inter,sans-serif" fill="#bcd4ee" font-weight="700" letter-spacing="3.5">NIBE</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+36}" text-anchor="middle" font-size="7.5" font-family="Inter,sans-serif" fill="#4a7090" letter-spacing="2">S1256 · 8kW</text>`;
+  s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="38" rx="14" fill="rgba(0,0,0,0.2)"/>`;
+  s+=`<rect x="${vpX}" y="${vpY+22}" width="${vpW}" height="16" fill="rgba(0,0,0,0.2)"/>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+24}" text-anchor="middle" font-size="11" font-family="Inter,sans-serif" fill="#bcd4ee" font-weight="700" letter-spacing="2.5">NIBE</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+36}" text-anchor="middle" font-size="7" font-family="Inter,sans-serif" fill="#4a7090" letter-spacing="1.5">S1256 · 8kW</text>`;
 
   // Display screen – no compressor circle, just screen
-  s+=`<rect x="${vpX+14}" y="${vpY+46}" width="${vpW-28}" height="88" rx="7" fill="#040c18" stroke="rgba(59,125,248,0.18)" stroke-width="1"/>`;
-  s+=`<rect x="${vpX+16}" y="${vpY+48}" width="${vpW-32}" height="84" rx="6" fill="#050e1c"/>`;
+  s+=`<rect x="${vpX+10}" y="${vpY+46}" width="${vpW-20}" height="88" rx="7" fill="#040c18" stroke="rgba(59,125,248,0.18)" stroke-width="1"/>`;
+  s+=`<rect x="${vpX+12}" y="${vpY+48}" width="${vpW-24}" height="84" rx="6" fill="#050e1c"/>`;
   const scopDisp=nibe.scop!==null?nibe.scop.toFixed(2):'–';
   s+=`<text x="${vpX+vpW/2}" y="${vpY+70}" text-anchor="middle" font-size="7" font-family="Inter,sans-serif" fill="#2a5a8a" letter-spacing="2.5">SCOP</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+102}" text-anchor="middle" font-size="30" font-family="JetBrains Mono,monospace" fill="#00d4b8" font-weight="600" filter="url(#glow)">${scopDisp}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+100}" text-anchor="middle" font-size="26" font-family="JetBrains Mono,monospace" fill="#00d4b8" font-weight="600" filter="url(#glow)">${scopDisp}</text>`;
   // ÅRSYTELSE label removed per user request
 
   // LEDs
-  s+=`<circle cx="${vpX+26}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
-  s+=`<circle cx="${vpX+37}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
-  s+=`<circle cx="${vpX+48}" cy="${vpY+144}" r="3.2" fill="#f59e0b" opacity=".8"/>`;
+  s+=`<circle cx="${vpX+20}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
+  s+=`<circle cx="${vpX+31}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
+  s+=`<circle cx="${vpX+42}" cy="${vpY+144}" r="3.2" fill="#f59e0b" opacity=".8"/>`;
 
   // Internals zone – just subtle panel, no circle
-  s+=`<rect x="${vpX+12}" y="${vpY+156}" width="${vpW-24}" height="${vpH-172}" rx="8" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
+  s+=`<rect x="${vpX+8}" y="${vpY+156}" width="${vpW-16}" height="${vpH-172}" rx="8" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
   // Cross-hatch pattern suggesting internals
   for(let i=0;i<5;i++){
-    s+=`<line x1="${vpX+18}" y1="${vpY+168+i*18}" x2="${vpX+vpW-18}" y2="${vpY+168+i*18}" stroke="rgba(59,125,248,0.08)" stroke-width="1"/>`;
+    s+=`<line x1="${vpX+12}" y1="${vpY+168+i*18}" x2="${vpX+vpW-12}" y2="${vpY+168+i*18}" stroke="rgba(59,125,248,0.08)" stroke-width="1"/>`;
   }
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle" font-size="6.5" font-family="Inter,sans-serif" fill="#1a4a6a" letter-spacing="2.5">KOMPRESSOR</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle" font-size="6" font-family="Inter,sans-serif" fill="#1a4a6a" letter-spacing="2">KOMPRESSOR</text>`;
 
   // VP shine
   s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="16" fill="url(#ss)" opacity=".45"/>`;
