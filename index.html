@@ -484,10 +484,43 @@ function buildScene(temps,nibe){
   s+=`<text x="${vpX+vpW/2}" y="${vpY+100}" text-anchor="middle" font-size="26" font-family="JetBrains Mono,monospace" fill="#00d4b8" font-weight="600" filter="url(#glow)">${scopDisp}</text>`;
   // ÅRSYTELSE label removed per user request
 
-  // LEDs
-  s+=`<circle cx="${vpX+20}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
-  s+=`<circle cx="${vpX+31}" cy="${vpY+144}" r="3.2" fill="#22c55e" opacity=".9" filter="url(#glow)"/>`;
-  s+=`<circle cx="${vpX+42}" cy="${vpY+144}" r="3.2" fill="#f59e0b" opacity=".8"/>`;
+  // LED bar – 8 diodes across VP front, SCOP-driven
+  // SCOP range: 2.5 (min) to 5.0 (max) → 0–8 LEDs lit
+  // Colors: red=1, orange=2-3, yellow=4-5, green=6-7, bright-green=8
+  {
+    const scopVal = nibe.scop !== null ? nibe.scop : 0;
+    const ledCount = 6;
+    const scopMin = 2.5, scopMax = 5.0;
+    const litCount = scopVal <= scopMin ? 0
+      : scopVal >= scopMax ? ledCount
+      : Math.round(((scopVal - scopMin) / (scopMax - scopMin)) * ledCount);
+
+    // Space evenly across VP width with margin
+    const ledMargin = 10;
+    const ledAreaW = vpW - ledMargin * 2;
+    const ledSpacing = ledAreaW / (ledCount - 1);
+    const ledY = vpY + 148;
+    const ledR = 3.4;
+
+    // Color ramp per position (1=red, 2-3=orange, 4-5=yellow, 6-7=lime, 8=bright green)
+    const ledColors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e','#00ffaa'];
+
+    for (let i = 0; i < ledCount; i++) {
+      const lx = vpX + ledMargin + i * ledSpacing;
+      const lit = i < litCount;
+      const col = ledColors[i];
+      if (lit) {
+        // Lit: full color + glow effect
+        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="${col}" opacity=".95" filter="url(#glow)"/>`;
+        // Inner bright core
+        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR*0.45}" fill="#fff" opacity=".55"/>`;
+      } else {
+        // Unlit: dark with subtle color tint
+        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="${col}" opacity=".12"/>`;
+        s+=`<circle cx="${lx}" cy="${ledY}" r="${ledR}" fill="none" stroke="${col}" stroke-width=".6" opacity=".2"/>`;
+      }
+    }
+  }
 
   // Internals zone – just subtle panel, no circle
   s+=`<rect x="${vpX+8}" y="${vpY+156}" width="${vpW-16}" height="${vpH-172}" rx="8" fill="rgba(0,0,0,0.25)" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>`;
@@ -652,6 +685,78 @@ function saveConfig(){sv('hId',document.getElementById('homeyId').value.trim());
 function loadConfig(){const i=lv('hId'),k=lv('hKey');if(i)document.getElementById('homeyId').value=i;if(k)document.getElementById('apiKey').value=k}
 function setSpinner(a){const i=document.getElementById('refreshIcon');a?i.classList.add('spin'):i.classList.remove('spin')}
 
+// ═══ INSIGHTS – 24t historikk ══════════════════════════════
+// Mapping: histKey → { devName, capabilityId }
+// capabilityId = "devicecapabilities_number.number1"
+// Insights log ID format: homey:device:<deviceId>/<capabilityId>
+// URI format:             homey:device:<deviceId>
+
+const INSIGHT_MAP = [
+  { hk:'topp',    dev:'Akkumulator Sensor Nr.1 (Øverst)'    },
+  { hk:'turVP',   dev:'Akkumulator Sensor Nr.2 (Tur fra VP)' },
+  { hk:'midt',    dev:'Akkumulator Sensor Nr.3'              },
+  { hk:'nedre',   dev:'Akkumulator Sensor Nr.4'              },
+  { hk:'retur',   dev:'Akkumulator Sensor Nr.5 (Retur)'      },
+  { hk:'snitt',   dev:'Tank Snitt'                           },
+  { hk:'energi',  dev:'Tank Energi'                         },
+  { hk:'dtb',     dev:'Tank ΔT T/B'                         },
+  { hk:'dvp',     dev:'Tank ΔT VP'                          },
+  { hk:'scop',    dev:'NIBE COP'                            },
+  { hk:'brineIn', dev:'Nibe Brine Inn'                      },
+  { hk:'brineOut',dev:'Nibe Brine Ut'                       },
+];
+
+let insightsLoaded = false;
+
+async function loadInsightsHistory(base, key, devs) {
+  // Only load once per session – history persists in H{}
+  if (insightsLoaded) return;
+  try {
+    // 1. Get all insight logs
+    const logsRes = await fetch(`${base}/api/manager/insights/log`, {
+      headers:{'Authorization':'Bearer '+key}
+    });
+    if (!logsRes.ok) return;
+    const logs = await logsRes.json();
+
+    // 2. For each sensor we care about, find matching log and fetch entries
+    for (const item of INSIGHT_MAP) {
+      const dev = devs.find(d => d.name === item.dev);
+      if (!dev) continue;
+
+      // Find the insights log for this device + capability
+      const logKey = Object.keys(logs).find(k => {
+        const log = logs[k];
+        return log.uri === `homey:device:${dev.id}` &&
+               log.id  === CAP;
+      });
+      if (!logKey) continue;
+
+      const log = logs[logKey];
+      const entriesRes = await fetch(
+        `${base}/api/manager/insights/log/${encodeURIComponent(log.uri)}/${encodeURIComponent(log.id)}/entry?resolution=last24Hours`,
+        { headers:{'Authorization':'Bearer '+key} }
+      );
+      if (!entriesRes.ok) continue;
+      const entries = await entriesRes.json();
+
+      // entries is array of {t: ISO timestamp, v: number}
+      if (!Array.isArray(entries)) continue;
+
+      // Fill history array – clear first then load chronologically
+      H[item.hk] = entries
+        .filter(e => typeof e.v === 'number' && isFinite(e.v))
+        .map(e => r1(e.v))
+        .slice(-MAX_HIST);
+    }
+
+    insightsLoaded = true;
+    console.log('Insights history loaded for', Object.keys(H).filter(k=>H[k].length>0).join(', '));
+  } catch(e) {
+    console.warn('Insights load failed (non-fatal):', e.message);
+  }
+}
+
 async function fetchHomey(){
   saveConfig();
   const hId=document.getElementById('homeyId').value.trim(),key=document.getElementById('apiKey').value.trim();
@@ -669,6 +774,10 @@ async function fetchHomey(){
     if(res.status===403)throw new Error('403 – Mangler rettigheter');
     if(!res.ok)throw new Error('HTTP '+res.status);
     const devs=Object.values(await res.json());
+
+    // Load insights history on first successful fetch
+    await loadInsightsHistory(base, key, devs);
+
     const temps=TANK_SENSORS.map(s=>{const d=devs.find(x=>x.name===s.dev);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null});
     const gv=name=>{const d=devs.find(x=>x.name===name);if(!d)return null;const c=d.capabilitiesObj?.[CAP];return(c&&typeof c.value==='number')?r1(c.value):null};
     render(temps,{scop:gv(SCOP_DEV),brineIn:gv(BRINE_IN_DEV),brineOut:gv(BRINE_OUT_DEV)});
