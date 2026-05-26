@@ -525,11 +525,22 @@ function hideTT() {
     () => document.getElementById('tt').classList.remove('on'), 320);
 }
 
+// Track which DOM elements already have tooltip handlers (prevents memory leak)
+const _ttBound = new WeakSet();
+
 function btt(el, label, hk, unit) {
-  el.addEventListener('mouseenter', () => showTT(el, label, hk, unit));
+  // Update label/hk/unit on element so handlers can read current values
+  el._ttLabel = label; el._ttHk = hk; el._ttUnit = unit;
+
+  if (_ttBound.has(el)) return;  // already bound – just update refs above
+  _ttBound.add(el);
+
+  // Subtle haptic feedback on long-press (iOS Safari supports navigator.vibrate)
+  const haptic = () => { try { navigator.vibrate && navigator.vibrate(8); } catch(_){} };
+
+  el.addEventListener('mouseenter', () => showTT(el, el._ttLabel, el._ttHk, el._ttUnit));
   el.addEventListener('mouseleave', hideTT);
 
-  // Long-press on iOS: show only if not scrolling
   let tmr = null, moved = false, sx = 0, sy = 0;
 
   el.addEventListener('touchstart', e => {
@@ -537,7 +548,7 @@ function btt(el, label, hk, unit) {
     sx = e.touches[0].clientX;
     sy = e.touches[0].clientY;
     tmr = setTimeout(() => {
-      if (!moved) showTT(el, label, hk, unit);
+      if (!moved) { haptic(); showTT(el, el._ttLabel, el._ttHk, el._ttUnit); }
     }, 500);
   }, { passive: true });
 
@@ -564,7 +575,7 @@ function buildSvg(temps, nibe) {
   // ── Layout ──────────────────────────────
   const tCX=96, tW=68, tTop=24, tBot=330, tH=tBot-tTop, tRx=12, eRy=10;
   const lblX=14, dotX=tCX-tW/2-3;
-  const vpX=248, vpY=46, vpW=110, vpH=252;
+  const vpX=248, vpY=46, vpW=110, vpH=265;
   const vpRX = vpX + vpW;
   const wCX=590, wBotY=330, wW=30;
   const p1x=wCX-10, p2x=wCX+10;
@@ -578,8 +589,8 @@ function buildSvg(temps, nibe) {
 
   // VP heating tank = running (>0.1 kW) AND supply line significantly warmer than return
   const vpHeat = pwr > 0.1 && turVP != null && turVP > (returT + 3);
-  // pClass for pipe animations – use vpHeat (available early)
-  const pClass = vpHeat ? '' : 'pf-off';
+  // pClass for pipe animations – animate whenever compressor runs (power > 0.1 kW)
+  const pClass = pwr > 0.1 ? '' : 'pf-off';
 
   let fillF;
   if (vpHeat) {
@@ -597,8 +608,8 @@ function buildSvg(temps, nibe) {
 
   // ── Pipe Y positions ────────────────────
   const hotY = tTop + 27, coldY = tBot - 27;
-  const boY  = vpY + vpH * 0.30;
-  const biY  = vpY + vpH * 0.68;
+  const boY  = vpY + vpH * 0.28;
+  const biY  = vpY + vpH * 0.72;
 
   // Geo pipe endpoints
   const geoEndY  = wBotY - 42;
@@ -702,10 +713,12 @@ function buildSvg(temps, nibe) {
 </defs>`;
 
   // ── GEO PIPES ──────────────────────────────────────────────
+  // Brine pipes extend 4px INTO VP body (vpRX-4)
+  const vpExit = vpRX - 4;
   // OUT: VP right-upper → right borehole pipe (p2x), rounded 90° bend down
-  const oPath = `M${vpRX},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${pipeDeep}`;
+  const oPath = `M${vpExit},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${pipeDeep}`;
   // IN: left borehole pipe (p1x) → VP right-lower, rounded 90° bend up
-  const iPath = `M${p1x},${pipeDeep} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
+  const iPath = `M${p1x},${pipeDeep} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpExit}`;
 
   // Pipe shadows (offset for 3D depth)
   s += `<path d="${oPath}" fill="none" stroke="#047857"
@@ -727,13 +740,13 @@ function buildSvg(temps, nibe) {
 
   // Animated flow on brine pipes (always running – brine always circulates)
   // OUT (VP→borehole): dark green animation stops AT flange top (not through it)
-  const oAnimPath = `M${vpRX},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${flangeTopY-8}`;
+  const oAnimPath = `M${vpExit},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${flangeTopY-8}`;
   // Brine UT (VP→borehole) = DARK GREEN (cooled fluid going into ground)
   s += `<path d="${oAnimPath}" fill="none" stroke="#047857"
          stroke-width="5" stroke-linecap="round"
          class="pf-geoO" opacity=".8"/>`;
   // IN (borehole→VP): bright cyan animation starts AT flange top (not from underground)
-  const iAnimPath = `M${p1x},${flangeTopY-22} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
+  const iAnimPath = `M${p1x},${flangeTopY-22} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpExit}`;
   // Brine INN (borehole→VP) = LIGHT CYAN (warm fluid coming from ground)
   s += `<path d="${iAnimPath}" fill="none" stroke="#5eead4"
          stroke-width="5" stroke-linecap="round"
@@ -764,44 +777,46 @@ function buildSvg(temps, nibe) {
          fill="#047857" font-weight="600">${boTxt}</text>`;
   s += `<text x="${bMid}" y="${boY-25}" text-anchor="middle"
          font-size="8" font-family="Inter,sans-serif"
-         fill="#065f46" letter-spacing="1" opacity=".85">BRINE INN</text>`;
+         fill="#065f46" letter-spacing="1" opacity=".85">BRINE UT</text>`;
   // Bottom pipe = UT (coming out of well)
   s += `<text x="${bMid}" y="${biY+19}" text-anchor="middle"
          font-size="11" font-family="Inter,sans-serif"
          fill="#5eead4" font-weight="600">${biTxt}</text>`;
   s += `<text x="${bMid}" y="${biY+30}" text-anchor="middle"
          font-size="8" font-family="Inter,sans-serif"
-         fill="#2dd4bf" letter-spacing="1" opacity=".85">BRINE UT</text>`;
+         fill="#2dd4bf" letter-spacing="1" opacity=".85">BRINE INN</text>`;
 
   // ── HOT & COLD PIPES ───────────────────────────────────────
   const tRX = tCX + tW/2;
 
+  // Hot/cold pipes – extend 4px INTO the VP body so they tuck in seamlessly
+  const vpEnter = vpX + 4;  // pipe ends 4px inside VP edge
   // Shadows
-  s += `<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#7c2d12"
+  s += `<path d="M${tRX},${hotY} H${vpEnter}" fill="none" stroke="#7c2d12"
          stroke-width="13" stroke-linecap="round"
          opacity=".25" transform="translate(0,3)"/>`;
-  s += `<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#0c4a6e"
+  s += `<path d="M${vpEnter},${coldY} H${tRX}" fill="none" stroke="#0c4a6e"
          stroke-width="13" stroke-linecap="round"
          opacity=".25" transform="translate(0,3)"/>`;
   // Fill
-  s += `<path d="M${tRX},${hotY} H${vpX}" fill="none"
+  s += `<path d="M${tRX},${hotY} H${vpEnter}" fill="none"
          stroke="url(#hpg)" stroke-width="11" stroke-linecap="round"/>`;
-  s += `<path d="M${vpX},${coldY} H${tRX}" fill="none"
+  s += `<path d="M${vpEnter},${coldY} H${tRX}" fill="none"
          stroke="url(#cpg)" stroke-width="11" stroke-linecap="round"/>`;
   // Shine
-  s += `<path d="M${tRX},${hotY} H${vpX}" fill="none" stroke="#fff"
+  s += `<path d="M${tRX},${hotY} H${vpEnter}" fill="none" stroke="#fff"
          stroke-width="3" stroke-linecap="round" opacity=".2"/>`;
-  s += `<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#fff"
+  s += `<path d="M${vpEnter},${coldY} H${tRX}" fill="none" stroke="#fff"
          stroke-width="3" stroke-linecap="round" opacity=".2"/>`;
 
   // Animated flow overlays
 
-  // Hot TUR (VP→tank): path goes VP→right toward tank, flowR = moves right ✓
-  s += `<path d="M${vpX},${hotY} H${tRX}" fill="none"
+  // Hot TUR (VP→tank): animation extends into VP
+  s += `<path d="M${vpEnter},${hotY} H${tRX}" fill="none"
          stroke="#ffa040" stroke-width="5" stroke-linecap="round"
          class="pf-hot ${pClass}" opacity=".55"/>`;
-  // Kald Retur (tank→VP): path goes tank→left toward VP, flowL = moves left ✓
-  s += `<path d="M${tRX},${coldY} H${vpX}" fill="none"
+  // Kald Retur (tank→VP): animation extends into VP
+  s += `<path d="M${tRX},${coldY} H${vpEnter}" fill="none"
          stroke="#7dd3fc" stroke-width="5" stroke-linecap="round"
          class="pf-cold ${pClass}" opacity=".55"/>`;
 
@@ -831,15 +846,16 @@ function buildSvg(temps, nibe) {
          font-size="8" font-family="Inter,sans-serif"
          fill="#1a608a" letter-spacing="1">KALD RETUR</text>`;
 
-  // Pipe connection ports on VP
-  s += `<rect x="${vpX-6}" y="${hotY-5}" width="8" height="10"
-         rx="2" fill="#2a4a6a" stroke="#1a3a5a"/>`;
-  s += `<rect x="${vpX-6}" y="${coldY-5}" width="8" height="10"
-         rx="2" fill="#1a3a5a" stroke="#0a2840"/>`;
-  s += `<rect x="${vpRX-2}" y="${boY-5}" width="8" height="10"
-         rx="2" fill="#083828" stroke="#052018"/>`;
-  s += `<rect x="${vpRX-2}" y="${biY-5}" width="8" height="10"
-         rx="2" fill="#083828" stroke="#052018"/>`;
+  // Smooth pipe entry shadows where pipes meet VP body (no rectangular ports)
+  // Just a subtle dark ellipse inside VP edge to suggest the pipe entering
+  s += `<ellipse cx="${vpX+3}" cy="${hotY}" rx="2.5" ry="5"
+         fill="#08111f" opacity=".5"/>`;
+  s += `<ellipse cx="${vpX+3}" cy="${coldY}" rx="2.5" ry="5"
+         fill="#08111f" opacity=".5"/>`;
+  s += `<ellipse cx="${vpRX-3}" cy="${boY}" rx="2.5" ry="5"
+         fill="#08111f" opacity=".5"/>`;
+  s += `<ellipse cx="${vpRX-3}" cy="${biY}" rx="2.5" ry="5"
+         fill="#08111f" opacity=".5"/>`;
 
   // ── HEAT PUMP ──────────────────────────────────────────────
   s += `<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="14"
@@ -1019,9 +1035,9 @@ function buildSvg(temps, nibe) {
          fill="#2a5a4a" opacity=".65">250 m</text>`;
 
   // ── ACCUMULATOR TANK ──────────────────────────────────────
-  // Drop shadow
-  s += `<ellipse cx="${tCX}" cy="${tBot+eRy+10}" rx="${tW/2-5}" ry="4"
-         fill="#000" fill-opacity=".2"/>`;
+  // Drop shadow below tank
+  s += `<ellipse cx="${tCX}" cy="${tBot+8}" rx="${tW/2-5}" ry="4"
+         fill="#000" fill-opacity=".22"/>`;
 
   // Tank body
   s += `<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}"
@@ -1065,14 +1081,7 @@ function buildSvg(temps, nibe) {
   s += `<rect x="${tCX-tW/2+7}" y="${tTop+eRy}" width="7" height="${tH-eRy*2}"
          rx="3" fill="#fff" fill-opacity=".04"/>`;
 
-  // Bottom dome (seamless cap)
-  s += `<rect x="${tCX-tW/2}" y="${tBot-eRy}" width="${tW}"
-         height="${eRy*2}" rx="${tW/2}"
-         fill="${fillF > .12 ? wD : 'url(#sg)'}"
-         stroke="rgba(255,255,255,.055)" stroke-width="1"/>`;
-  s += `<ellipse cx="${tCX}" cy="${tBot+eRy*.3}"
-         rx="${tW/2-9}" ry="${eRy*.36}"
-         fill="${fillF > .12 ? wB : '#4a8aaa'}" fill-opacity=".14"/>`;
+  // Bottom is naturally rounded by main tank body rx – no separate cap needed
 
   // Sensor markers + labels (all left side, aligned column)
   SENSORS.forEach((sen, i) => {
@@ -1202,7 +1211,7 @@ function render(temps, nibe, isLive) {
 // ═══════════════════════════════════════════
 // SCOP INSIGHTS (from Homey Logic variable)
 // ═══════════════════════════════════════════
-let _scopDone = false, _lastHid = '';
+let _scopDone = false, _lastHid = '', _failCount = 0, _savCounter = 0;
 
 async function loadScopInsights(base, key) {
   const curHid = document.getElementById('hid').value.trim();
@@ -1264,7 +1273,11 @@ function setSpin(on) {
   on ? el.classList.add('spin') : el.classList.remove('spin');
 }
 
+let _lastStatusTxt = '', _lastStatusType = '';
 function setStatus(txt, type) {
+  type = type || '';
+  if (_lastStatusTxt === txt && _lastStatusType === type) return;  // no-op if unchanged
+  _lastStatusTxt = txt; _lastStatusType = type;
   const el = document.getElementById('sts');
   el.textContent = txt;
   el.className = 'hdr-s' + (type ? ' '+type : '');
@@ -1319,8 +1332,10 @@ async function doFetch() {
 
     await loadScopInsights(base, key);
     render(temps, nibe, true);
-    savH();
+    _savCounter = (_savCounter + 1) % 4;
+    if (_savCounter === 0) savH();  // save every 4th fetch (~1 min)
 
+    _failCount = 0;  // reset backoff on success
     const pts = H.t100.length;
     const pStr = pts > 0 ? ` · ${pts}p` : '';
     setStatus('Live · '+new Date().toLocaleTimeString('nb-NO',
@@ -1330,6 +1345,10 @@ async function doFetch() {
     setStatus('Tilkoblingsfeil', 'err');
     errEl.style.display = 'block';
     errEl.innerHTML = `<strong>Feil:</strong> ${e.message}`;
+    // Exponential backoff: retry after 30s, then 60s, then 120s
+    _failCount = Math.min(_failCount + 1, 3);
+    const backoff = 30 * 1000 * Math.pow(2, _failCount - 1);
+    setTimeout(() => { if (!document.hidden) doFetch(); }, backoff);
   } finally {
     setSpin(false);
   }
@@ -1344,11 +1363,44 @@ function tCfg() {
 }
 
 // ── Auto-refresh ──
-setInterval(doFetch, 15 * 1000);  // 4x per minutt
+// Adaptive refresh: 15s active, pause in background, immediate fetch on resume
+let _refreshTimer = null;
+let _wasHidden = false;
+
+function startAutoRefresh() {
+  if (_refreshTimer) return;
+  _refreshTimer = setInterval(() => {
+    if (!document.hidden) doFetch();
+  }, 15 * 1000);
+}
+
+function stopAutoRefresh() {
+  if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
+}
+
+// Page Visibility API – pause when backgrounded, fetch immediately on resume
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    _wasHidden = true;
+    stopAutoRefresh();
+  } else if (_wasHidden) {
+    _wasHidden = false;
+    doFetch();
+    startAutoRefresh();
+  }
+}, { passive: true });
+
+startAutoRefresh();
 
 // ── Startup ──
 lodCfg();
 lodH();
+
+// Save history when page is hidden/closed to avoid data loss
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) savH();
+}, { passive: true });
+window.addEventListener('pagehide', () => savH(), { passive: true });
 render(
   [58.4, 49.2, 40.1, 33.7, 29.3],
   { scop:3.84, brineIn:8.2, brineOut:2.1,
