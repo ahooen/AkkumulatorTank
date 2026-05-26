@@ -398,6 +398,8 @@ const DEV = {
   supply  : 'Nibe Supply Line',
   power   : 'Nibe System Power',
   hotWater: 'Nibe Hot Water',
+  compHz  : 'Nibe Kompressor Hz',   // MyUplink param – compressor frequency
+  degMin  : 'Nibe Gradminutter',    // MyUplink param 781 – degree minutes
 };
 
 const REF = 25, KWH = 0.5815;
@@ -737,14 +739,18 @@ function buildSvg(temps, nibe) {
          stroke-width="5" stroke-linecap="round"
          class="pf-geoI" opacity=".7"/>`;
 
-  // Direction arrows (subtle)
+  // Direction arrows
+  // boY top pipe = BRINE INN (VP→borehole) → arrows point RIGHT toward borehole
+  // biY bottom pipe = BRINE UT (borehole→VP) → arrows point LEFT toward VP
   const bMid = vpRX + (wCX - vpRX) / 2 - 10;
   for (let i = 0; i < 2; i++) {
     const ax = vpRX + 16 + i * 52;
+    // Top (brine inn to well): right-pointing dark green arrows
     s += `<polygon points="${ax},${boY-4} ${ax+8},${boY} ${ax},${boY+4}"
-           fill="#059669" opacity=".7"/>`;
+           fill="#065f46" opacity=".8"/>`;
+    // Bottom (brine ut from well): left-pointing light cyan arrows
     s += `<polygon points="${ax+8},${biY-4} ${ax},${biY} ${ax+8},${biY+4}"
-           fill="#2dd4bf" opacity=".7"/>`;
+           fill="#5eead4" opacity=".8"/>`;
   }
 
   // Brine temperature labels
@@ -914,7 +920,19 @@ function buildSvg(temps, nibe) {
            stroke="rgba(59,125,248,.06)" stroke-width="1"/>`;
   }
 
-  // Operating mode text on VP
+  // Hz and GM info inside VP internals panel (semi-transparent)
+  const hzStr = (nibe.compHz != null && pwr > 0.1)
+    ? `${Math.round(nibe.compHz)} Hz` : 'Stanset';
+  const gmStr = nibe.degMin != null ? `${Math.round(nibe.degMin)} GM` : '– GM';
+  const hzCol = pwr > 0.1 ? '#22c55e' : '#3d5878';
+  s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-36}" text-anchor="middle"
+         font-size="9" font-family="JetBrains Mono,monospace"
+         fill="${hzCol}" opacity=".65">${hzStr}</text>`;
+  s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-23}" text-anchor="middle"
+         font-size="8.5" font-family="JetBrains Mono,monospace"
+         fill="#3d5878" opacity=".55">${gmStr}</text>`;
+
+  // Mode label at bottom
   const mStr  = vpHeat ? 'VARMER TANK' : pwr>0.1 ? 'VARMTVANN' : 'AVSLÅTT';
   const mCol  = vpHeat ? '#22c55e' : pwr>0.1 ? '#f59e0b' : '#3d5878';
   s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle"
@@ -1280,6 +1298,8 @@ async function doFetch() {
       supply  : gv(DEV.supply),
       power   : gv(DEV.power),
       hotWater: gv(DEV.hotWater),
+      compHz  : gv(DEV.compHz),
+      degMin  : gv(DEV.degMin),
     };
 
     await loadScopInsights(base, key);
@@ -1317,7 +1337,8 @@ lodH();
 render(
   [58.4, 49.2, 40.1, 33.7, 29.3],
   { scop:3.84, brineIn:8.2, brineOut:2.1,
-    supply:55, power:3.2, hotWater:0 },
+    supply:55, power:3.2, hotWater:0,
+    compHz:48, degMin:-274 },
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
