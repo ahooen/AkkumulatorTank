@@ -71,6 +71,22 @@ body{font-family:var(--f);color:var(--t1);
 .spin{animation:spin .75s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* Pipe flow dash animations */
+/* Flow directions:
+   flowR = dashes move RIGHT  (hot TUR: VP→tank)
+   flowL = dashes move LEFT   (cold retur: tank→VP)
+   flowD = dashes move DOWN   (brine OUT: VP→borehole, horizontal then down)
+   flowU = dashes move UP     (brine IN:  borehole→VP, up then horizontal) */
+@keyframes flowR{from{stroke-dashoffset:40}to{stroke-dashoffset:0}}
+@keyframes flowL{from{stroke-dashoffset:0}to{stroke-dashoffset:40}}
+@keyframes flowD{from{stroke-dashoffset:0}to{stroke-dashoffset:40}}
+@keyframes flowU{from{stroke-dashoffset:40}to{stroke-dashoffset:0}}
+.pf-hot {stroke-dasharray:14 12;animation:flowR 2.2s linear infinite}
+.pf-cold{stroke-dasharray:14 12;animation:flowR 2.2s linear infinite}
+.pf-geoO{stroke-dasharray:13 12;animation:flowU 2.8s linear infinite}
+.pf-geoI{stroke-dasharray:13 12;animation:flowU 2.8s linear infinite}
+.pf-off {stroke-dasharray:none;animation:none}
+
 /* ── SCROLL AREA ── */
 .wrap{
   padding:.7rem 1rem calc(1.5rem + var(--safe-bot));
@@ -707,31 +723,49 @@ function buildSvg(temps, nibe) {
   s += `<path d="${iPath}" fill="none" stroke="#fff"
          stroke-width="3" stroke-linecap="round" opacity=".18"/>`;
 
-  // Flow direction arrows
+  // Animated flow on brine pipes (always running – brine always circulates)
+  // OUT (VP→borehole): dark green animation stops AT flange top (not through it)
+  const oAnimPath = `M${vpRX},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${flangeTopY-8}`;
+  // Brine INN (going into well) = DARK GREEN (cooled, returning to ground)
+  s += `<path d="${oAnimPath}" fill="none" stroke="#065f46"
+         stroke-width="5" stroke-linecap="round"
+         class="pf-geoO" opacity=".8"/>`;
+  // IN (borehole→VP): bright cyan animation starts AT flange top (not from underground)
+  const iAnimPath = `M${p1x},${flangeTopY-22} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
+  // Brine UT (coming out of well) = LIGHT TURQUOISE (warmed by ground)
+  s += `<path d="${iAnimPath}" fill="none" stroke="#5eead4"
+         stroke-width="5" stroke-linecap="round"
+         class="pf-geoI" opacity=".7"/>`;
+
+  // Direction arrows (subtle)
   const bMid = vpRX + (wCX - vpRX) / 2 - 10;
   for (let i = 0; i < 2; i++) {
     const ax = vpRX + 16 + i * 52;
     s += `<polygon points="${ax},${boY-4} ${ax+8},${boY} ${ax},${boY+4}"
-           fill="#059669" opacity=".8"/>`;
+           fill="#059669" opacity=".7"/>`;
     s += `<polygon points="${ax+8},${biY-4} ${ax},${biY} ${ax+8},${biY+4}"
-           fill="#2dd4bf" opacity=".8"/>`;
+           fill="#2dd4bf" opacity=".7"/>`;
   }
 
   // Brine temperature labels
+  // Øvre port (boY): VP→borehole = "BRINE INN" (going into well), uses dark color for cool fluid
+  // Nedre port (biY): borehole→VP = "BRINE UT" (coming out of well), uses light color for warm fluid
   const boTxt = nibe.brineOut != null ? `${nibe.brineOut.toFixed(1)} °C` : '–';
   const biTxt = nibe.brineIn  != null ? `${nibe.brineIn.toFixed(1)} °C`  : '–';
+  // Top pipe = INN (going into well)
   s += `<text x="${bMid}" y="${boY-13}" text-anchor="middle"
          font-size="11" font-family="Inter,sans-serif"
-         fill="#059669" font-weight="600">${boTxt}</text>`;
-  s += `<text x="${bMid}" y="${biY+19}" text-anchor="middle"
-         font-size="11" font-family="Inter,sans-serif"
-         fill="#2dd4bf" font-weight="600">${biTxt}</text>`;
+         fill="#047857" font-weight="600">${boTxt}</text>`;
   s += `<text x="${bMid}" y="${boY-25}" text-anchor="middle"
          font-size="8" font-family="Inter,sans-serif"
-         fill="#047857" letter-spacing="1" opacity=".85">BRINE UT</text>`;
+         fill="#065f46" letter-spacing="1" opacity=".85">BRINE INN</text>`;
+  // Bottom pipe = UT (coming out of well)
+  s += `<text x="${bMid}" y="${biY+19}" text-anchor="middle"
+         font-size="11" font-family="Inter,sans-serif"
+         fill="#5eead4" font-weight="600">${biTxt}</text>`;
   s += `<text x="${bMid}" y="${biY+30}" text-anchor="middle"
          font-size="8" font-family="Inter,sans-serif"
-         fill="#0d9488" letter-spacing="1" opacity=".85">BRINE INN</text>`;
+         fill="#2dd4bf" letter-spacing="1" opacity=".85">BRINE UT</text>`;
 
   // ── HOT & COLD PIPES ───────────────────────────────────────
   const tRX = tCX + tW/2;
@@ -754,14 +788,25 @@ function buildSvg(temps, nibe) {
   s += `<path d="M${vpX},${coldY} H${tRX}" fill="none" stroke="#fff"
          stroke-width="3" stroke-linecap="round" opacity=".2"/>`;
 
-  // Arrows: hot tank←VP, cold tank→VP
+  // Animated flow overlays
+  const pClass = vpHeat ? '' : 'pf-off';
+  // Hot TUR (VP→tank): path goes VP→right toward tank, flowR = moves right ✓
+  s += `<path d="M${vpX},${hotY} H${tRX}" fill="none"
+         stroke="#ffa040" stroke-width="5" stroke-linecap="round"
+         class="pf-hot ${pClass}" opacity=".55"/>`;
+  // Kald Retur (tank→VP): path goes tank→left toward VP, flowL = moves left ✓
+  s += `<path d="M${tRX},${coldY} H${vpX}" fill="none"
+         stroke="#7dd3fc" stroke-width="5" stroke-linecap="round"
+         class="pf-cold ${pClass}" opacity=".55"/>`;
+
+  // Keep subtle arrows for direction hint
   const pmid = tRX + (vpX - tRX) / 2;
   for (let i = 0; i < 2; i++) {
     const ax = tRX + 20 + i * 48;
     s += `<polygon points="${ax+8},${hotY-4} ${ax},${hotY} ${ax+8},${hotY+4}"
-           fill="#f97316" opacity=".85"/>`;
+           fill="#f97316" opacity=".7"/>`;
     s += `<polygon points="${ax},${coldY-4} ${ax+8},${coldY} ${ax},${coldY+4}"
-           fill="#38bdf8" opacity=".85"/>`;
+           fill="#38bdf8" opacity=".7"/>`;
   }
 
   // Pipe labels
@@ -1264,7 +1309,7 @@ function tCfg() {
 }
 
 // ── Auto-refresh ──
-setInterval(doFetch, 5 * 60 * 1000);
+setInterval(doFetch, 15 * 1000);  // 4x per minutt
 
 // ── Startup ──
 lodCfg();
