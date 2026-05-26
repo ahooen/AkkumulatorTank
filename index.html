@@ -398,8 +398,9 @@ const DEV = {
   supply  : 'Nibe Supply Line',
   power   : 'Nibe System Power',
   hotWater: 'Nibe Hot Water',
-  compHz  : 'Nibe Kompressor Hz',   // MyUplink param – compressor frequency
-  degMin  : 'Nibe Gradminutter',    // MyUplink param 781 – degree minutes
+  compHz  : 'Nibe Kompressor Hz',
+  degMin  : 'Nibe Gradminutter',
+  bt6     : 'Nibe BT6',   // Hot water charging temp – rising = DHW production
 };
 
 const REF = 25, KWH = 0.5815;
@@ -413,6 +414,7 @@ const H = {
   t100:[], t75:[], t50:[], t25:[], t0:[],
   snitt:[], energi:[], dtb:[], dvp:[],
   scop:[], brineIn:[], brineOut:[],
+  bt6:[],  // BT6 hot water charging – rising = DHW production
 };
 
 const r1 = v => Math.round(v * 10) / 10;
@@ -441,11 +443,10 @@ function lodH() {
 // COLOR HELPERS
 // ═══════════════════════════════════════════
 const TEMP_STOPS = [
-  {v:0,  c:[56,189,248]},
-  {v:25, c:[52,211,153]},
-  {v:40, c:[251,146,60]},
-  {v:58, c:[239,68,68]},
-  {v:75, c:[153,27,27]},
+  {v:0,  c:[56,189,248]},   // cold blue
+  {v:25, c:[52,211,153]},   // cool green
+  {v:35, c:[251,191,36]},   // warm yellow
+  {v:45, c:[239,68,68]},    // hot red (max for accumulator tank)
 ];
 
 function tCol(t) {
@@ -577,6 +578,8 @@ function buildSvg(temps, nibe) {
 
   // VP heating tank = running (>0.1 kW) AND supply line significantly warmer than return
   const vpHeat = pwr > 0.1 && turVP != null && turVP > (returT + 3);
+  // pClass for pipe animations – use vpHeat (available early)
+  const pClass = vpHeat ? '' : 'pf-off';
 
   let fillF;
   if (vpHeat) {
@@ -792,7 +795,7 @@ function buildSvg(temps, nibe) {
          stroke-width="3" stroke-linecap="round" opacity=".2"/>`;
 
   // Animated flow overlays
-  const pClass = vpHeat ? '' : 'pf-off';
+
   // Hot TUR (VP→tank): path goes VP→right toward tank, flowR = moves right ✓
   s += `<path d="M${vpX},${hotY} H${tRX}" fill="none"
          stroke="#ffa040" stroke-width="5" stroke-linecap="round"
@@ -917,11 +920,16 @@ function buildSvg(temps, nibe) {
            stroke="rgba(59,125,248,.06)" stroke-width="1"/>`;
   }
 
-  // Mode detection:
-  // vpHeat = power>0.1 AND supply > return+3 → heating tank
-  // vpDHW  = power>0.1 AND supply ≤ return+3 → hot water (heat going to boiler, not tank)
-  // Off    = power ≤ 0.1
-  const vpDHW = pwr > 0.1 && !vpHeat;
+  // Mode detection using BT6 trend:
+  // BT6 rising  + power>0.1 → Tappevannsproduksjon
+  // BT6 falling + power>0.1 → Varmeproduksjon (or just finished DHW)
+  // power ≤ 0.1             → Avslått
+  const bt6Hist = H.bt6 || [];
+  const bt6Rising = bt6Hist.length >= 2 &&
+    (bt6Hist[bt6Hist.length-1] - bt6Hist[bt6Hist.length-2]) > 0.05;
+  const vpDHW = pwr > 0.1 && bt6Rising;
+  // Override vpHeat: if BT6 rising, it's DHW regardless of supply line
+  const vpHeatFinal = pwr > 0.1 && !vpDHW;
 
   // Termisk effekt = elektrisk effekt × SCOP (øyeblikksverdi)
   // P_termisk (kW) = power (kW) × scop
@@ -929,7 +937,7 @@ function buildSvg(temps, nibe) {
   const pTermisk = pwr > 0.1 ? r1(pwr * scop2) : null;
   const pwrStr = pTermisk != null ? `${pTermisk} kWₙ` : 'Stanset';
   const gmStr  = nibe.degMin != null ? `${Math.round(nibe.degMin)} GM` : '– GM';
-  const pwrCol = vpHeat ? '#22c55e' : pwr > 0.1 ? '#f59e0b' : '#3d5878';
+  const pwrCol = vpHeatFinal ? '#22c55e' : pwr > 0.1 ? '#f59e0b' : '#3d5878';
   const gmCol  = nibe.degMin != null && nibe.degMin < -200 ? '#f59e0b' : '#3d5878';
 
   s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-36}" text-anchor="middle"
@@ -1139,12 +1147,15 @@ function renderPanels(temps, nibe) {
     sc != null ? r2(sc).toFixed(2) : '–';
 
   const pwr  = nibe.power ?? 0;
-  const tVP  = nibe.supply;
-  const rT   = temps[4] ?? 25;
-  const vpH  = pwr > 0.1 && tVP != null && tVP > (rT + 3);
-  // Mode: use supply vs return temp diff, not hot water demand
-  const vpDHW2 = pwr > 0.1 && !vpH;
-  const modeTxt = vpH ? 'Varmer akkumulatortank' : vpDHW2 ? 'Produserer varmtvann' : 'Avslått';
+  // BT6 trend: rising = DHW production
+  const bt6H = H.bt6 || [];
+  const bt6R = bt6H.length >= 2 &&
+    (bt6H[bt6H.length-1] - bt6H[bt6H.length-2]) > 0.05;
+  const isDHW  = pwr > 0.1 && bt6R;
+  const isHeat = pwr > 0.1 && !isDHW;
+  const modeTxt = isHeat ? 'Varmeproduksjon' :
+                  isDHW  ? 'Tappevannsproduksjon' :
+                           'Avslått';
   document.getElementById('vMod').textContent = modeTxt;
 
   const fmtB = (v, id) => {
@@ -1182,6 +1193,7 @@ function render(temps, nibe, isLive) {
     ph('scop',     nibe.scop);
     ph('brineIn',  nibe.brineIn);
     ph('brineOut', nibe.brineOut);
+    ph('bt6',      nibe.bt6);
   }
   buildSvg(temps, nibe);
   renderPanels(temps, nibe);
@@ -1302,7 +1314,8 @@ async function doFetch() {
       hotWater: gv(DEV.hotWater),
       compHz  : gv(DEV.compHz),
       degMin  : gv(DEV.degMin),
-    };  // compHz not available from MyUplink – showing power kW instead
+      bt6     : gv(DEV.bt6),
+    };
 
     await loadScopInsights(base, key);
     render(temps, nibe, true);
@@ -1340,7 +1353,7 @@ render(
   [58.4, 49.2, 40.1, 33.7, 29.3],
   { scop:3.84, brineIn:8.2, brineOut:2.1,
     supply:55, power:3.2, hotWater:0,
-    compHz:null, degMin:-248 },
+    compHz:null, degMin:-248, bt6:49.2 },
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
