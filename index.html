@@ -675,19 +675,16 @@ function buildSvg(temps, nibe) {
     <stop offset="65%"  stop-color="#0369a1"/>
     <stop offset="100%" stop-color="#0c4a6e"/>
   </linearGradient>
-  <!-- Brine OUT (cooler, dark green) -->
-  <linearGradient id="gpO" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%"   stop-color="#34d399"/>
-    <stop offset="25%"  stop-color="#059669"/>
-    <stop offset="70%"  stop-color="#065f46"/>
-    <stop offset="100%" stop-color="#022c22"/>
+  <!-- Brine pipes – both same #047857 at 30% opacity -->
+  <linearGradient id="gpO" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#047857" stop-opacity=".3"/>
+    <stop offset="40%"  stop-color="#047857" stop-opacity=".3"/>
+    <stop offset="100%" stop-color="#047857" stop-opacity=".3"/>
   </linearGradient>
-  <!-- Brine IN (warmer, bright cyan) -->
-  <linearGradient id="gpI" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0%"   stop-color="#022c22"/>
-    <stop offset="30%"  stop-color="#0d9488"/>
-    <stop offset="65%"  stop-color="#2dd4bf"/>
-    <stop offset="100%" stop-color="#99f6e4"/>
+  <linearGradient id="gpI" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%"   stop-color="#047857" stop-opacity=".3"/>
+    <stop offset="40%"  stop-color="#047857" stop-opacity=".3"/>
+    <stop offset="100%" stop-color="#047857" stop-opacity=".3"/>
   </linearGradient>
 
   <!-- Filters -->
@@ -708,33 +705,33 @@ function buildSvg(temps, nibe) {
   const iPath = `M${p1x},${pipeDeep} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
 
   // Pipe shadows (offset for 3D depth)
-  s += `<path d="${oPath}" fill="none" stroke="#022c22"
+  s += `<path d="${oPath}" fill="none" stroke="#047857"
          stroke-width="13" stroke-linecap="round"
-         opacity=".25" transform="translate(2,3)"/>`;
-  s += `<path d="${iPath}" fill="none" stroke="#0f766e"
+         opacity=".12" transform="translate(2,3)"/>`;
+  s += `<path d="${iPath}" fill="none" stroke="#047857"
          stroke-width="13" stroke-linecap="round"
-         opacity=".25" transform="translate(2,3)"/>`;
+         opacity=".12" transform="translate(2,3)"/>`;
   // Pipe fill
   s += `<path d="${oPath}" fill="none" stroke="url(#gpO)"
          stroke-width="11" stroke-linecap="round"/>`;
   s += `<path d="${iPath}" fill="none" stroke="url(#gpI)"
          stroke-width="11" stroke-linecap="round"/>`;
-  // Pipe specular shine
+  // Pipe specular shine (subtle since pipes are semi-transparent)
   s += `<path d="${oPath}" fill="none" stroke="#fff"
-         stroke-width="3" stroke-linecap="round" opacity=".18"/>`;
+         stroke-width="2.5" stroke-linecap="round" opacity=".12"/>`;
   s += `<path d="${iPath}" fill="none" stroke="#fff"
-         stroke-width="3" stroke-linecap="round" opacity=".18"/>`;
+         stroke-width="2.5" stroke-linecap="round" opacity=".12"/>`;
 
   // Animated flow on brine pipes (always running – brine always circulates)
   // OUT (VP→borehole): dark green animation stops AT flange top (not through it)
   const oAnimPath = `M${vpRX},${boY} H${p2x-R} Q${p2x},${boY} ${p2x},${boY+R} V${flangeTopY-8}`;
-  // Brine INN (going into well) = DARK GREEN (cooled, returning to ground)
-  s += `<path d="${oAnimPath}" fill="none" stroke="#065f46"
+  // Brine UT (VP→borehole) = DARK GREEN (cooled fluid going into ground)
+  s += `<path d="${oAnimPath}" fill="none" stroke="#047857"
          stroke-width="5" stroke-linecap="round"
          class="pf-geoO" opacity=".8"/>`;
   // IN (borehole→VP): bright cyan animation starts AT flange top (not from underground)
   const iAnimPath = `M${p1x},${flangeTopY-22} V${biY+R} Q${p1x},${biY} ${p1x-R},${biY} H${vpRX}`;
-  // Brine UT (coming out of well) = LIGHT TURQUOISE (warmed by ground)
+  // Brine INN (borehole→VP) = LIGHT CYAN (warm fluid coming from ground)
   s += `<path d="${iAnimPath}" fill="none" stroke="#5eead4"
          stroke-width="5" stroke-linecap="round"
          class="pf-geoI" opacity=".7"/>`;
@@ -920,24 +917,29 @@ function buildSvg(temps, nibe) {
            stroke="rgba(59,125,248,.06)" stroke-width="1"/>`;
   }
 
-  // Hz and GM info inside VP internals panel (semi-transparent)
-  const hzStr = (nibe.compHz != null && pwr > 0.1)
-    ? `${Math.round(nibe.compHz)} Hz` : 'Stanset';
-  const gmStr = nibe.degMin != null ? `${Math.round(nibe.degMin)} GM` : '– GM';
-  const hzCol = pwr > 0.1 ? '#22c55e' : '#3d5878';
+  // Mode detection:
+  // vpHeat = power>0.1 AND supply > return+3 → heating tank
+  // vpDHW  = power>0.1 AND supply ≤ return+3 → hot water (heat going to boiler, not tank)
+  // Off    = power ≤ 0.1
+  const vpDHW = pwr > 0.1 && !vpHeat;
+
+  // Termisk effekt = elektrisk effekt × SCOP (øyeblikksverdi)
+  // P_termisk (kW) = power (kW) × scop
+  const scop2 = nibe.scop != null && nibe.scop > 0 ? nibe.scop : 1;
+  const pTermisk = pwr > 0.1 ? r1(pwr * scop2) : null;
+  const pwrStr = pTermisk != null ? `${pTermisk} kWₙ` : 'Stanset';
+  const gmStr  = nibe.degMin != null ? `${Math.round(nibe.degMin)} GM` : '– GM';
+  const pwrCol = vpHeat ? '#22c55e' : pwr > 0.1 ? '#f59e0b' : '#3d5878';
+  const gmCol  = nibe.degMin != null && nibe.degMin < -200 ? '#f59e0b' : '#3d5878';
+
   s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-36}" text-anchor="middle"
          font-size="9" font-family="JetBrains Mono,monospace"
-         fill="${hzCol}" opacity=".65">${hzStr}</text>`;
+         fill="${pwrCol}" opacity=".7">${pwrStr}</text>`;
   s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-23}" text-anchor="middle"
          font-size="8.5" font-family="JetBrains Mono,monospace"
-         fill="#3d5878" opacity=".55">${gmStr}</text>`;
+         fill="${gmCol}" opacity=".55">${gmStr}</text>`;
 
-  // Mode label at bottom
-  const mStr  = vpHeat ? 'VARMER TANK' : pwr>0.1 ? 'VARMTVANN' : 'AVSLÅTT';
-  const mCol  = vpHeat ? '#22c55e' : pwr>0.1 ? '#f59e0b' : '#3d5878';
-  s += `<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle"
-         font-size="6.5" font-family="Inter,sans-serif"
-         fill="${mCol}" letter-spacing="2">${mStr}</text>`;
+  // Mode label removed per user request
 
   // VP shine overlay
   s += `<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}"
@@ -1140,10 +1142,12 @@ function renderPanels(temps, nibe) {
   const tVP  = nibe.supply;
   const rT   = temps[4] ?? 25;
   const vpH  = pwr > 0.1 && tVP != null && tVP > (rT + 3);
+  // Consistent mode logic: use supply vs return diff, not hot water demand
+  const vpDHW2 = pwr > 0.1 && !vpH;
   document.getElementById('vMod').textContent =
-    vpH     ? '🟢 Varmer akkumulatortank' :
-    pwr>0.1 ? '🟡 Produserer varmtvann'  :
-              '⚫ Avslått';
+    vpH    ? '🟢 Varmer akkumulatortank' :
+    vpDHW2 ? '🟡 Produserer varmtvann'  :
+             '⚫ Avslått';
 
   const fmtB = (v, id) => {
     document.getElementById(id).innerHTML = v != null
@@ -1300,7 +1304,7 @@ async function doFetch() {
       hotWater: gv(DEV.hotWater),
       compHz  : gv(DEV.compHz),
       degMin  : gv(DEV.degMin),
-    };
+    };  // compHz not available from MyUplink – showing power kW instead
 
     await loadScopInsights(base, key);
     render(temps, nibe, true);
@@ -1338,7 +1342,7 @@ render(
   [58.4, 49.2, 40.1, 33.7, 29.3],
   { scop:3.84, brineIn:8.2, brineOut:2.1,
     supply:55, power:3.2, hotWater:0,
-    compHz:48, degMin:-274 },
+    compHz:null, degMin:-248 },
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
