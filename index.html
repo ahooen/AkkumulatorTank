@@ -1142,12 +1142,10 @@ function renderPanels(temps, nibe) {
   const tVP  = nibe.supply;
   const rT   = temps[4] ?? 25;
   const vpH  = pwr > 0.1 && tVP != null && tVP > (rT + 3);
-  // Consistent mode logic: use supply vs return diff, not hot water demand
+  // Mode: use supply vs return temp diff, not hot water demand
   const vpDHW2 = pwr > 0.1 && !vpH;
-  document.getElementById('vMod').textContent =
-    vpH    ? '🟢 Varmer akkumulatortank' :
-    vpDHW2 ? '🟡 Produserer varmtvann'  :
-             '⚫ Avslått';
+  const modeTxt = vpH ? 'Varmer akkumulatortank' : vpDHW2 ? 'Produserer varmtvann' : 'Avslått';
+  document.getElementById('vMod').textContent = modeTxt;
 
   const fmtB = (v, id) => {
     document.getElementById(id).innerHTML = v != null
