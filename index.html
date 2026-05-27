@@ -400,7 +400,7 @@ const DEV = {
   hotWater: 'Nibe Hot Water',
   compHz  : 'Nibe Kompressor Hz',
   degMin  : 'Nibe Gradminutter',
-  bt6     : 'Nibe BT6',   // Hot water charging temp – rising = DHW production
+  bt7     : 'Nibe BT7',   // Hot water top temp – rising = DHW production
 };
 
 const REF = 25, KWH = 0.5815;
@@ -414,7 +414,7 @@ const H = {
   t100:[], t75:[], t50:[], t25:[], t0:[],
   snitt:[], energi:[], dtb:[], dvp:[],
   scop:[], brineIn:[], brineOut:[],
-  bt6:[],  // BT6 hot water charging – rising = DHW production
+  bt7:[],  // BT7 hot water top – rising = DHW production
 };
 
 const r1 = v => Math.round(v * 10) / 10;
@@ -936,15 +936,15 @@ function buildSvg(temps, nibe) {
            stroke="rgba(59,125,248,.06)" stroke-width="1"/>`;
   }
 
-  // Mode detection using BT6 trend:
-  // BT6 rising  + power>0.1 → Tappevannsproduksjon
-  // BT6 falling + power>0.1 → Varmeproduksjon (or just finished DHW)
-  // power ≤ 0.1             → Avslått
-  const bt6Hist = H.bt6 || [];
-  const bt6Rising = bt6Hist.length >= 2 &&
-    (bt6Hist[bt6Hist.length-1] - bt6Hist[bt6Hist.length-2]) > 0.05;
-  const vpDHW = pwr > 0.1 && bt6Rising;
-  // Override vpHeat: if BT6 rising, it's DHW regardless of supply line
+  // Mode detection using BT7 (Hot water top) trend:
+  // BT7 rising  + power>0.1 → Tappevannsproduksjon (top of DHW tank heating up)
+  // BT7 flat/falling + power>0.1 → Varmeproduksjon
+  // power ≤ 0.1                  → Avslått
+  const bt7H = H.bt7 || [];
+  // Check trend over last 3 measurements for stability (avoids noise)
+  const bt7Rising = bt7H.length >= 3 &&
+    (bt7H[bt7H.length-1] - bt7H[bt7H.length-3]) > 0.1;
+  const vpDHW = pwr > 0.1 && bt7Rising;
   const vpHeatFinal = pwr > 0.1 && !vpDHW;
 
   // Termisk effekt = elektrisk effekt × SCOP (øyeblikksverdi)
@@ -1156,11 +1156,11 @@ function renderPanels(temps, nibe) {
     sc != null ? r2(sc).toFixed(2) : '–';
 
   const pwr  = nibe.power ?? 0;
-  // BT6 trend: rising = DHW production
-  const bt6H = H.bt6 || [];
-  const bt6R = bt6H.length >= 2 &&
-    (bt6H[bt6H.length-1] - bt6H[bt6H.length-2]) > 0.05;
-  const isDHW  = pwr > 0.1 && bt6R;
+  // BT7 trend (over 3 measurements): rising = DHW production
+  const bt7p = H.bt7 || [];
+  const bt7R = bt7p.length >= 3 &&
+    (bt7p[bt7p.length-1] - bt7p[bt7p.length-3]) > 0.1;
+  const isDHW  = pwr > 0.1 && bt7R;
   const isHeat = pwr > 0.1 && !isDHW;
   const modeTxt = isHeat ? 'Varmeproduksjon' :
                   isDHW  ? 'Tappevannsproduksjon' :
@@ -1202,7 +1202,7 @@ function render(temps, nibe, isLive) {
     ph('scop',     nibe.scop);
     ph('brineIn',  nibe.brineIn);
     ph('brineOut', nibe.brineOut);
-    ph('bt6',      nibe.bt6);
+    ph('bt7',      nibe.bt7);
   }
   buildSvg(temps, nibe);
   renderPanels(temps, nibe);
@@ -1327,7 +1327,7 @@ async function doFetch() {
       hotWater: gv(DEV.hotWater),
       compHz  : gv(DEV.compHz),
       degMin  : gv(DEV.degMin),
-      bt6     : gv(DEV.bt6),
+      bt7     : gv(DEV.bt7),
     };
 
     await loadScopInsights(base, key);
@@ -1405,7 +1405,7 @@ render(
   [58.4, 49.2, 40.1, 33.7, 29.3],
   { scop:3.84, brineIn:8.2, brineOut:2.1,
     supply:55, power:3.2, hotWater:0,
-    compHz:null, degMin:-248, bt6:49.2 },
+    compHz:null, degMin:-248, bt7:55.5 },
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
