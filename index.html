@@ -32,6 +32,17 @@
 *{box-sizing:border-box;margin:0;padding:0;
   -webkit-tap-highlight-color:transparent;
   -webkit-touch-callout:none}
+
+/* Tooltip-bindable elements: no text selection on long-press */
+.sr, .mc, .scop-c, .bp, .panel, .scene, #svg, #svg *,
+.sr *, .mc *, .scop-c *, .bp * {
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+  user-select:none;
+}
+
+/* But still allow text selection in config inputs */
+.cfi { -webkit-user-select:auto; user-select:auto; }
 html{background:var(--bg);height:-webkit-fill-available}
 body{font-family:var(--f);color:var(--t1);
   min-height:100svh;min-height:-webkit-fill-available;
