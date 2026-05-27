@@ -1210,7 +1210,7 @@ function render(temps, nibe, isLive) {
     }
     if (temps[0] != null && temps[4] != null) ph('dtb', r1(temps[0]-temps[4]));
     if (temps[1] != null && temps[4] != null) ph('dvp', r1(temps[1]-temps[4]));
-    ph('scop',     nibe.scop);
+    if(nibe.scop!=null) H.scop.push(r2(nibe.scop)), H.scop.length>MAX_PTS&&H.scop.shift();
     ph('brineIn',  nibe.brineIn);
     ph('brineOut', nibe.brineOut);
     ph('bt7',      nibe.bt7);
@@ -1321,16 +1321,23 @@ async function doFetch() {
 
     const devs = Object.values(await res.json());
 
+    // gv rounds to 1 decimal, gv2 to 2 decimals (for SCOP precision)
     const gv = name => {
       const d = devs.find(x => x.name === name);
       if (!d) return null;
       const c = d.capabilitiesObj?.[CAP];
       return (c && typeof c.value === 'number') ? r1(c.value) : null;
     };
+    const gv2 = name => {
+      const d = devs.find(x => x.name === name);
+      if (!d) return null;
+      const c = d.capabilitiesObj?.[CAP];
+      return (c && typeof c.value === 'number') ? r2(c.value) : null;
+    };
 
     const temps = SENSORS.map(s => gv(s.dev));
     const nibe  = {
-      scop    : gv(DEV.scop),
+      scop    : gv2(DEV.scop),
       brineIn : gv(DEV.brineIn),
       brineOut: gv(DEV.brineOut),
       supply  : gv(DEV.supply),
