@@ -717,21 +717,18 @@ function buildSvg(temps, nibe) {
   // Hz display (now available from Modbus!)
   const hz = nibe.hz;
   // Hz, thermal kWt, GM displayed in VP internals
-  const hzStr  = hz!=null && pwr>0.2 ? `${hz.toFixed(1)} Hz` : 'Stanset';
+  const hzStr  = hz!=null && pwr>0.2 ? `${hz.toFixed(1)} Hz` : '';  // mode shown at bottom
   // kWt = electrical power (kW) × SCOP. Use scopDC, fallback to scop24
   const scopForKwt = nibe.scopDC ?? nibe.scop24;
   const kwt    = scopForKwt!=null && pwr>0.2 ? r1(pwr*scopForKwt) : null;
-  const kwtStr = kwt!=null ? `${kwt} kWt` : pwr>0.2 ? '… kWt' : '';
+  const kwtStr = kwt!=null ? `${kwt} kWt` : '';
   const gmStr  = nibe.gm!=null ? `${Math.round(nibe.gm)} GM` : '– GM';
-  const hzCol  = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#2e4d6a';
-  const kwtCol = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#2e4d6a';
-  const gmCol  = nibe.gm!=null&&nibe.gm<-200?'#f59e0b':'#2e4d6a';
-  s+=`<text id="svgHz" x="${vpX+vpW/2}" y="${vpY+vpH-46}" text-anchor="middle" font-size="8.5" font-family="DM Mono,monospace" fill="${hzCol}" opacity=".7">${hzStr}</text>`;
-  // DEBUG: show raw values to diagnose kWt
-  const dbg = `p=${r1(pwr*10)/10}kW s=${scopForKwt}`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-45}" text-anchor="middle" font-size="7" font-family="DM Mono,monospace" fill="#ff0" opacity=".9">${dbg}</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-33}" text-anchor="middle" font-size="9" font-family="DM Mono,monospace" fill="${kwtCol}" opacity=".75">${kwtStr}</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-20}" text-anchor="middle" font-size="8" font-family="DM Mono,monospace" fill="${gmCol}" opacity=".5">${gmStr}</text>`;
+  const hzCol  = isHeat?'#2dd4bf':isDHW?'#fbbf24':pwr>0.2?'#7dd3fc':'#2e4d6a';
+  const kwtCol = isHeat?'#2dd4bf':isDHW?'#fbbf24':pwr>0.2?'#7dd3fc':'#2e4d6a';
+  const gmCol  = nibe.gm!=null&&nibe.gm<-200?'#fbbf24':'#5eead4';  // always visible teal
+  s+=`<text id="svgHz" x="${vpX+vpW/2}" y="${vpY+vpH-46}" text-anchor="middle" font-size="8.5" font-family="DM Mono,monospace" fill="${hzCol}" opacity=".85">${hzStr}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-33}" text-anchor="middle" font-size="9" font-family="DM Mono,monospace" fill="${kwtCol}" opacity=".85">${kwtStr}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-20}" text-anchor="middle" font-size="8" font-family="DM Mono,monospace" fill="${gmCol}" opacity=".8">${gmStr}</text>`;
   s+=`<rect id="svgHzHit" x="${vpX+8}" y="${vpY+vpH-56}" width="${vpW-16}" height="16" fill="transparent" style="cursor:pointer"/>`;
 
   // Mode at bottom
