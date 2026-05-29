@@ -281,12 +281,7 @@ body{font-family:var(--f);color:var(--t1);
         <div style="flex:1">
           <div class="scop-l">SCOP · siden oppstart</div>
           <div class="scop-v" id="vScopDC">–</div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px">
-            <div class="scop-m" id="vMod">–</div>
-            <div style="font:500 10px/1 var(--m);color:var(--t3)">
-              COP <span id="vScop" style="color:var(--teal)">–</span>
-            </div>
-          </div>
+          <div class="scop-m" id="vMod" style="margin-top:4px">–</div>
         </div>
       </div>
       <div class="br">
@@ -671,12 +666,10 @@ function buildSvg(temps, nibe) {
   // SCOP screen
   s+=`<rect x="${vpX+10}" y="${vpY+42}" width="${vpW-20}" height="76" rx="6" fill="#040c18" stroke="rgba(45,124,246,.16)" stroke-width="1"/>`;
   s+=`<rect x="${vpX+12}" y="${vpY+44}" width="${vpW-24}" height="72" rx="5" fill="#050e1c"/>`;
-  // Live COP large on screen, SCOP smaller below
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+60}" text-anchor="middle" font-size="6.5" font-family="Syne,sans-serif" fill="#2a5a8a" letter-spacing="2">LIVE COP</text>`;
-  const copVal  = nibe.scop   != null ? r2(nibe.scop).toFixed(2)   : '–';
+  // SCOP (cumulative since startup) on VP screen
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+62}" text-anchor="middle" font-size="6.5" font-family="Syne,sans-serif" fill="#2a5a8a" letter-spacing="2">SCOP</text>`;
   const scopVal = nibe.scopDC != null ? r2(nibe.scopDC).toFixed(2) : '–';
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+88}" text-anchor="middle" font-size="27" font-family="DM Mono,monospace" fill="#00c9a7" font-weight="500" filter="url(#glow)">${copVal}</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+102}" text-anchor="middle" font-size="7" font-family="Syne,sans-serif" fill="#2a5a8a" letter-spacing="1.5">SCOP <tspan font-family="DM Mono,monospace" fill="#4a9a8a" font-size="8">${scopVal}</tspan></text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+92}" text-anchor="middle" font-size="27" font-family="DM Mono,monospace" fill="#00c9a7" font-weight="500" filter="url(#glow)">${scopVal}</text>`;
 
   // ── LED BAR ──
   {
@@ -713,13 +706,18 @@ function buildSvg(temps, nibe) {
 
   // Hz display (now available from Modbus!)
   const hz = nibe.hz;
-  const hzStr = hz!=null && pwr>0.2 ? `${hz.toFixed(1)} Hz` : 'Stanset';
-  const gmStr = nibe.gm!=null ? `${Math.round(nibe.gm)} GM` : '– GM';
-  const hzCol = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#2e4d6a';
-  const gmCol = nibe.gm!=null&&nibe.gm<-200?'#f59e0b':'#2e4d6a';
-  s+=`<text id="svgHz" x="${vpX+vpW/2}" y="${vpY+vpH-36}" text-anchor="middle" font-size="9" font-family="DM Mono,monospace" fill="${hzCol}" opacity=".7">${hzStr}</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-23}" text-anchor="middle" font-size="8.5" font-family="DM Mono,monospace" fill="${gmCol}" opacity=".55">${gmStr}</text>`;
-  s+=`<rect id="svgHzHit" x="${vpX+8}" y="${vpY+vpH-46}" width="${vpW-16}" height="16" fill="transparent" style="cursor:pointer"/>`;
+  // Hz, thermal kWt, GM displayed in VP internals
+  const hzStr  = hz!=null && pwr>0.2 ? `${hz.toFixed(1)} Hz` : 'Stanset';
+  const kwt    = nibe.scopDC!=null && pwr>0.2 ? r1(pwr/1000*nibe.scopDC) : null;
+  const kwtStr = kwt!=null ? `${kwt} kWt` : '';
+  const gmStr  = nibe.gm!=null ? `${Math.round(nibe.gm)} GM` : '– GM';
+  const hzCol  = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#2e4d6a';
+  const kwtCol = isHeat?'#22c55e':isDHW?'#f59e0b':'#2e4d6a';
+  const gmCol  = nibe.gm!=null&&nibe.gm<-200?'#f59e0b':'#2e4d6a';
+  s+=`<text id="svgHz" x="${vpX+vpW/2}" y="${vpY+vpH-46}" text-anchor="middle" font-size="8.5" font-family="DM Mono,monospace" fill="${hzCol}" opacity=".7">${hzStr}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-33}" text-anchor="middle" font-size="9" font-family="DM Mono,monospace" fill="${kwtCol}" opacity=".75">${kwtStr}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-20}" text-anchor="middle" font-size="8" font-family="DM Mono,monospace" fill="${gmCol}" opacity=".5">${gmStr}</text>`;
+  s+=`<rect id="svgHzHit" x="${vpX+8}" y="${vpY+vpH-56}" width="${vpW-16}" height="16" fill="transparent" style="cursor:pointer"/>`;
 
   // Mode at bottom
   const mStr = isHeat?'VARME':isDHW?'VARMTVANN':pwr>0.2?'DRIFT':'STANSET';
@@ -822,7 +820,6 @@ function renderPanels(temps, nibe) {
     ? `${nibe.flow.toFixed(1)}<span class="mu">\u202FL/min</span>` : '–';
 
   // NIBE SCOP
-  document.getElementById('vScop').textContent  = nibe.scop  !=null?r2(nibe.scop).toFixed(2):'–';
   document.getElementById('vScopDC').textContent = nibe.scopDC!=null?r2(nibe.scopDC).toFixed(2):'–';
 
   // Mode from priority (direct from Modbus!)
@@ -853,7 +850,7 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mEnergi'),  'Energi i tank',     'energi', 'kWh');
   btt(document.getElementById('mDtb'),     'ΔT Topp–Bunn',      'dtb',    'K');
   btt(document.getElementById('mFlow'),    'Volumstrøm',        'flow',   'L/min');
-  btt(document.getElementById('mScop'),    'COP inneværende time','scop', '');
+  btt(document.getElementById('mScop'),    'SCOP siden oppstart','scopDC','');
   btt(document.getElementById('mBrineIn'), 'Brine inn BT10',    'brineIn','°C');
   btt(document.getElementById('mBrineOut'),'Brine ut BT11',     'brineOt','°C');
   btt(document.getElementById('mHz'),      'Kompressor Hz',     'hz',     'Hz');
@@ -875,15 +872,14 @@ function render(temps, nibe, isLive) {
     }
     if(temps[0]!=null&&temps[4]!=null) ph('dtb',r1(temps[0]-temps[4]));
     ph('flow',    nibe.flow);
-    phR2('scop',  nibe.scop);
-    phR2('scopDC', nibe.scopDC);
+    phR2('scopDC', nibe.scopDC);  // cumulative SCOP
     ph('brineIn', nibe.brineIn);
     ph('brineOt', nibe.brineOt);
     ph('hz',      nibe.hz);
     ph('pwr',     nibe.pwr);
     ph('gm',      nibe.gm);
     if(nibe.pwr!=null&&nibe.scop!=null&&nibe.pwr>200)
-      ph('pTerm', r1(nibe.pwr/1000*nibe.scop));
+      if(nibe.scopDC!=null) ph('pTerm', r1(nibe.pwr/1000*nibe.scopDC));
   }
   buildSvg(temps, nibe);
   renderPanels(temps, nibe);
@@ -944,8 +940,7 @@ async function doFetch() {
 
     // NIBE data direct from Modbus (Nibe S-Series)
     const nibe={
-      scop   : gvN(N.scopDev, N.scop),  // time-COP from script
-      scopDC : gvN(SCOP_DEV,  N.scop),  // cumulative SCOP since startup
+      scopDC : gvN(SCOP_DEV, N.scop),  // cumulative SCOP since startup
       prio   : gv(NIBE_DEV,  N.prio),
       hz     : gvN(NIBE_DEV, N.hz),
       pwr    : gvN(NIBE_DEV, N.pwr),
