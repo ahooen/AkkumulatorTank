@@ -279,9 +279,15 @@ body{font-family:var(--f);color:var(--t1);
       <div class="scop-c" id="mScop">
         <div class="scop-i">⚡</div>
         <div style="flex:1">
-          <div class="scop-l">SCOP · siden oppstart</div>
-          <div class="scop-v" id="vScopDC">–</div>
-          <div class="scop-m" id="vMod" style="margin-top:4px">–</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
+            <div class="scop-l">SCOP · siden oppstart</div>
+            <div style="font:700 8px/1 var(--f);color:var(--t3);letter-spacing:.1em;text-transform:uppercase">24t</div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <div class="scop-v" id="vScopDC">–</div>
+            <div style="font:500 20px/1 var(--m);color:var(--teal);opacity:.75" id="vScop24">–</div>
+          </div>
+          <div class="scop-m" id="vMod" style="margin-top:5px">–</div>
         </div>
       </div>
       <div class="br">
@@ -357,7 +363,8 @@ const TANK_SENSORS = [
 // Nibe S-Series Modbus capabilities
 const N = {
   scop   : 'devicecapabilities_number.number1', // from DC device
-  scopDev: 'Nibe S1256-8kw',
+  scopDev:   'Nibe S1256-8kw',
+  scop24Cap: 'devicecapabilities_number.number1',
   prio   : 'measure_enum_NIBE.i1028_priority',
   hz     : 'measure_frequency_NIBE.i1046_compressor',
   pwr    : 'measure_power_NIBE.i2166_energy_usage',
@@ -377,7 +384,8 @@ const N = {
   disch  : 'measure_temperature_NIBE.i13_discharge',
 };
 const NIBE_DEV  = 'Nibe S-Series';
-const SCOP_DEV  = 'Nibe S1256-8kw'; // DC device – holds cumulative SCOP since startup
+const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
+const SCOP24_DEV  = 'Nibe SCOP 24t';  // rolling 24h SCOP
 
 const REF = 25, KWH = 0.5815;
 const MAX_PTS = 48; // ~4h at 15s
@@ -389,7 +397,7 @@ const LS_KEY  = 'vs5';
 const H = {
   t100:[], t75:[], t50:[], t25:[], t0:[],
   snitt:[], energi:[], dtb:[], flow:[],
-  scop:[], scopDC:[], brineIn:[], brineOt:[],
+  scop:[], scopDC:[], scop24:[], brineIn:[], brineOt:[],
   hz:[], pwr:[], gm:[], pTerm:[],
 };
 
@@ -666,10 +674,12 @@ function buildSvg(temps, nibe) {
   // SCOP screen
   s+=`<rect x="${vpX+10}" y="${vpY+42}" width="${vpW-20}" height="76" rx="6" fill="#040c18" stroke="rgba(45,124,246,.16)" stroke-width="1"/>`;
   s+=`<rect x="${vpX+12}" y="${vpY+44}" width="${vpW-24}" height="72" rx="5" fill="#050e1c"/>`;
-  // SCOP (cumulative since startup) on VP screen
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+62}" text-anchor="middle" font-size="6.5" font-family="Syne,sans-serif" fill="#2a5a8a" letter-spacing="2">SCOP</text>`;
-  const scopVal = nibe.scopDC != null ? r2(nibe.scopDC).toFixed(2) : '–';
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+92}" text-anchor="middle" font-size="27" font-family="DM Mono,monospace" fill="#00c9a7" font-weight="500" filter="url(#glow)">${scopVal}</text>`;
+  // SCOP screen: total large, 24h smaller below
+  const scopVal  = nibe.scopDC != null ? r2(nibe.scopDC).toFixed(2) : '–';
+  const scop24Val= nibe.scop24 != null ? r2(nibe.scop24).toFixed(2) : '';
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+60}" text-anchor="middle" font-size="6.5" font-family="Syne,sans-serif" fill="#2a5a8a" letter-spacing="2">SCOP</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+88}" text-anchor="middle" font-size="26" font-family="DM Mono,monospace" fill="#00c9a7" font-weight="500" filter="url(#glow)">${scopVal}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+102}" text-anchor="middle" font-size="7.5" font-family="Syne,sans-serif" fill="#2a5a8a" letter-spacing="1">24t <tspan font-family="DM Mono,monospace" fill="#4a9a8a" font-size="9">${scop24Val}</tspan></text>`;
 
   // ── LED BAR ──
   {
@@ -821,6 +831,7 @@ function renderPanels(temps, nibe) {
 
   // NIBE SCOP
   document.getElementById('vScopDC').textContent = nibe.scopDC!=null?r2(nibe.scopDC).toFixed(2):'–';
+  document.getElementById('vScop24').textContent = nibe.scop24!=null?r2(nibe.scop24).toFixed(2):'–';
 
   // Mode from priority (direct from Modbus!)
   const pwr=(nibe.pwr??0)/1000;
@@ -850,7 +861,9 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mEnergi'),  'Energi i tank',     'energi', 'kWh');
   btt(document.getElementById('mDtb'),     'ΔT Topp–Bunn',      'dtb',    'K');
   btt(document.getElementById('mFlow'),    'Volumstrøm',        'flow',   'L/min');
-  btt(document.getElementById('mScop'),    'SCOP siden oppstart','scopDC','');
+  btt(document.getElementById('mScop'),    'SCOP siden oppstart', 'scopDC','');
+  const s24el = document.getElementById('vScop24');
+  if(s24el) btt(s24el, 'SCOP siste 24t', 'scop24', '');
   btt(document.getElementById('mBrineIn'), 'Brine inn BT10',    'brineIn','°C');
   btt(document.getElementById('mBrineOut'),'Brine ut BT11',     'brineOt','°C');
   btt(document.getElementById('mHz'),      'Kompressor Hz',     'hz',     'Hz');
@@ -873,6 +886,7 @@ function render(temps, nibe, isLive) {
     if(temps[0]!=null&&temps[4]!=null) ph('dtb',r1(temps[0]-temps[4]));
     ph('flow',    nibe.flow);
     phR2('scopDC', nibe.scopDC);  // cumulative SCOP
+    phR2('scop24', nibe.scop24);  // rolling 24h SCOP
     ph('brineIn', nibe.brineIn);
     ph('brineOt', nibe.brineOt);
     ph('hz',      nibe.hz);
@@ -940,7 +954,8 @@ async function doFetch() {
 
     // NIBE data direct from Modbus (Nibe S-Series)
     const nibe={
-      scopDC : gvN(SCOP_DEV, N.scop),  // cumulative SCOP since startup
+      scopDC : gvN(SCOP_DEV,   N.scop),      // cumulative SCOP since startup
+      scop24 : gvN(SCOP24_DEV, N.scop24Cap), // rolling 24h SCOP
       prio   : gv(NIBE_DEV,  N.prio),
       hz     : gvN(NIBE_DEV, N.hz),
       pwr    : gvN(NIBE_DEV, N.pwr),
@@ -996,7 +1011,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{p
 lodCfg(); lodH();
 render(
   [58.4,49.2,40.1,33.7,29.3],
-  {scop:3.84,scopDC:5.21,prio:'Heating',hz:42.5,pwr:1100,
+  {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,brineIn:8.2,brineOt:2.1,
    bt7:51,gm:-248,flow:12.3},
   false
