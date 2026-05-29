@@ -88,7 +88,7 @@ body{font-family:var(--f);color:var(--t1);
 #svg{width:100%;height:auto;display:block;
   -webkit-user-select:none;user-select:none}
 .grid{display:grid;gap:.7rem;
-  grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  grid-template-columns:1fr}
 .panel{background:var(--s1);border:1px solid var(--b1);
   border-radius:14px;padding:.85rem .95rem}
 .ph{display:flex;align-items:center;gap:6px;margin-bottom:.7rem}
@@ -240,74 +240,66 @@ body{font-family:var(--f);color:var(--t1);
          preserveAspectRatio="xMidYMid meet"
          aria-hidden="true"></svg>
   </div>
-  <div class="grid">
-    <!-- Tank sensors -->
-    <div class="panel">
-      <div class="ph">
-        <div class="phd" style="background:#2d7cf6"></div>
-        <div class="pt">Akkumulatortank · 500 L</div>
-      </div>
-      <div id="rows"></div>
+  <!-- Tank panel: full width, sensors only -->
+  <div class="panel" style="margin-bottom:.7rem">
+    <div class="ph">
+      <div class="phd" style="background:#2d7cf6"></div>
+      <div class="pt">Akkumulatortank · 500 L</div>
     </div>
-    <!-- Tank metrics -->
-    <div class="panel">
-      <div class="ph">
-        <div class="phd" style="background:#60a5fa"></div>
-        <div class="pt">Tanknøkkeltall</div>
-      </div>
-      <div class="mg">
-        <div class="mc" id="mSnitt">
-          <div class="ml">Snitt</div>
-          <div class="mv" id="vSnitt">–<span class="mu">°C</span></div></div>
-        <div class="mc" id="mEnergi">
-          <div class="ml">Energi</div>
-          <div class="mv" id="vEnergi">–<span class="mu">kWh</span></div></div>
-        <div class="mc" id="mDtb">
-          <div class="ml">ΔT Topp–Bunn</div>
-          <div class="mv" id="vDtb">–<span class="mu">K</span></div></div>
-        <div class="mc" id="mFlow">
-          <div class="ml">Volumstrøm</div>
-          <div class="mv" id="vFlow">–<span class="mu">L/min</span></div></div>
-      </div>
+    <div id="rows"></div>
+  </div>
+
+  <!-- NIBE panel: full width, all metrics -->
+  <div class="panel">
+    <div class="ph">
+      <div class="phd" style="background:#00c9a7"></div>
+      <div class="pt">NIBE S1256 · 8 kW</div>
+      <div id="vMod" style="font:600 10px/1 var(--f);color:var(--teal);margin-left:auto;letter-spacing:.04em">–</div>
     </div>
-    <!-- NIBE -->
-    <div class="panel">
-      <div class="ph">
-        <div class="phd" style="background:#00c9a7"></div>
-        <div class="pt">NIBE S1256 · 8 kW</div>
+    <!-- 10 tiles in 2-col grid, symmetrical 5 rows -->
+    <div class="mg" style="margin-bottom:6px">
+      <div class="mc" id="mSnitt">
+        <div class="ml">Snitt tank</div>
+        <div class="mv" id="vSnitt">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mEnergi">
+        <div class="ml">Energi tank</div>
+        <div class="mv" id="vEnergi">–<span class="mu">kWh</span></div></div>
+      <div class="mc" id="mDtb">
+        <div class="ml">ΔT Topp–Bunn</div>
+        <div class="mv" id="vDtb">–<span class="mu">K</span></div></div>
+      <div class="mc" id="mBrineIn">
+        <div class="ml">Brine Inn</div>
+        <div class="mv" id="vBrineIn">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mBrineOut">
+        <div class="ml">Brine Ut</div>
+        <div class="mv" id="vBrineOut">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mOutAvg">
+        <div class="ml">Ute temp.</div>
+        <div class="mv" id="vOutAvg">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mBt7">
+        <div class="ml">Tappevann</div>
+        <div class="mv" id="vBt7">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mPwr">
+        <div class="ml">Effekt</div>
+        <div class="mv" id="vPwr">–<span class="mu">W</span></div></div>
+      <div class="mc" id="mGm">
+        <div class="ml">Gradminutter</div>
+        <div class="mv" id="vGm">–<span class="mu">GM</span></div></div>
+      <div class="mc" id="mHz">
+        <div class="ml">Kompressor</div>
+        <div class="mv" id="vHz">–<span class="mu">Hz</span></div></div>
+    </div>
+    <!-- SCOP: two equal tiles side by side -->
+    <div class="mg">
+      <div class="scop-c" id="mScop" style="margin:0;flex-direction:column;gap:4px">
+        <div class="scop-l" style="margin-bottom:2px">SCOP · siden oppstart</div>
+        <div class="scop-v" id="vScopDC">–</div>
+
       </div>
-      <div class="scop-c" id="mScop">
-        <div class="scop-i">⚡</div>
-        <div style="flex:1">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px">
-            <div class="scop-l">SCOP · siden oppstart</div>
-            <div style="font:700 8px/1 var(--f);color:var(--t3);letter-spacing:.1em;text-transform:uppercase">24t</div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline">
-            <div class="scop-v" id="vScopDC">–</div>
-            <div style="font:500 20px/1 var(--m);color:var(--teal);opacity:.75" id="vScop24">–</div>
-          </div>
-          <div class="scop-m" id="vMod" style="margin-top:5px">–</div>
-        </div>
-      </div>
-      <div class="br">
-        <div class="bp" id="mBrineIn">
-          <div class="bl">Brine inn · BT10</div>
-          <div class="bv" id="vBrineIn">–<span class="bu"> °C</span></div></div>
-        <div class="bp" id="mBrineOut">
-          <div class="bl">Brine ut · BT11</div>
-          <div class="bv" id="vBrineOut">–<span class="bu"> °C</span></div></div>
-      </div>
-      <div class="emg">
-        <div class="emc" id="mHz">
-          <div class="eml">Kompressor</div>
-          <div class="emv" id="vHz">–<span class="emu"> Hz</span></div></div>
-        <div class="emc" id="mPwr">
-          <div class="eml">Effekt</div>
-          <div class="emv" id="vPwr">–<span class="emu"> W</span></div></div>
-        <div class="emc" id="mGm">
-          <div class="eml">Gradmin.</div>
-          <div class="emv" id="vGm">–<span class="emu"> GM</span></div></div>
+      <div class="scop-c" id="mScop24" style="margin:0;flex-direction:column;gap:4px">
+        <div class="scop-l" style="margin-bottom:2px">Snitt COP siste 24t</div>
+        <div class="scop-v" id="vScop24">–</div>
+
       </div>
     </div>
   </div>
@@ -378,6 +370,8 @@ const N = {
   heatP  : 'meter_power_NIBE.i2283_prod_heat_current_hour',
   heatU  : 'meter_power_NIBE.i2291_used_heat_current_hour',
   hwP    : 'meter_power_NIBE.i2285_prod_water_current_hour',
+  bt7    : 'measure_temperature_NIBE.i8_warmwater_top',
+  outAvg : 'measure_temperature_NIBE.i37_outside_avg',
   hwU    : 'meter_power_NIBE.i2293_used_water_current_hour',
   hpPct  : 'measure_percentage_NIBE.i1102_heating_pump',
   srcPct : 'measure_percentage_NIBE.i1104_source_pump',
@@ -726,15 +720,15 @@ function buildSvg(temps, nibe) {
   const hzCol  = isHeat?'#2dd4bf':isDHW?'#fbbf24':pwr>0.2?'#7dd3fc':'#2e4d6a';
   const kwtCol = isHeat?'#2dd4bf':isDHW?'#fbbf24':pwr>0.2?'#7dd3fc':'#2e4d6a';
   const gmCol  = nibe.gm!=null&&nibe.gm<-200?'#fbbf24':'#5eead4';  // always visible teal
-  s+=`<text id="svgHz" x="${vpX+vpW/2}" y="${vpY+vpH-46}" text-anchor="middle" font-size="8.5" font-family="DM Mono,monospace" fill="${hzCol}" opacity=".85">${hzStr}</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-33}" text-anchor="middle" font-size="9" font-family="DM Mono,monospace" fill="${kwtCol}" opacity=".85">${kwtStr}</text>`;
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-20}" text-anchor="middle" font-size="8" font-family="DM Mono,monospace" fill="${gmCol}" opacity=".8">${gmStr}</text>`;
+  s+=`<text id="svgHz" x="${vpX+vpW/2}" y="${vpY+vpH-50}" text-anchor="middle" font-size="10.5" font-family="DM Mono,monospace" fill="${hzCol}" opacity=".9">${hzStr}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-36}" text-anchor="middle" font-size="11" font-family="DM Mono,monospace" fill="${kwtCol}" opacity=".9">${kwtStr}</text>`;
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-22}" text-anchor="middle" font-size="10" font-family="DM Mono,monospace" fill="${gmCol}" opacity=".9">${gmStr}</text>`;
   s+=`<rect id="svgHzHit" x="${vpX+8}" y="${vpY+vpH-56}" width="${vpW-16}" height="16" fill="transparent" style="cursor:pointer"/>`;
 
   // Mode at bottom
   const mStr = isHeat?'VARME':isDHW?'VARMTVANN':pwr>0.2?'DRIFT':'STANSET';
-  const mCol = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#2e4d6a';
-  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-10}" text-anchor="middle" font-size="7" font-family="Syne,sans-serif" fill="${mCol}" letter-spacing="2">${mStr}</text>`;
+  const mCol = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#5eead4';  // STANSET = same teal as GM
+  s+=`<text x="${vpX+vpW/2}" y="${vpY+vpH-8}" text-anchor="middle" font-size="8.5" font-family="Syne,sans-serif" fill="${mCol}" font-weight="600" letter-spacing="2" opacity=".95">${mStr}</text>`;
   s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="14" fill="url(#ss)" opacity=".38"/>`;
 
   // ── BOREHOLE ──
@@ -828,8 +822,7 @@ function renderPanels(temps, nibe) {
   document.getElementById('vSnitt').innerHTML  = fmt(snitt?.toFixed(1),'°C');
   document.getElementById('vEnergi').innerHTML = fmt(energi?.toFixed(1),'kWh');
   document.getElementById('vDtb').innerHTML    = fmt(dtb?.toFixed(1),'K');
-  document.getElementById('vFlow').innerHTML   = nibe.flow!=null
-    ? `${nibe.flow.toFixed(1)}<span class="mu">\u202FL/min</span>` : '–';
+
 
   // NIBE SCOP
   document.getElementById('vScopDC').textContent = nibe.scopDC!=null?r2(nibe.scopDC).toFixed(2):'–';
@@ -846,13 +839,16 @@ function renderPanels(temps, nibe) {
   // Brine
   const fmtB=(v,id)=>{document.getElementById(id).innerHTML=v!=null
     ?`${v.toFixed(1)}<span class="bu">\u202F°C</span>`:'–';};
-  fmtB(nibe.brineIn,'vBrineIn');
-  fmtB(nibe.brineOt,'vBrineOut');
+  const fmtT=(v,id)=>{document.getElementById(id).innerHTML=v!=null
+    ?`${v.toFixed(1)}<span class="mu">°C</span>`:'–';};
+  fmtT(nibe.brineIn,'vBrineIn');
+  fmtT(nibe.brineOt,'vBrineOut');
+  fmtT(nibe.bt7,    'vBt7');
+  fmtT(nibe.outAvg, 'vOutAvg');
 
   // Extra metrics
   document.getElementById('vHz').innerHTML = nibe.hz!=null&&pwr>0.2
-    ?`${nibe.hz.toFixed(1)}<span class="emu"> Hz</span>`
-    :`<span style="font-size:11px;color:var(--t3)">Stanset</span>`;
+    ?`${nibe.hz.toFixed(1)}<span class="mu"> Hz</span>` : '–';
   document.getElementById('vPwr').innerHTML = nibe.pwr!=null
     ?`${Math.round(nibe.pwr)}<span class="emu"> W</span>`:'–';
   document.getElementById('vGm').innerHTML = nibe.gm!=null
@@ -862,7 +858,7 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mSnitt'),   'Snitt temperatur',  'snitt',  '°C');
   btt(document.getElementById('mEnergi'),  'Energi i tank',     'energi', 'kWh');
   btt(document.getElementById('mDtb'),     'ΔT Topp–Bunn',      'dtb',    'K');
-  btt(document.getElementById('mFlow'),    'Volumstrøm',        'flow',   'L/min');
+
   btt(document.getElementById('mScop'),    'SCOP siden oppstart', 'scopDC','');
   const s24el = document.getElementById('vScop24');
   if(s24el) btt(s24el, 'SCOP siste 24t', 'scop24', '');
@@ -871,6 +867,8 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mHz'),      'Kompressor Hz',     'hz',     'Hz');
   btt(document.getElementById('mPwr'),     'Strømtrekk',        'pwr',    'W');
   btt(document.getElementById('mGm'),      'Gradminutter',      'gm',     'GM');
+  btt(document.getElementById('mBt7'),     'Tappevann BT7',     'bt7',    '°C');
+  btt(document.getElementById('mOutAvg'),  'Utetemperatur snitt','gm',    '°C');
 }
 
 // ═══════════════════════════════════════════
@@ -973,6 +971,7 @@ async function doFetch() {
       heatP  : gvN(NIBE_DEV, N.heatP),
       heatU  : gvN(NIBE_DEV, N.heatU),
       hwP    : gvN(NIBE_DEV, N.hwP),
+      outAvg : gvN(NIBE_DEV, N.outAvg),
       hwU    : gvN(NIBE_DEV, N.hwU),
     };
 
