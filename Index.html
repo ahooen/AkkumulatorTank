@@ -684,7 +684,7 @@ function buildSvg(temps, nibe) {
   // ── LED BAR ──
   {
     const sMin=2.5, sMax=5.5, nL=6;
-    const sv = nibe.scop ?? 0;
+    const sv = nibe.scopDC ?? nibe.scop24 ?? 0;
     const lit = sv<=sMin?0:sv>=sMax?nL:Math.round(((sv-sMin)/(sMax-sMin))*nL);
     const lf = lit/nL;
     const aCol = lf<=0?'#ef4444':lf<=.33?'#f97316':lf<=.5?'#eab308':lf<=.67?'#84cc16':lf<=.83?'#22c55e':'#00ffaa';
@@ -721,7 +721,7 @@ function buildSvg(temps, nibe) {
   // kWt = electrical power (kW) × SCOP. Use scopDC, fallback to scop24
   const scopForKwt = nibe.scopDC ?? nibe.scop24;
   const kwt    = scopForKwt!=null && pwr>0.2 ? r1(pwr*scopForKwt) : null;
-  const kwtStr = kwt!=null ? `${kwt} kWt` : '';
+  const kwtStr = kwt!=null ? `${kwt} kWt` : pwr>0.2 ? '… kWt' : '';
   const gmStr  = nibe.gm!=null ? `${Math.round(nibe.gm)} GM` : '– GM';
   const hzCol  = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#2e4d6a';
   const kwtCol = isHeat?'#22c55e':isDHW?'#f59e0b':pwr>0.2?'#60a5fa':'#2e4d6a';
