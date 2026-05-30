@@ -514,9 +514,10 @@ function buildSvg(temps, nibe) {
   const pwr    = (nibe.pwr ?? 0) / 1000; // W→kW
   const prio   = nibe.prio ?? '';
 
-  // Mode: direct from priority field
-  const isHeat = prio === 'Heating'  && pwr > 0.2;
-  const isDHW  = prio === 'HotWater' && pwr > 0.2;
+  // Mode: direct from priority field (case-insensitive, flexible match)
+  const pL = String(prio).toLowerCase();
+  const isHeat = pwr > 0.2 && pL.includes('heat') && !pL.includes('water');
+  const isDHW  = pwr > 0.2 && (pL.includes('water') || pL.includes('hot'));
   const isOff  = pwr <= 0.2;
 
   // Tank fill
@@ -819,9 +820,9 @@ function renderPanels(temps, nibe) {
 
   // Mode from priority (direct from Modbus!)
   const pwr=(nibe.pwr??0)/1000;
-  const prio=nibe.prio??'';
-  const isHeat=prio==='Heating'&&pwr>0.2;
-  const isDHW=prio==='HotWater'&&pwr>0.2;
+  const prio=String(nibe.prio??'').toLowerCase();
+  const isHeat=pwr>0.2 && prio.includes('heat') && !prio.includes('water');
+  const isDHW =pwr>0.2 && (prio.includes('water')||prio.includes('hot'));
   document.getElementById('vMod').textContent =
     isHeat?'Varmeproduksjon':isDHW?'Tappevannsproduksjon':pwr>0.2?'Drift':'Avslått';
 
