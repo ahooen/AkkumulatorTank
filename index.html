@@ -51,16 +51,8 @@ body{font-family:var(--f);color:var(--t1);
 .hdr-s{font:500 10px/1 var(--m);color:var(--t3);letter-spacing:.05em;
   transition:color .3s}
 .hdr-s.live{color:#22c55e}.hdr-s.err{color:#f87171}
-.btn{background:rgba(45,124,246,.1);border:1px solid rgba(45,124,246,.22);
-  color:#60a5fa;padding:5px 12px;border-radius:8px;
-  font:500 11px/1 var(--m);cursor:pointer;
-  display:flex;align-items:center;gap:5px;
-  touch-action:manipulation;transition:all .12s;
-  -webkit-user-select:none;user-select:none}
-.btn:active{background:rgba(45,124,246,.22);transform:scale(.97)}
-.btn svg{width:12px;height:12px;flex-shrink:0}
-.spin{animation:spin .75s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+
+
 
 /* ── PIPE ANIMATIONS ── */
 /* Hot TUR: VP→tank (right) | Cold Retur: tank→VP (left)
@@ -70,9 +62,10 @@ body{font-family:var(--f);color:var(--t1);
 @keyframes flowD{from{stroke-dashoffset:0}to{stroke-dashoffset:40}}
 @keyframes flowU{from{stroke-dashoffset:40}to{stroke-dashoffset:0}}
 .pf-hot {stroke-dasharray:14 12;animation:flowR 2.2s linear infinite}
-.pf-cold{stroke-dasharray:14 12;animation:flowL 2.2s linear infinite}
+.pf-cold{stroke-dasharray:14 12;animation:flowR 2.2s linear infinite}
 .pf-geoO{stroke-dasharray:13 12;animation:flowU 2.8s linear infinite}
-.pf-geoI{stroke-dasharray:13 12;animation:flowD 2.8s linear infinite}
+.pf-geoI{stroke-dasharray:13 12;animation:flowU 2.8s linear infinite}
+.pf-geo-off{stroke-dasharray:none;animation:none}
 .pf-off {stroke-dasharray:none;animation:none}
 
 /* ── LAYOUT ── */
@@ -213,14 +206,8 @@ body{font-family:var(--f);color:var(--t1);
 <div class="hdr">
   <div class="hdr-i">
     <span class="hdr-s" id="sts">Klar</span>
-    <button class="btn" id="rbtn" onclick="doFetch()">
-      <svg id="rico" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5
-                 M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/>
-      </svg>
-      Oppdater
-    </button>
+    <span id="vMod" style="font:600 11px/1 var(--f);color:var(--teal);
+      letter-spacing:.04em">–</span>
   </div>
 </div>
 
@@ -254,7 +241,7 @@ body{font-family:var(--f);color:var(--t1);
     <div class="ph">
       <div class="phd" style="background:#00c9a7"></div>
       <div class="pt">NIBE S1256 · 8 kW</div>
-      <div id="vMod" style="font:600 10px/1 var(--f);color:var(--teal);margin-left:auto;letter-spacing:.04em">–</div>
+
     </div>
     <!-- 10 tiles in 2-col grid, symmetrical 5 rows -->
     <div class="mg" style="margin-bottom:6px">
@@ -535,6 +522,8 @@ function buildSvg(temps, nibe) {
   // Tank fill
   const vpHeat = isHeat && turVP != null && turVP > (returT + 3);
   const pClass = pwr > 0.2 ? '' : 'pf-off';
+  // bClass: stop brine animation when compressor < 1 Hz (standby only)
+  const bClass = (nibe.hz != null && nibe.hz >= 1) ? '' : 'pf-geo-off';
 
   let fillF;
   if (vpHeat) {
@@ -615,8 +604,8 @@ function buildSvg(temps, nibe) {
   s+=`<path d="${oPath}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".12"/>`;
   s+=`<path d="${iPath}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".12"/>`;
   // Animations
-  s+=`<path d="${oAnimPath}" fill="none" stroke="#047857" stroke-width="5" stroke-linecap="round" class="pf-geoO" opacity=".8"/>`;
-  s+=`<path d="${iAnimPath}" fill="none" stroke="#5eead4" stroke-width="5" stroke-linecap="round" class="pf-geoI" opacity=".7"/>`;
+  s+=`<path d="${oAnimPath}" fill="none" stroke="#047857" stroke-width="5" stroke-linecap="round" class="pf-geoO ${bClass}" opacity=".8"/>`;
+  s+=`<path d="${iAnimPath}" fill="none" stroke="#5eead4" stroke-width="5" stroke-linecap="round" class="pf-geoI ${bClass}" opacity=".7"/>`;
 
   // Arrows + labels
   const bMid=vpRX+(wCX-vpRX)/2-10;
@@ -910,7 +899,7 @@ const savCfg=()=>{sv('hid',document.getElementById('hid').value.trim());sv('hkey
 const lodCfg=()=>{const i=lv('hid'),k=lv('hkey');if(i)document.getElementById('hid').value=i;if(k)document.getElementById('hkey').value=k};
 
 let _lastSts='', _lastStsT='', _failCount=0, _savCounter=0;
-function setSpin(on){const e=document.getElementById('rico');on?e.classList.add('spin'):e.classList.remove('spin')}
+function setSpin(on){}  // button removed
 function setStatus(txt,type){
   type=type||'';
   if(_lastSts===txt&&_lastStsT===type)return;
@@ -982,7 +971,7 @@ async function doFetch() {
 
     const pts=H.t100.length;
     setStatus('Live · '+new Date().toLocaleTimeString('nb-NO',
-      {hour:'2-digit',minute:'2-digit'})+(pts>2?` · ${pts}p`:''),'live');
+      {hour:'2-digit',minute:'2-digit'})+''  ,'live');
 
   } catch(e) {
     setStatus('Tilkoblingsfeil','err');
