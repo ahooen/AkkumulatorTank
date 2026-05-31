@@ -277,7 +277,7 @@ body{font-family:var(--f);color:var(--t1);
          aria-hidden="true"></svg>
   </div>
   <!-- Tank panel: full width, sensors only -->
-  <div class="panel" style="margin-bottom:.7rem">
+  <div class="panel" style="margin-bottom:.7rem;padding-bottom:.4rem">
     <div class="ph">
       <div class="phd" style="background:#2d7cf6"></div>
       <div class="pt">Akkumulatortank · 500 L</div>
@@ -324,6 +324,12 @@ body{font-family:var(--f);color:var(--t1);
       <div class="mc" id="mHz">
         <div class="ml">Kompressor</div>
         <div class="mv" id="vHz">–<span class="mu">Hz</span></div></div>
+      <div class="mc" id="mCompStarts">
+        <div class="ml">Komp. starter</div>
+        <div class="mv" id="vCompStarts">–<span class="mu">stk</span></div></div>
+      <div class="mc" id="mCompHours">
+        <div class="ml">Driftstid</div>
+        <div class="mv" id="vCompHours">–<span class="mu">t</span></div></div>
     </div>
     <!-- SCOP: two equal tiles side by side -->
     <div class="mg">
@@ -412,6 +418,8 @@ const N = {
   hpPct  : 'measure_percentage_NIBE.i1102_heating_pump',
   srcPct : 'measure_percentage_NIBE.i1104_source_pump',
   disch  : 'measure_temperature_NIBE.i13_discharge',
+  compStarts: 'measure_count_NIBE.i1083_compressor_starts',
+  compHours : 'measure_hour_NIBE.i1087_compressor_usage_total',
 };
 const NIBE_DEV  = 'Nibe S-Series';
 const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
@@ -692,6 +700,45 @@ function buildSvg(temps, nibe) {
   s+=`<text x="${pmid}" y="${hotY-24}" text-anchor="middle" font-size="8" font-family="Syne,sans-serif" fill="#9a4a20" letter-spacing="1">VARM TUR</text>`;
   s+=`<text x="${pmid}" y="${coldY+18}" text-anchor="middle" font-size="11" font-family="DM Mono,monospace" fill="#38bdf8" font-weight="500">${cTxt}</text>`;
   s+=`<text x="${pmid}" y="${coldY+29}" text-anchor="middle" font-size="8" font-family="Syne,sans-serif" fill="#1a608a" letter-spacing="1">KALD RETUR</text>`;
+
+  // ── Heating pump symbol on TUR pipe ──
+  {
+    const pumpX = pmid + 39, pumpY = hotY;
+    const pR = 7.5;
+    const hpVal = nibe.hpPct;
+    const hpRunning = hpVal != null && hpVal > 0;
+    const hpCol = hpRunning ? '#f97316' : '#3d5878';
+    // Circle
+    s+=`<circle cx="${pumpX}" cy="${pumpY}" r="${pR}"
+         fill="#0a1525" stroke="${hpCol}" stroke-width="1.4" opacity=".9"/>`;
+    // Triangle pointing left (flow VP→tank)
+    s+=`<polygon points="${pumpX+3},${pumpY} ${pumpX-3},${pumpY-3.5} ${pumpX-3},${pumpY+3.5}"
+         fill="${hpCol}" opacity=".8" transform="rotate(180,${pumpX},${pumpY})"/>`;
+    // Percentage below
+    const hpTxt = hpVal != null ? `${Math.round(hpVal)}%` : '';
+    s+=`<text x="${pumpX}" y="${pumpY+20}" text-anchor="middle"
+         font-size="7.5" font-family="DM Mono,monospace" fill="${hpCol}" opacity=".75">${hpTxt}</text>`;
+  }
+
+  // ── Source pump symbol on BRINE UT pipe ──
+  {
+    const spX = bMid + 50, spY = boY;
+    const pR = 7.5;
+    const spVal = nibe.srcPct;
+    const spRunning = spVal != null && spVal > 0;
+    const spCol = spRunning ? '#10b981' : '#3d5878';
+    // Circle
+    s+=`<circle cx="${spX}" cy="${spY}" r="${pR}"
+         fill="#0a1525" stroke="${spCol}" stroke-width="1.4" opacity=".9"/>`;
+    // Triangle pointing right (flow VP→borehole)
+    s+=`<polygon points="${spX+3},${spY} ${spX-3},${spY-3.5} ${spX-3},${spY+3.5}"
+         fill="${spCol}" opacity=".8"/>`;
+    // Percentage below
+    const spTxt = spVal != null ? `${Math.round(spVal)}%` : '';
+    s+=`<text x="${spX}" y="${spY-14}" text-anchor="middle"
+         font-size="7.5" font-family="DM Mono,monospace" fill="${spCol}" opacity=".75">${spTxt}</text>`;
+  }
+
   // Port shadows
   s+=`<ellipse cx="${vpX+3}" cy="${hotY}" rx="2.5" ry="5" fill="#08111f" opacity=".5"/>`;
   s+=`<ellipse cx="${vpX+3}" cy="${coldY}" rx="2.5" ry="5" fill="#08111f" opacity=".5"/>`;
@@ -921,10 +968,12 @@ function buildSvg(temps, nibe) {
   const HK=['t100','t75','t50','t25','t0'];
   TANK_SENSORS.forEach((sen,i)=>{
     const sy=tTop+(1-sen.pct/100)*tH, t=temps[i], col=tCol(t);
+    // Nudge top sensor text down 3px, bottom sensor text up 3px
+    const tNudge = sen.pct===100 ? 3 : sen.pct===0 ? -3 : 0;
     s+=`<line x1="${dotX}" y1="${sy}" x2="${lblX+28}" y2="${sy}" stroke="${col}" stroke-width="1.1" stroke-dasharray="3,2.5" opacity=".7"/>`;
     s+=`<circle cx="${dotX}" cy="${sy}" r="4" fill="${col}" stroke="#07101e" stroke-width="1.2"/>`;
     s+=`<circle cx="${dotX}" cy="${sy}" r="1.8" fill="#fff" fill-opacity=".36"/>`;
-    s+=`<text x="${lblX+26}" y="${sy+4}" text-anchor="end" font-size="10.5" font-family="DM Mono,monospace" fill="${col}" font-weight="400">${t!=null?t.toFixed(1)+'°':'–'}</text>`;
+    s+=`<text x="${lblX+26}" y="${sy+4+tNudge}" text-anchor="end" font-size="10.5" font-family="DM Mono,monospace" fill="${col}" font-weight="400">${t!=null?t.toFixed(1)+'°':'–'}</text>`;
   });
   s+=`<text x="${tCX}" y="${tTop-15}" text-anchor="middle" font-size="8" font-family="Syne,sans-serif" fill="#3a6a90" letter-spacing="2" opacity=".8">AKKUMULATORTANK</text>`;
   s+=`<text x="${tCX}" y="${tTop-5}" text-anchor="middle" font-size="7.5" font-family="Syne,sans-serif" fill="#2a5070" opacity=".6">500 L</text>`;
@@ -996,6 +1045,10 @@ function renderPanels(temps, nibe) {
     ?`${Math.round(nibe.pwr)}<span class="emu"> W</span>`:'–';
   document.getElementById('vGm').innerHTML = nibe.gm!=null
     ?`${Math.round(nibe.gm)}<span class="emu"> GM</span>`:'–';
+  document.getElementById('vCompStarts').innerHTML = nibe.compStarts!=null
+    ?`${nibe.compStarts}<span class="mu"> stk</span>`:'–';
+  document.getElementById('vCompHours').innerHTML = nibe.compHours!=null
+    ?`${Math.round(nibe.compHours)}<span class="mu"> t</span>`:'–';
 
   // Tooltips
   btt(document.getElementById('mSnitt'),   'Snitt temperatur',  'snitt',  '°C');
@@ -1116,6 +1169,10 @@ async function doFetch() {
       hwP    : gvN(NIBE_DEV, N.hwP),
       outAvg : gvN(NIBE_DEV, N.outAvg),
       hwU    : gvN(NIBE_DEV, N.hwU),
+      hpPct  : gvN(NIBE_DEV, N.hpPct),
+      srcPct : gvN(NIBE_DEV, N.srcPct),
+      compStarts: gvN(NIBE_DEV, N.compStarts),
+      compHours : gvN(NIBE_DEV, N.compHours),
     };
 
     render(temps, nibe, true);
@@ -1159,7 +1216,7 @@ render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,brineIn:8.2,brineOt:2.1,
-   bt7:51,gm:-248,flow:12.3},
+   bt7:51,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
