@@ -68,6 +68,55 @@ body{font-family:var(--f);color:var(--t1);
 .pf-geo-off{stroke-dasharray:none;animation:none}
 .pf-off {stroke-dasharray:none;animation:none}
 
+/* ── Tank life animations ── */
+/* Rising bubbles in water */
+@keyframes bub{
+  0%{transform:translateY(0);opacity:0}
+  12%{opacity:.55}
+  88%{opacity:.45}
+  100%{transform:translateY(var(--rise,-60px));opacity:0}
+}
+.bub{animation:bub var(--dur,5s) ease-in infinite;animation-delay:var(--dly,0s);
+  transform-box:fill-box;will-change:transform,opacity}
+/* Heat particles rising from heat zone (faster, warmer) */
+@keyframes heatp{
+  0%{transform:translateY(0) scale(.6);opacity:0}
+  18%{opacity:.8;transform:translateY(-6px) scale(1)}
+  82%{opacity:.5}
+  100%{transform:translateY(var(--hrise,-90px)) scale(.5);opacity:0}
+}
+.heatp{animation:heatp var(--hdur,3s) ease-out infinite;animation-delay:var(--hdly,0s);
+  transform-box:fill-box;will-change:transform,opacity}
+/* Compressor pulse glow */
+@keyframes vpPulse{
+  0%,100%{opacity:var(--g0,.15)}
+  50%{opacity:var(--g1,.4)}
+}
+.vp-pulse{animation:vpPulse var(--pdur,2.4s) ease-in-out infinite;
+  transform-box:fill-box;will-change:opacity}
+/* Water surface wave (gentle horizontal drift of a sine path) */
+@keyframes waveDrift{
+  from{transform:translateX(0)}
+  to{transform:translateX(calc(-1 * var(--wd,32px)))}
+}
+@keyframes waveDriftRev{
+  from{transform:translateX(calc(-1 * var(--wd,32px)))}
+  to{transform:translateX(0)}
+}
+@keyframes glintPulse{
+  0%,100%{opacity:0}
+  50%{opacity:.55}
+}
+.wave-rev{animation:waveDriftRev 7s linear infinite;
+  transform-box:fill-box;will-change:transform}
+.glint{animation:glintPulse var(--gdur,4s) ease-in-out infinite;
+  animation-delay:var(--gdly,0s);transform-box:fill-box;will-change:opacity}
+.wave{animation:waveDrift 3.5s linear infinite;
+  transform-box:fill-box;will-change:transform}
+@media(prefers-reduced-motion:reduce){
+  .bub,.heatp,.vp-pulse,.wave,.wave-rev,.glint{animation:none}
+}
+
 /* ── LAYOUT ── */
 .wrap{padding:.7rem 1rem calc(1.5rem + var(--safe-bot));
   max-width:960px;margin:0 auto}
@@ -254,15 +303,15 @@ body{font-family:var(--f);color:var(--t1);
       <div class="mc" id="mDtb">
         <div class="ml">ΔT Topp–Bunn</div>
         <div class="mv" id="vDtb">–<span class="mu">K</span></div></div>
+      <div class="mc" id="mOutAvg">
+        <div class="ml">Ute temp.</div>
+        <div class="mv" id="vOutAvg">–<span class="mu">°C</span></div></div>
       <div class="mc" id="mBrineIn">
         <div class="ml">Brine Inn</div>
         <div class="mv" id="vBrineIn">–<span class="mu">°C</span></div></div>
       <div class="mc" id="mBrineOut">
         <div class="ml">Brine Ut</div>
         <div class="mv" id="vBrineOut">–<span class="mu">°C</span></div></div>
-      <div class="mc" id="mOutAvg">
-        <div class="ml">Ute temp.</div>
-        <div class="mv" id="vOutAvg">–<span class="mu">°C</span></div></div>
       <div class="mc" id="mBt7">
         <div class="ml">Tappevann</div>
         <div class="mv" id="vBt7">–<span class="mu">°C</span></div></div>
@@ -590,6 +639,9 @@ function buildSvg(temps, nibe) {
   <filter id="sdw" x="-15%" y="-10%" width="130%" height="130%">
     <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#000" flood-opacity=".38"/>
   </filter>
+  <filter id="ripBlur" x="-20%" y="-50%" width="140%" height="200%">
+    <feGaussianBlur stdDeviation="0.6"/>
+  </filter>
 </defs>`;
 
   // ── GEO PIPES ──
@@ -647,6 +699,20 @@ function buildSvg(temps, nibe) {
   s+=`<ellipse cx="${vpRX-3}" cy="${biY}" rx="2.5" ry="5" fill="#08111f" opacity=".5"/>`;
 
   // ── HEAT PUMP ──
+  // Compressor pulse glow – brighter/faster at higher Hz
+  {
+    const hzNow = nibe.hz ?? 0;
+    if (hzNow >= 1) {
+      const frac = Math.min(1, Math.max(0, (hzNow - 15) / 75)); // 15→90 Hz
+      const g0 = (0.10 + frac * 0.12).toFixed(2);
+      const g1 = (0.30 + frac * 0.30).toFixed(2);
+      const pdur = (3.0 - frac * 1.6).toFixed(2);  // faster at high Hz
+      const glowCol = isDHW ? '#f59e0b' : '#22c55e';
+      s+=`<rect class="vp-pulse" x="${vpX-5}" y="${vpY-5}" width="${vpW+10}" height="${vpH+10}" rx="18"
+           fill="none" stroke="${glowCol}" stroke-width="3"
+           style="--g0:${g0};--g1:${g1};--pdur:${pdur}s" filter="url(#glow)"/>`;
+    }
+  }
   s+=`<rect x="${vpX}" y="${vpY}" width="${vpW}" height="${vpH}" rx="14" fill="url(#vpg)" stroke="rgba(255,255,255,.07)" stroke-width="1.2" filter="url(#sdw)"/>`;
   for(let i=0;i<14;i++) s+=`<line x1="${vpX+7}" y1="${vpY+13+i*18}" x2="${vpX+vpW-7}" y2="${vpY+13+i*18}" stroke="#fff" stroke-width=".3" opacity="${.013+i*.0012}"/>`;
   s+=`<rect x="${vpX+5}" y="${vpY+15}" width="8" height="${vpH-30}" rx="3.5" fill="#fff" fill-opacity=".04"/>`;
@@ -751,8 +817,95 @@ function buildSvg(temps, nibe) {
   s+=`<rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" rx="${tRx}" fill="url(#sg)" stroke="rgba(255,255,255,.055)" stroke-width="1.1" filter="url(#sdw)"/>`;
   s+=`<g clip-path="url(#tc)">
     <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#wg)"/>
-    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#ws)"/>
-    <ellipse cx="${tCX}" cy="${fillY}" rx="${tW/2-1}" ry="6" fill="${wS}" fill-opacity=".38"/>
+    <rect x="${tCX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#ws)"/>`;
+
+  // ── Realistic water surface: multi-frequency ripples + specular glints ──
+  {
+    const wy = fillY;
+    const xL = tCX - tW/2, xR = tCX + tW/2;
+    const P  = 44;                       // drift period (seamless loop distance)
+    const w1 = P / (2*Math.PI);
+    const w2 = (P/2) / (2*Math.PI);
+    const w3 = (P/3) / (2*Math.PI);
+    const buildSurface = (phase, lift) => {
+      const x0 = xL - P, x1 = xR + P;
+      let d = '';
+      for (let x = x0; x <= x1; x += 2) {
+        const t = (x - x0);
+        const yy = wy - (lift||0)
+          + Math.sin(t/w1 + phase) * 2.0
+          + Math.sin(t/w2 + phase*1.7 + 1.1) * 1.1
+          + Math.sin(t/w3 + phase*2.3 + 2.2) * 0.5;
+        d += (d === '' ? `M${x.toFixed(1)},${yy.toFixed(1)}` : ` L${x.toFixed(1)},${yy.toFixed(1)}`);
+      }
+      return d;
+    };
+
+    // Translucent band below surface for depth
+    const bandTop = buildSurface(0, 0);
+    const bandFill = bandTop + ` L${(xR+P).toFixed(1)},${(wy+8).toFixed(1)} L${(xL-P).toFixed(1)},${(wy+8).toFixed(1)} Z`;
+    s+=`<path class="wave" d="${bandFill}" fill="${lc(wB,40)}" fill-opacity=".55"
+         style="--wd:${P}px"/>`;
+
+    // Bright crest line – clearly visible white-ish
+    s+=`<path class="wave" d="${bandTop}" fill="none" stroke="${lc(wB,110)}"
+         stroke-width="1.6" stroke-opacity=".75" stroke-linecap="round"
+         style="--wd:${P}px;animation-duration:5s"/>`;
+    // Second crest drifting opposite for organic shimmer
+    s+=`<path class="wave-rev" d="${buildSurface(2.6, 1.5)}" fill="none" stroke="#fff"
+         stroke-width="1" stroke-opacity=".45" stroke-linecap="round"
+         filter="url(#ripBlur)" style="--wd:${P}px;animation-duration:7s"/>`;
+
+    // Specular glints
+    const glints = [0.32, 0.6, 0.78];
+    for (let i = 0; i < glints.length; i++) {
+      const gx = xL + glints[i] * tW;
+      s+=`<ellipse class="glint" cx="${gx.toFixed(1)}" cy="${(wy+1).toFixed(1)}"
+           rx="${(3 + i).toFixed(1)}" ry="1" fill="#fff" fill-opacity="0"
+           filter="url(#ripBlur)"
+           style="--gdur:${(3.5 + i*1.2)}s;--gdly:${(i*1.6)}s"/>`;
+    }
+  }
+
+  // ── Rising bubbles: only within water, stop at surface ──
+  {
+    const waterBot = tBot - 5;
+    const surfaceY = fillY + 4;               // just below the water surface
+    const waterH   = Math.max(16, waterBot - surfaceY);
+    const seeds = [0.22, 0.5, 0.74, 0.38, 0.62, 0.85];
+    for (let i = 0; i < seeds.length; i++) {
+      const bx = tCX - tW/2 + 8 + seeds[i] * (tW - 16);
+      const r  = 0.8 + (i % 3) * 0.4;
+      const dur = 5 + (i % 4) * 1.4;
+      const dly = i * (dur / seeds.length);
+      // Start at bottom, rise the full water column (clamped to surface)
+      const rise = -waterH;
+      s+=`<circle class="bub" cx="${bx.toFixed(1)}" cy="${waterBot.toFixed(1)}" r="${r.toFixed(1)}"
+           fill="#fff" fill-opacity=".45"
+           style="--dur:${dur}s;--dly:${dly.toFixed(1)}s;--rise:${rise.toFixed(0)}px"/>`;
+    }
+  }
+
+  // ── Heat particles: rising from heat zone, clamped to water surface ──
+  if (vpHeat || isDHW) {
+    const baseY = tBot - 10;                  // rise from bottom heat zone
+    const surfaceY = fillY + 4;
+    const maxRise = Math.max(14, baseY - surfaceY);
+    const hCol  = isDHW ? '#fbbf24' : '#fb923c';
+    const seeds = [0.3, 0.55, 0.7, 0.45];
+    for (let i = 0; i < seeds.length; i++) {
+      const px = tCX - tW/2 + 10 + seeds[i] * (tW - 20);
+      const dur = 2.8 + (i % 3) * 0.7;
+      const dly = i * (dur / seeds.length);
+      // Clamp rise so particles never go above the surface
+      const rise = -Math.min(maxRise, tH * (0.5 + (i % 2) * 0.18));
+      s+=`<circle class="heatp" cx="${px.toFixed(1)}" cy="${baseY}" r="1.5"
+           fill="${hCol}" fill-opacity=".75"
+           style="--hdur:${dur}s;--hdly:${dly}s;--hrise:${rise.toFixed(0)}px"/>`;
+    }
+  }
+
+  s+=`<ellipse cx="${tCX}" cy="${fillY}" rx="${tW/2-1}" ry="6" fill="${wS}" fill-opacity=".18"/>
     <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" fill="url(#tf)"/>
     <rect x="${tCX-tW/2}" y="${tTop}" width="${tW}" height="${tH}" fill="url(#ss)"/>
   </g>`;
