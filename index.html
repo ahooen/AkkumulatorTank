@@ -365,7 +365,7 @@ body{font-family:var(--f);color:var(--t1);
         <div class="ml">Dusjtid</div>
         <div class="mv" id="vDhwDusj">–<span class="mu">min</span></div></div>
       <div class="mc" id="mDhwDT">
-        <div class="ml">ΔT Topp–Oppv.</div>
+        <div class="ml">ΔT Topp–Bunn</div>
         <div class="mv" id="vDhwDT">–<span class="mu">K</span></div></div>
     </div>
   </div>
@@ -448,6 +448,7 @@ const N = {
 const NIBE_DEV  = 'Nibe S-Series';
 const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
 const SCOP24_DEV  = 'Nibe SCOP 24t';  // rolling 24h SCOP
+const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) via MyUplink
 
 const REF = 25, KWH = 0.5815;
 const MAX_PTS = 48; // ~4h at 15s
@@ -1128,11 +1129,11 @@ function render(temps, nibe, isLive) {
 function buildDHW(nibe) {
   const bt7 = nibe.bt7;     // topp (BT7)
   const bt6 = nibe.bt6;     // oppvarming/midt (BT6)
-  // BT5 (bunn) ikke tilgjengelig via Modbus
+  const bt5 = nibe.bt5;     // bunn/start (BT5 via MyUplink)
 
-  const temps = [bt7, bt6].filter(v => v != null);
+  const temps = [bt7, bt6, bt5].filter(v => v != null);
   const snitt = temps.length ? r1(temps.reduce((a,b)=>a+b,0)/temps.length) : null;
-  const dt    = (bt7 != null && bt6 != null) ? r1(bt7 - bt6) : null;
+  const dt    = (bt7 != null && bt5 != null) ? r1(bt7 - bt5) : null;
 
   // Energi over 35°C (brukbar til dusj)
   // 180L, 4.186 kJ/(kg·K), /3600 = kWh
@@ -1212,8 +1213,9 @@ function buildDHW(nibe) {
 
   // ── Sensor dots + labels on left ──
   const sensors = [
-    {pct:100, y:tY+tH*0.12,  val:bt7,   name:'BT7 Topp'},
-    {pct:50,  y:tY+tH*0.55,  val:bt6,   name:'BT6 Oppv.'},
+    {pct:100, y:tY+tH*0.10,  val:bt7,   name:'BT7 Topp'},
+    {pct:50,  y:tY+tH*0.50,  val:bt6,   name:'BT6 Oppv.'},
+    {pct:0,   y:tY+tH*0.88,  val:bt5,   name:'BT5 Bunn'},
   ];
   const dotX = tX - tW/2 - 3;
   const lblX = 10;
@@ -1269,7 +1271,7 @@ function buildDHW(nibe) {
   s+=`<rect x="${rX}" y="${y4}" width="${rW}" height="${cardH}" rx="8"
        fill="rgba(245,158,11,.06)" stroke="rgba(245,158,11,.18)" stroke-width="1"/>`;
   s+=`<text x="${rX+10}" y="${y4+14}" font-size="7" font-family="Syne,sans-serif"
-       fill="#d97706" letter-spacing="1.2" font-weight="700">ΔT TOPP – OPPV.</text>`;
+       fill="#d97706" letter-spacing="1.2" font-weight="700">ΔT TOPP – BUNN</text>`;
   s+=`<text x="${rX+10}" y="${y4+31}" font-size="18" font-family="DM Mono,monospace"
        fill="#fbbf24" font-weight="500">${dt != null ? dt.toFixed(1) : '–'}<tspan font-size="10" fill="#8a6a30"> K</tspan></text>`;
 
@@ -1342,6 +1344,7 @@ async function doFetch() {
       brineOt: gvN(NIBE_DEV, N.brineOt),
       bt7    : gvN(NIBE_DEV, N.bt7),
       bt6    : gvN(NIBE_DEV, N.bt6),
+      bt5    : gvN(BT5_DEV, 'devicecapabilities_number.number1'),  // BT5 from DC
       gm     : gvN(NIBE_DEV, N.gm),
       flow   : gvN(NIBE_DEV, N.flow),
       heatP  : gvN(NIBE_DEV, N.heatP),
@@ -1396,7 +1399,7 @@ render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,brineIn:8.2,brineOt:2.1,
-   bt7:51,bt6:46,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
+   bt7:51,bt6:46,bt5:42,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
