@@ -345,6 +345,30 @@ body{font-family:var(--f);color:var(--t1);
       </div>
     </div>
   </div>
+  <!-- Tappevannstank illustrasjon -->
+  <div class="panel" style="margin-top:.7rem">
+    <div class="ph">
+      <div class="phd" style="background:#f59e0b"></div>
+      <div class="pt">Tappevannstank · 180 L</div>
+    </div>
+    <svg id="svgDHW" viewBox="0 0 380 220" preserveAspectRatio="xMidYMid meet"
+         style="width:100%;height:auto;display:block;-webkit-user-select:none;user-select:none"
+         aria-hidden="true"></svg>
+    <div class="mg" style="margin-top:8px">
+      <div class="mc" id="mDhwSnitt">
+        <div class="ml">Snitt temp.</div>
+        <div class="mv" id="vDhwSnitt">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mDhwKwh">
+        <div class="ml">Energi</div>
+        <div class="mv" id="vDhwKwh">–<span class="mu">kWh</span></div></div>
+      <div class="mc" id="mDhwDusj">
+        <div class="ml">Dusjtid</div>
+        <div class="mv" id="vDhwDusj">–<span class="mu">min</span></div></div>
+      <div class="mc" id="mDhwDT">
+        <div class="ml">ΔT Topp–Oppv.</div>
+        <div class="mv" id="vDhwDT">–<span class="mu">K</span></div></div>
+    </div>
+  </div>
   <div class="cfg">
     <button class="cft" id="cft"
       onclick="tCfg()" ontouchend="event.preventDefault();tCfg()">
@@ -412,7 +436,7 @@ const N = {
   heatP  : 'meter_power_NIBE.i2283_prod_heat_current_hour',
   heatU  : 'meter_power_NIBE.i2291_used_heat_current_hour',
   hwP    : 'meter_power_NIBE.i2285_prod_water_current_hour',
-  bt7    : 'measure_temperature_NIBE.i8_warmwater_top',
+  bt6    : 'measure_temperature_NIBE.i9_hot_water',
   outAvg : 'measure_temperature_NIBE.i37_outside_avg',
   hwU    : 'meter_power_NIBE.i2293_used_water_current_hour',
   hpPct  : 'measure_percentage_NIBE.i1102_heating_pump',
@@ -1095,6 +1119,161 @@ function render(temps, nibe, isLive) {
   }
   buildSvg(temps, nibe);
   renderPanels(temps, nibe);
+  buildDHW(nibe);
+}
+
+// ═══════════════════════════════════════════
+// DHW TANK (Tappevannstank 180L)
+// ═══════════════════════════════════════════
+function buildDHW(nibe) {
+  const bt7 = nibe.bt7;     // topp (BT7)
+  const bt6 = nibe.bt6;     // oppvarming/midt (BT6)
+  // BT5 (bunn) ikke tilgjengelig via Modbus
+
+  const temps = [bt7, bt6].filter(v => v != null);
+  const snitt = temps.length ? r1(temps.reduce((a,b)=>a+b,0)/temps.length) : null;
+  const dt    = (bt7 != null && bt6 != null) ? r1(bt7 - bt6) : null;
+
+  // Energi over 35°C (brukbar til dusj)
+  // 180L, 4.186 kJ/(kg·K), /3600 = kWh
+  const KWH_K = 180 * 4.186 / 3600; // 0.2093 kWh/K
+  const kwh   = snitt != null && snitt > 35 ? r1(KWH_K * (snitt - 35)) : 0;
+
+  // Dusjtid: 8 L/min dusj, 40°C, kaldtvann 10°C
+  // Energi per minutt dusj = 8 * 4.186 * (40-10) / 3600 = 0.028 kWh/min
+  const DUSJ_KWH_MIN = 8 * 4.186 * 30 / 3600;
+  const dusjMin = kwh > 0 ? Math.round(kwh / DUSJ_KWH_MIN) : 0;
+
+  // ── Oppdater fliser ──
+  const el = id => document.getElementById(id);
+  el('vDhwSnitt').innerHTML = snitt != null ? `${snitt}<span class="mu">°C</span>` : '–';
+  el('vDhwKwh').innerHTML   = `${kwh}<span class="mu"> kWh</span>`;
+  el('vDhwDusj').innerHTML  = `${dusjMin}<span class="mu"> min</span>`;
+  el('vDhwDT').innerHTML    = dt != null ? `${dt}<span class="mu"> K</span>` : '–';
+
+  // ── SVG ──
+  const W = 380, H = 220;
+  const tX = 100, tY = 18, tW = 60, tH = 178, tRx = 11, eRy = 9;
+  const tBot = tY + tH;
+
+  // Fill level based on snitt
+  const fillF = snitt != null ? Math.min(.96, Math.max(.06, (snitt - 10) / 55)) : 0.5;
+  const fillY = tBot - tH * fillF;
+  const wB = tCol(snitt ?? 30), wL = lc(wB, 55), wD = dc(wB, 35), wS = lc(wB, 75);
+
+  let s = `<defs>
+    <clipPath id="dhwC"><rect x="${tX-tW/2}" y="${tY}" width="${tW}" height="${tH}" rx="${tRx}"/></clipPath>
+    <linearGradient id="dhwSg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0e2440"/><stop offset="22%" stop-color="#1a3d60"/>
+      <stop offset="50%" stop-color="#1e4870"/><stop offset="78%" stop-color="#1a3d60"/>
+      <stop offset="100%" stop-color="#0a1830"/></linearGradient>
+    <linearGradient id="dhwWg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${wL}"/><stop offset="55%" stop-color="${wB}"/>
+      <stop offset="100%" stop-color="${wD}"/></linearGradient>
+    <linearGradient id="dhwSs" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="28%" stop-color="#fff" stop-opacity=".22"/>
+      <stop offset="52%" stop-color="#fff" stop-opacity=".04"/>
+      <stop offset="100%" stop-color="#000" stop-opacity=".1"/></linearGradient>
+    <filter id="dhwSdw" x="-15%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#000" flood-opacity=".35"/>
+    </filter>
+  </defs>`;
+
+  // Shadow
+  s+=`<ellipse cx="${tX}" cy="${tBot+7}" rx="${tW/2-4}" ry="3.5" fill="#000" fill-opacity=".2"/>`;
+
+  // Tank body
+  s+=`<rect x="${tX-tW/2}" y="${tY}" width="${tW}" height="${tH}" rx="${tRx}"
+       fill="url(#dhwSg)" stroke="rgba(255,255,255,.055)" stroke-width="1.1" filter="url(#dhwSdw)"/>`;
+
+  // Water fill
+  s+=`<g clip-path="url(#dhwC)">
+    <rect x="${tX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#dhwWg)"/>
+    <rect x="${tX-tW/2}" y="${fillY}" width="${tW}" height="${tBot-fillY}" fill="url(#dhwSs)"/>
+    <ellipse cx="${tX}" cy="${fillY}" rx="${tW/2-1}" ry="5" fill="${wS}" fill-opacity=".2"/>
+    <rect x="${tX-tW/2}" y="${tY}" width="${tW}" height="${tH}" fill="url(#dhwSs)" opacity=".4"/>
+  </g>`;
+
+  // Top cap
+  s+=`<rect x="${tX-tW/2}" y="${tY}" width="${tW}" height="${eRy*2}" rx="${tW/2}"
+       fill="url(#dhwSg)" stroke="rgba(255,255,255,.07)" stroke-width="1"/>`;
+  s+=`<rect x="${tX-tW/2}" y="${tY}" width="${tW}" height="${eRy*2}" rx="${tW/2}"
+       fill="url(#dhwSs)" opacity=".5"/>`;
+
+  // Band markers
+  [tY+tH*.33, tY+tH*.66].forEach(by => {
+    s+=`<rect x="${tX-tW/2+2}" y="${by-2.5}" width="${tW-4}" height="5" rx="2"
+         fill="rgba(56,128,200,.12)" stroke="rgba(255,255,255,.04)" stroke-width=".5"/>`;
+  });
+
+  // Shine strip
+  s+=`<rect x="${tX-tW/2+6}" y="${tY+eRy}" width="6" height="${tH-eRy*2}" rx="3" fill="#fff" fill-opacity=".04"/>`;
+
+  // ── Sensor dots + labels on left ──
+  const sensors = [
+    {pct:100, y:tY+tH*0.12,  val:bt7,   name:'BT7 Topp'},
+    {pct:50,  y:tY+tH*0.55,  val:bt6,   name:'BT6 Oppv.'},
+  ];
+  const dotX = tX - tW/2 - 3;
+  const lblX = 10;
+
+  sensors.forEach(sen => {
+    const col = tCol(sen.val);
+    const valTxt = sen.val != null ? sen.val.toFixed(1) + '°' : '–';
+    s+=`<line x1="${dotX}" y1="${sen.y}" x2="${lblX+26}" y2="${sen.y}"
+         stroke="${col}" stroke-width="1" stroke-dasharray="3,2.5" opacity=".6"/>`;
+    s+=`<circle cx="${dotX}" cy="${sen.y}" r="3.5" fill="${col}" stroke="#07101e" stroke-width="1"/>`;
+    s+=`<circle cx="${dotX}" cy="${sen.y}" r="1.5" fill="#fff" fill-opacity=".3"/>`;
+    s+=`<text x="${lblX+24}" y="${sen.y+3.5}" text-anchor="end"
+         font-size="10" font-family="DM Mono,monospace" fill="${col}">${valTxt}</text>`;
+  });
+
+  // ── Label above tank ──
+  s+=`<text x="${tX}" y="${tY-7}" text-anchor="middle"
+       font-size="8" font-family="Syne,sans-serif" fill="#8a6a30" letter-spacing="1.5" opacity=".9">TAPPEVANN</text>`;
+
+  // ── Right side: info cards ──
+  const rX = 175, rW = 190, cardH = 38, gap = 6;
+
+  // Snitt temp - big
+  const snittCol = tCol(snitt ?? 30);
+  s+=`<rect x="${rX}" y="${tY}" width="${rW}" height="${cardH}" rx="8"
+       fill="rgba(245,158,11,.06)" stroke="rgba(245,158,11,.18)" stroke-width="1"/>`;
+  s+=`<text x="${rX+10}" y="${tY+14}" font-size="7" font-family="Syne,sans-serif"
+       fill="#d97706" letter-spacing="1.2" font-weight="700">SNITT TEMPERATUR</text>`;
+  s+=`<text x="${rX+10}" y="${tY+31}" font-size="18" font-family="DM Mono,monospace"
+       fill="${snittCol}" font-weight="500">${snitt != null ? snitt.toFixed(1) : '–'}<tspan font-size="10" fill="#8a6a30"> °C</tspan></text>`;
+
+  // Energi
+  const y2 = tY + cardH + gap;
+  s+=`<rect x="${rX}" y="${y2}" width="${rW}" height="${cardH}" rx="8"
+       fill="rgba(245,158,11,.06)" stroke="rgba(245,158,11,.18)" stroke-width="1"/>`;
+  s+=`<text x="${rX+10}" y="${y2+14}" font-size="7" font-family="Syne,sans-serif"
+       fill="#d97706" letter-spacing="1.2" font-weight="700">ENERGI OVER 35°C</text>`;
+  s+=`<text x="${rX+10}" y="${y2+31}" font-size="18" font-family="DM Mono,monospace"
+       fill="#fbbf24" font-weight="500">${kwh.toFixed(1)}<tspan font-size="10" fill="#8a6a30"> kWh</tspan></text>`;
+
+  // Dusjtid - med ikon
+  const y3 = y2 + cardH + gap;
+  const dusjCol = dusjMin > 15 ? '#22c55e' : dusjMin > 8 ? '#f59e0b' : '#ef4444';
+  s+=`<rect x="${rX}" y="${y3}" width="${rW}" height="${cardH}" rx="8"
+       fill="rgba(245,158,11,.06)" stroke="rgba(245,158,11,.18)" stroke-width="1"/>`;
+  s+=`<text x="${rX+10}" y="${y3+14}" font-size="7" font-family="Syne,sans-serif"
+       fill="#d97706" letter-spacing="1.2" font-weight="700">🚿 FORVENTET DUSJTID</text>`;
+  s+=`<text x="${rX+10}" y="${y3+31}" font-size="18" font-family="DM Mono,monospace"
+       fill="${dusjCol}" font-weight="500">${dusjMin}<tspan font-size="10" fill="#8a6a30"> min</tspan></text>`;
+
+  // ΔT
+  const y4 = y3 + cardH + gap;
+  s+=`<rect x="${rX}" y="${y4}" width="${rW}" height="${cardH}" rx="8"
+       fill="rgba(245,158,11,.06)" stroke="rgba(245,158,11,.18)" stroke-width="1"/>`;
+  s+=`<text x="${rX+10}" y="${y4+14}" font-size="7" font-family="Syne,sans-serif"
+       fill="#d97706" letter-spacing="1.2" font-weight="700">ΔT TOPP – OPPV.</text>`;
+  s+=`<text x="${rX+10}" y="${y4+31}" font-size="18" font-family="DM Mono,monospace"
+       fill="#fbbf24" font-weight="500">${dt != null ? dt.toFixed(1) : '–'}<tspan font-size="10" fill="#8a6a30"> K</tspan></text>`;
+
+  document.getElementById('svgDHW').innerHTML = s;
 }
 
 // ═══════════════════════════════════════════
@@ -1162,6 +1341,7 @@ async function doFetch() {
       brineIn: gvN(NIBE_DEV, N.brineIn),
       brineOt: gvN(NIBE_DEV, N.brineOt),
       bt7    : gvN(NIBE_DEV, N.bt7),
+      bt6    : gvN(NIBE_DEV, N.bt6),
       gm     : gvN(NIBE_DEV, N.gm),
       flow   : gvN(NIBE_DEV, N.flow),
       heatP  : gvN(NIBE_DEV, N.heatP),
@@ -1216,7 +1396,7 @@ render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,brineIn:8.2,brineOt:2.1,
-   bt7:51,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
+   bt7:51,bt6:46,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
