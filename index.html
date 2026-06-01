@@ -369,6 +369,16 @@ body{font-family:var(--f);color:var(--t1);
         <div class="mv" id="vDhwDT">–<span class="mu">K</span></div></div>
     </div>
   </div>
+  <!-- VP Internal Refrigerant Circuit -->
+  <div class="panel" style="margin-top:.7rem">
+    <div class="ph">
+      <div class="phd" style="background:#f97316"></div>
+      <div class="pt">NIBE S1256 · Kjølekrets</div>
+    </div>
+    <svg id="svgVPI" viewBox="0 0 700 480" preserveAspectRatio="xMidYMid meet"
+         style="width:100%;height:auto;display:block;-webkit-user-select:none;user-select:none"
+         aria-hidden="true"></svg>
+  </div>
   <div class="cfg">
     <button class="cft" id="cft"
       onclick="tCfg()" ontouchend="event.preventDefault();tCfg()">
@@ -400,6 +410,7 @@ body{font-family:var(--f);color:var(--t1);
     </div>
     <div class="err" id="err"></div>
   </div>
+
 </div>
 
 <script>
@@ -442,6 +453,9 @@ const N = {
   hpPct  : 'measure_percentage_NIBE.i1102_heating_pump',
   srcPct : 'measure_percentage_NIBE.i1104_source_pump',
   disch  : 'measure_temperature_NIBE.i13_discharge',
+  bt12   : 'measure_temperature_NIBE.i12_heating_supply',
+  bt15   : 'measure_temperature_NIBE.i14_liquid_line',
+  bt17   : 'measure_temperature_NIBE.i16_suction_gas',
   compStarts: 'measure_count_NIBE.i1083_compressor_starts',
   compHours : 'measure_hour_NIBE.i1087_compressor_usage_total',
 };
@@ -1121,6 +1135,7 @@ function render(temps, nibe, isLive) {
   buildSvg(temps, nibe);
   renderPanels(temps, nibe);
   buildDHW(nibe);
+  buildVPInternal(nibe);
 }
 
 // ═══════════════════════════════════════════
@@ -1279,6 +1294,339 @@ function buildDHW(nibe) {
 }
 
 // ═══════════════════════════════════════════
+// VP INTERNAL – Refrigerant Circuit Schematic
+// ═══════════════════════════════════════════
+function buildVPInternal(nibe) {
+  const W = 700, H = 480;
+  // Key positions
+  const tankCX=310, tankY=35, tankW=120, tankH=200, tankBot=tankY+tankH;
+  const evapX=510, evapY=310, evapW=155, evapH=60;
+  const compCX=350, compCY=430, compR=26;
+  const expVX=430, expVY=335;
+  const gp1X=130, gp1Y=110, gp1R=14;
+  const gp2X=595, gp2Y=230, gp2R=14;
+
+  // Values
+  const hz    = nibe.hz ?? 0;
+  const pwr   = (nibe.pwr ?? 0);
+  const running = hz >= 1;
+  const bt2   = nibe.supply;
+  const bt3   = nibe.ret;
+  const bt7   = nibe.bt7;
+  const bt6   = nibe.bt6;
+  const bt5   = nibe.bt5;
+  const bt10  = nibe.brineIn;
+  const bt11  = nibe.brineOt;
+  const bt12  = nibe.bt12;
+  const bt14  = nibe.disch;
+  const bt15  = nibe.bt15;
+  const bt17  = nibe.bt17;
+  const gp1   = nibe.hpPct;
+  const gp2   = nibe.srcPct;
+  const flow  = nibe.flow;
+
+  const fmt = v => v != null ? v.toFixed(1) : '–';
+  const fmti = v => v != null ? Math.round(v) : '–';
+
+  let s = `<defs>
+    <linearGradient id="vpiCond" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ef4444"/><stop offset="100%" stop-color="#f97316"/></linearGradient>
+    <linearGradient id="vpiEvap" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06b6d4"/><stop offset="100%" stop-color="#3b82f6"/></linearGradient>
+    <linearGradient id="vpiTankG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0e2440"/><stop offset="50%" stop-color="#1a3858"/>
+      <stop offset="100%" stop-color="#0a1830"/></linearGradient>
+    <filter id="vpiGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>`;
+
+  // ── Background panel ──
+  s += `<rect x="0" y="0" width="${W}" height="${H}" rx="0" fill="none"/>`;
+
+  // ════════════════════════════════════════════
+  // HOT WATER TANK (center) with coil inside
+  // ════════════════════════════════════════════
+  const tL = tankCX - tankW/2, tR = tankCX + tankW/2;
+  s += `<rect x="${tL}" y="${tankY}" width="${tankW}" height="${tankH}" rx="14"
+         fill="url(#vpiTankG)" stroke="rgba(255,255,255,.08)" stroke-width="1.5"/>`;
+  // Top dome
+  s += `<ellipse cx="${tankCX}" cy="${tankY+8}" rx="${tankW/2-1}" ry="8"
+         fill="#1a3858" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
+  // Tank label
+  s += `<text x="${tankCX}" y="${tankY-10}" text-anchor="middle"
+         font-size="8" font-family="Syne,sans-serif" fill="#4a7a9a" letter-spacing="1.5">VARMTVANNSTANK</text>`;
+
+  // Coil (condenser) inside tank – serpentine orange lines
+  const coilL = tL + 15, coilR = tR - 15, coilTop = tankY + 30, coilBot = tankBot - 25;
+  const nCoils = 5;
+  const coilStep = (coilBot - coilTop) / nCoils;
+  s += `<g opacity=".85">`;
+  for (let i = 0; i < nCoils; i++) {
+    const cy = coilTop + i * coilStep + coilStep/2;
+    const x1 = i % 2 === 0 ? coilL : coilR;
+    const x2 = i % 2 === 0 ? coilR : coilL;
+    // Horizontal coil pass
+    s += `<line x1="${x1}" y1="${cy}" x2="${x2}" y2="${cy}"
+           stroke="#f97316" stroke-width="3" stroke-linecap="round" opacity=".7"/>`;
+    // Connect to next coil pass
+    if (i < nCoils - 1) {
+      const nx = x2;
+      const ny = cy + coilStep;
+      s += `<line x1="${x2}" y1="${cy}" x2="${x2}" y2="${cy + coilStep/2}"
+             stroke="#f97316" stroke-width="3" stroke-linecap="round" opacity=".7"/>`;
+      s += `<line x1="${x2}" y1="${cy + coilStep/2}" x2="${x2}" y2="${coilTop + (i+1)*coilStep + coilStep/2}"
+             stroke="#f97316" stroke-width="3" stroke-linecap="round" opacity=".5"/>`;
+    }
+  }
+  s += `</g>`;
+
+  // Coil entry (hot gas from compressor, top-right of tank)
+  const coilEntryY = coilTop;
+  // Coil exit (liquid, bottom-left of tank)
+  const coilExitY = coilBot;
+
+  // Tank sensor dots
+  const tankSensors = [
+    { y: tankY + tankH * 0.12, val: bt7, label: 'BT7', col: '#ef4444' },
+    { y: tankY + tankH * 0.50, val: bt6, label: 'BT6', col: '#f97316' },
+    { y: tankY + tankH * 0.85, val: bt5, label: 'BT5', col: '#eab308' },
+  ];
+  tankSensors.forEach(sen => {
+    s += `<circle cx="${tR + 8}" cy="${sen.y}" r="3" fill="${sen.col}" opacity=".8"/>`;
+    s += `<text x="${tR + 15}" y="${sen.y + 3.5}" font-size="8.5" font-family="DM Mono,monospace"
+           fill="${sen.col}" opacity=".85">${sen.label} ${fmt(sen.val)}°</text>`;
+  });
+
+  // ════════════════════════════════════════════
+  // HEATING CIRCUIT (left side)
+  // ════════════════════════════════════════════
+  const supplyY = tankY + 25;   // BT2 supply exits tank left
+  const returnY = tankBot - 20; // BT3 return enters tank left
+
+  // Supply pipe (red, tank → left → GP1 → out)
+  s += `<path d="M${tL},${supplyY} H${gp1X+gp1R+5}" fill="none"
+         stroke="#ef4444" stroke-width="4" stroke-linecap="round" opacity=".6"/>`;
+  s += `<path d="M${gp1X-gp1R-5},${supplyY} H30"
+         fill="none" stroke="#ef4444" stroke-width="4" stroke-linecap="round" opacity=".6"/>`;
+  // Arrow out
+  s += `<polygon points="30,${supplyY-5} 20,${supplyY} 30,${supplyY+5}" fill="#ef4444" opacity=".6"/>`;
+  s += `<text x="35" y="${supplyY-10}" font-size="8" font-family="Syne,sans-serif"
+         fill="#ef4444" letter-spacing="1" opacity=".8">TIL RADIATOR</text>`;
+
+  // Return pipe (blue, in → tank)
+  s += `<path d="M30,${returnY} H${tL}" fill="none"
+         stroke="#3b82f6" stroke-width="4" stroke-linecap="round" opacity=".5"/>`;
+  s += `<polygon points="50,${returnY-5} 60,${returnY} 50,${returnY+5}" fill="#3b82f6" opacity=".5"/>`;
+  s += `<text x="35" y="${returnY+16}" font-size="8" font-family="Syne,sans-serif"
+         fill="#3b82f6" letter-spacing="1" opacity=".8">FRA RADIATOR</text>`;
+
+  // BT2 badge (supply)
+  s += `<rect x="${gp1X+30}" y="${supplyY-16}" width="58" height="20" rx="5"
+         fill="rgba(239,68,68,.12)" stroke="rgba(239,68,68,.3)" stroke-width="1"/>`;
+  s += `<text x="${gp1X+59}" y="${supplyY-2}" text-anchor="middle" font-size="9"
+         font-family="DM Mono,monospace" fill="#ef4444">BT2 ${fmt(bt2)}°</text>`;
+
+  // BT3 badge (return)
+  s += `<rect x="${gp1X-15}" y="${returnY-16}" width="58" height="20" rx="5"
+         fill="rgba(59,130,246,.12)" stroke="rgba(59,130,246,.3)" stroke-width="1"/>`;
+  s += `<text x="${gp1X+14}" y="${returnY-2}" text-anchor="middle" font-size="9"
+         font-family="DM Mono,monospace" fill="#3b82f6">BT3 ${fmt(bt3)}°</text>`;
+
+  // GP1 pump symbol
+  const gp1Running = gp1 != null && gp1 > 0;
+  const gp1Col = gp1Running ? '#f97316' : '#3d5878';
+  s += `<circle cx="${gp1X}" cy="${supplyY}" r="${gp1R}"
+         fill="#0a1828" stroke="${gp1Col}" stroke-width="2"/>`;
+  s += `<polygon points="${gp1X+4},${supplyY} ${gp1X-4},${supplyY-5} ${gp1X-4},${supplyY+5}"
+         fill="${gp1Col}" opacity=".8" transform="rotate(180,${gp1X},${supplyY})"/>`;
+  s += `<text x="${gp1X}" y="${supplyY+gp1R+12}" text-anchor="middle" font-size="8"
+         font-family="DM Mono,monospace" fill="${gp1Col}">GP1 ${gp1!=null?gp1+'%':'–'}</text>`;
+
+  // Flow sensor
+  if (flow != null) {
+    s += `<text x="${gp1X}" y="${supplyY+gp1R+23}" text-anchor="middle" font-size="7"
+           font-family="DM Mono,monospace" fill="#6a8fb0">${flow.toFixed(1)} L/min</text>`;
+  }
+
+  // ════════════════════════════════════════════
+  // BRINE CIRCUIT (right side)
+  // ════════════════════════════════════════════
+  const brineInY = evapY + 15;   // enters evaporator
+  const brineOutY = evapY + evapH - 15;
+
+  // Brine in pipe (from ground, right side down to evaporator)
+  s += `<path d="M${W-20},${50} V${brineInY} H${evapX+evapW}"
+         fill="none" stroke="#5eead4" stroke-width="4" stroke-linecap="round" opacity=".5"/>`;
+  // Brine out pipe (from evaporator, up and out)
+  s += `<path d="M${evapX+evapW},${brineOutY} H${W-45} V${50}"
+         fill="none" stroke="#047857" stroke-width="4" stroke-linecap="round" opacity=".5"/>`;
+
+  // Labels
+  s += `<text x="${W-15}" y="${42}" text-anchor="end" font-size="7" font-family="Syne,sans-serif"
+         fill="#5eead4" letter-spacing="1">BRINE INN</text>`;
+  s += `<text x="${W-50}" y="${42}" text-anchor="end" font-size="7" font-family="Syne,sans-serif"
+         fill="#047857" letter-spacing="1">BRINE UT</text>`;
+
+  // BT10 badge (brine in)
+  s += `<rect x="${W-90}" y="${140}" width="70" height="20" rx="5"
+         fill="rgba(94,234,212,.1)" stroke="rgba(94,234,212,.25)" stroke-width="1"/>`;
+  s += `<text x="${W-55}" y="${154}" text-anchor="middle" font-size="8.5"
+         font-family="DM Mono,monospace" fill="#5eead4">BT10 ${fmt(bt10)}°</text>`;
+
+  // BT11 badge (brine out)
+  s += `<rect x="${W-90}" y="${170}" width="70" height="20" rx="5"
+         fill="rgba(4,120,87,.15)" stroke="rgba(4,120,87,.3)" stroke-width="1"/>`;
+  s += `<text x="${W-55}" y="${184}" text-anchor="middle" font-size="8.5"
+         font-family="DM Mono,monospace" fill="#10b981">BT11 ${fmt(bt11)}°</text>`;
+
+  // Brine ΔT
+  if (bt10 != null && bt11 != null) {
+    const bdt = r1(bt10 - bt11);
+    s += `<text x="${W-55}" y="${204}" text-anchor="middle" font-size="7.5"
+           font-family="DM Mono,monospace" fill="#6a8fb0">ΔT ${bdt} K</text>`;
+  }
+
+  // GP2 pump symbol
+  const gp2Running = gp2 != null && gp2 > 0;
+  const gp2Col = gp2Running ? '#10b981' : '#3d5878';
+  s += `<circle cx="${gp2X}" cy="${gp2Y}" r="${gp2R}"
+         fill="#0a1828" stroke="${gp2Col}" stroke-width="2"/>`;
+  s += `<polygon points="${gp2X+4},${gp2Y} ${gp2X-4},${gp2Y-5} ${gp2X-4},${gp2Y+5}"
+         fill="${gp2Col}" opacity=".8"/>`;
+  s += `<text x="${gp2X}" y="${gp2Y+gp2R+12}" text-anchor="middle" font-size="8"
+         font-family="DM Mono,monospace" fill="${gp2Col}">GP2 ${gp2!=null?gp2+'%':'–'}</text>`;
+
+  // ════════════════════════════════════════════
+  // EVAPORATOR (bottom right) – cold side
+  // ════════════════════════════════════════════
+  s += `<rect x="${evapX}" y="${evapY}" width="${evapW}" height="${evapH}" rx="8"
+         fill="url(#vpiEvap)" opacity=".2" stroke="rgba(59,130,246,.3)" stroke-width="1.5"/>`;
+  // Internal plates
+  for (let i = 0; i < 6; i++) {
+    const px = evapX + 15 + i * (evapW-30)/5;
+    s += `<line x1="${px}" y1="${evapY+10}" x2="${px}" y2="${evapY+evapH-10}"
+           stroke="#3b82f6" stroke-width="1.5" opacity=".35"/>`;
+  }
+  s += `<text x="${evapX+evapW/2}" y="${evapY-8}" text-anchor="middle"
+         font-size="8" font-family="Syne,sans-serif" fill="#38bdf8" letter-spacing="1.5">FORDAMPER</text>`;
+
+  // Refrigerant enters evaporator from left, exits bottom-left
+  // BT17 suction gas (cold, exits evaporator bottom → to compressor)
+  s += `<rect x="${evapX-5}" y="${evapY+evapH+8}" width="68" height="18" rx="4"
+         fill="rgba(59,130,246,.1)" stroke="rgba(59,130,246,.25)" stroke-width="1"/>`;
+  s += `<text x="${evapX+29}" y="${evapY+evapH+21}" text-anchor="middle" font-size="8"
+         font-family="DM Mono,monospace" fill="#60a5fa">BT17 ${fmt(bt17)}°</text>`;
+
+  // ════════════════════════════════════════════
+  // REFRIGERANT CIRCUIT PIPES
+  // ════════════════════════════════════════════
+
+  // 1. Compressor → BT14 (hot gas) → up to coil entry in tank
+  const hotGasCol = running ? '#ef4444' : '#3d5878';
+  s += `<path d="M${compCX},${compCY-compR} V${coilEntryY} H${tR-15}"
+         fill="none" stroke="${hotGasCol}" stroke-width="3" stroke-linecap="round"
+         stroke-dasharray="${running?'none':'6,4'}" opacity=".65"/>`;
+  // BT14 badge
+  s += `<rect x="${compCX+8}" y="${280}" width="68" height="18" rx="4"
+         fill="rgba(239,68,68,.1)" stroke="rgba(239,68,68,.25)" stroke-width="1"/>`;
+  s += `<text x="${compCX+42}" y="${293}" text-anchor="middle" font-size="8"
+         font-family="DM Mono,monospace" fill="#f87171">BT14 ${fmt(bt14)}°</text>`;
+
+  // 2. Coil exit → BT15 (liquid) → down → expansion valve
+  const liqCol = running ? '#f59e0b' : '#3d5878';
+  s += `<path d="M${coilL+5},${coilExitY} V${expVY} H${expVX-12}"
+         fill="none" stroke="${liqCol}" stroke-width="3" stroke-linecap="round"
+         stroke-dasharray="${running?'none':'6,4'}" opacity=".6"/>`;
+  // BT15 badge
+  s += `<rect x="${coilL-75}" y="${coilExitY+5}" width="68" height="18" rx="4"
+         fill="rgba(245,158,11,.1)" stroke="rgba(245,158,11,.25)" stroke-width="1"/>`;
+  s += `<text x="${coilL-41}" y="${coilExitY+18}" text-anchor="middle" font-size="8"
+         font-family="DM Mono,monospace" fill="#fbbf24">BT15 ${fmt(bt15)}°</text>`;
+
+  // BT12 badge (at supply line / condenser exit)
+  s += `<rect x="${coilL-75}" y="${coilExitY-20}" width="68" height="18" rx="4"
+         fill="rgba(249,115,22,.1)" stroke="rgba(249,115,22,.25)" stroke-width="1"/>`;
+  s += `<text x="${coilL-41}" y="${coilExitY-7}" text-anchor="middle" font-size="8"
+         font-family="DM Mono,monospace" fill="#fb923c">BT12 ${fmt(bt12)}°</text>`;
+
+  // 3. Expansion valve → evaporator
+  s += `<path d="M${expVX+12},${expVY} H${evapX}"
+         fill="none" stroke="#22d3ee" stroke-width="3" stroke-linecap="round"
+         stroke-dasharray="${running?'none':'6,4'}" opacity=".5"/>`;
+
+  // 4. Evaporator → BT17 → compressor
+  s += `<path d="M${evapX},${evapY+evapH} V${compCY} H${compCX+compR}"
+         fill="none" stroke="#60a5fa" stroke-width="3" stroke-linecap="round"
+         stroke-dasharray="${running?'none':'6,4'}" opacity=".5"/>`;
+
+  // ════════════════════════════════════════════
+  // EXPANSION VALVE
+  // ════════════════════════════════════════════
+  s += `<polygon points="${expVX-10},${expVY-8} ${expVX+10},${expVY} ${expVX-10},${expVY+8}"
+         fill="none" stroke="#22d3ee" stroke-width="1.5" opacity=".6"/>`;
+  s += `<polygon points="${expVX+10},${expVY-8} ${expVX-10},${expVY} ${expVX+10},${expVY+8}"
+         fill="none" stroke="#22d3ee" stroke-width="1.5" opacity=".6"/>`;
+  s += `<text x="${expVX}" y="${expVY-14}" text-anchor="middle"
+         font-size="7" font-family="Syne,sans-serif" fill="#22d3ee" letter-spacing="1">EXP.VENTIL</text>`;
+
+  // ════════════════════════════════════════════
+  // COMPRESSOR
+  // ════════════════════════════════════════════
+  const cCol = running ? '#a855f7' : '#3d5878';
+  s += `<circle cx="${compCX}" cy="${compCY}" r="${compR}"
+         fill="#0c1a2e" stroke="${cCol}" stroke-width="2.5"
+         ${running?'filter="url(#vpiGlow)"':''}/>`;
+  // Inner circle
+  s += `<circle cx="${compCX}" cy="${compCY}" r="${compR*0.6}"
+         fill="none" stroke="${cCol}" stroke-width="1.5" opacity=".5"/>`;
+  // Status text
+  s += `<text x="${compCX}" y="${compCY-2}" text-anchor="middle"
+         font-size="10" font-family="DM Mono,monospace" fill="${cCol}" font-weight="500">
+         ${running ? hz.toFixed(0)+' Hz' : 'OFF'}</text>`;
+  s += `<text x="${compCX}" y="${compCY+11}" text-anchor="middle"
+         font-size="7.5" font-family="DM Mono,monospace" fill="${cCol}" opacity=".7">
+         ${running ? fmti(pwr)+' W' : ''}</text>`;
+  s += `<text x="${compCX}" y="${compCY+compR+14}" text-anchor="middle"
+         font-size="8" font-family="Syne,sans-serif" fill="${cCol}" letter-spacing="1.5">KOMPRESSOR</text>`;
+
+  // ════════════════════════════════════════════
+  // INTERNAL HEATER (Elpatron) – left side
+  // ════════════════════════════════════════════
+  const elpX = 55, elpY = 165, elpH = 50;
+  s += `<rect x="${elpX-12}" y="${elpY}" width="24" height="${elpH}" rx="4"
+         fill="rgba(239,68,68,.08)" stroke="rgba(239,68,68,.2)" stroke-width="1"/>`;
+  // Zigzag heating element
+  for (let i = 0; i < 3; i++) {
+    const y1 = elpY + 8 + i * 14;
+    s += `<polyline points="${elpX-6},${y1} ${elpX+6},${y1+4} ${elpX-6},${y1+8} ${elpX+6},${y1+12}"
+           fill="none" stroke="#ef4444" stroke-width="1.5" opacity=".5"/>`;
+  }
+  s += `<text x="${elpX}" y="${elpY-8}" text-anchor="middle"
+         font-size="7" font-family="Syne,sans-serif" fill="#ef4444" letter-spacing=".8" opacity=".7">ELPATRON</text>`;
+
+  // ════════════════════════════════════════════
+  // LEGEND / INFO
+  // ════════════════════════════════════════════
+  const legY = H - 30;
+  const legs = [
+    { col: '#ef4444', label: 'Hetgass' },
+    { col: '#f59e0b', label: 'Væske' },
+    { col: '#22d3ee', label: 'Kald' },
+    { col: '#60a5fa', label: 'Sugegass' },
+    { col: '#5eead4', label: 'Brine' },
+  ];
+  let lx = 50;
+  legs.forEach(l => {
+    s += `<line x1="${lx}" y1="${legY}" x2="${lx+20}" y2="${legY}"
+           stroke="${l.col}" stroke-width="3" stroke-linecap="round" opacity=".6"/>`;
+    s += `<text x="${lx+25}" y="${legY+3.5}" font-size="7.5" font-family="DM Mono,monospace"
+           fill="${l.col}" opacity=".7">${l.label}</text>`;
+    lx += 25 + l.label.length * 5.5 + 15;
+  });
+
+  document.getElementById('svgVPI').innerHTML = s;
+}
 // FETCH FROM HOMEY
 // ═══════════════════════════════════════════
 const sv  = (k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};
@@ -1356,6 +1704,10 @@ async function doFetch() {
       srcPct : gvN(NIBE_DEV, N.srcPct),
       compStarts: gvN(NIBE_DEV, N.compStarts),
       compHours : gvN(NIBE_DEV, N.compHours),
+      disch  : gvN(NIBE_DEV, N.disch),
+      bt12   : gvN(NIBE_DEV, N.bt12),
+      bt15   : gvN(NIBE_DEV, N.bt15),
+      bt17   : gvN(NIBE_DEV, N.bt17),
     };
 
     render(temps, nibe, true);
@@ -1399,7 +1751,7 @@ render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,brineIn:8.2,brineOt:2.1,
-   bt7:51,bt6:46,bt5:42,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
+   bt7:51,bt6:46,bt5:42,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
