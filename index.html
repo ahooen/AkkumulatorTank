@@ -1271,8 +1271,9 @@ function buildDHW(nibe) {
   const lblX = 10;
 
   sensors.forEach(sen => {
+    if (sen.val == null) return;  // skip sensors without data
     const col = tCol(sen.val);
-    const valTxt = sen.val != null ? sen.val.toFixed(1) + '°' : '–';
+    const valTxt = sen.val.toFixed(1) + '°';
     s+=`<line x1="${dotX}" y1="${sen.y}" x2="${lblX+26}" y2="${sen.y}"
          stroke="${col}" stroke-width="1" stroke-dasharray="3,2.5" opacity=".6"/>`;
     s+=`<circle cx="${dotX}" cy="${sen.y}" r="3.5" fill="${col}" stroke="#07101e" stroke-width="1"/>`;
@@ -1312,7 +1313,7 @@ function buildDHW(nibe) {
   s+=`<rect x="${rX}" y="${y3}" width="${rW}" height="${cardH}" rx="8"
        fill="rgba(245,158,11,.06)" stroke="rgba(245,158,11,.18)" stroke-width="1"/>`;
   s+=`<text x="${rX+10}" y="${y3+14}" font-size="7" font-family="Syne,sans-serif"
-       fill="#d97706" letter-spacing="1.2" font-weight="700">🚿 FORVENTET DUSJTID</text>`;
+       fill="#d97706" letter-spacing="1.2" font-weight="700">FORVENTET DUSJTID</text>`;
   s+=`<text x="${rX+10}" y="${y3+31}" font-size="18" font-family="DM Mono,monospace"
        fill="${dusjCol}" font-weight="500">${dusjMin}<tspan font-size="10" fill="#8a6a30"> min</tspan></text>`;
 
