@@ -549,6 +549,8 @@ const H = {
   hz:[], pwr:[], gm:[], pTerm:[],
   bt7:[], outAvg:[], compStarts:[], compHours:[],
   dhwSnitt:[], dhwKwh:[], dhwDusj:[], dhwDt:[],
+  bt5:[], bt6:[], supply:[], ret:[], hpPct:[], srcPct:[],
+  bt12:[], bt15:[], disch:[], bt17:[], brineDT:[],
 };
 
 const r1 = v => Math.round(v * 10) / 10;
@@ -616,7 +618,7 @@ function showTT(el, label, hk, unit) {
     const pts = data.map((v,i) => `${(i/(n-1))*170},${40-((v-mn)/rng)*34-3}`).join(' ');
     document.getElementById('ttn').textContent = mn.toFixed(1)+unit;
     document.getElementById('ttx').textContent = mx.toFixed(1)+unit;
-    document.getElementById('tth').textContent = `${n} målinger · ~${Math.round(n*15/60*10)/10}t`;
+    document.getElementById('tth').textContent = `${n} målinger · ~${Math.round(n*5/60*10)/10}t`;
     g.innerHTML = `<defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#2d7cf6" stop-opacity=".25"/>
       <stop offset="100%" stop-color="#2d7cf6" stop-opacity="0"/>
@@ -1210,6 +1212,18 @@ function render(temps, nibe, isLive) {
     ph('outAvg',  nibe.outAvg);
     ph('compStarts', nibe.compStarts);
     ph('compHours',  nibe.compHours);
+    // Kjølekrets-følere
+    ph('bt5',     nibe.bt5);
+    ph('bt6',     nibe.bt6);
+    ph('supply',  nibe.supply);
+    ph('ret',     nibe.ret);
+    ph('hpPct',   nibe.hpPct);
+    ph('srcPct',  nibe.srcPct);
+    ph('bt12',    nibe.bt12);
+    ph('bt15',    nibe.bt15);
+    ph('disch',   nibe.disch);
+    ph('bt17',    nibe.bt17);
+    if(nibe.brineIn!=null&&nibe.brineOt!=null) ph('brineDT', r1(nibe.brineIn-nibe.brineOt));
     // Tappevann avledede verdier
     const dhwV=[nibe.bt7,nibe.bt6,nibe.bt5].filter(t=>t!=null);
     if(dhwV.length){
@@ -1377,24 +1391,27 @@ function buildDHW(nibe) {
 
   // ── Sensor dots + labels on left ──
   const sensors = [
-    {pct:100, y:tY+tH*0.10,  val:bt7,   name:'BT7 Topp'},
-    {pct:50,  y:tY+tH*0.50,  val:bt5,   name:'BT6 Oppv.'},
-    {pct:0,   y:tY+tH*0.88,  val:bt6,   name:'BT5 Bunn'},
+    {pct:100, y:tY+tH*0.10,  val:bt7,   name:'BT7 Topp',  hk:'bt7', tip:'Tappevann topp'},
+    {pct:50,  y:tY+tH*0.50,  val:bt5,   name:'BT6 Oppv.', hk:'bt5', tip:'Tappevann midt'},
+    {pct:0,   y:tY+tH*0.88,  val:bt6,   name:'BT5 Bunn',  hk:'bt6', tip:'Tappevann bunn'},
   ];
   const dotX = tX - tW/2 - 3;
   const lblX = 10;
 
-  sensors.forEach(sen => {
+  sensors.forEach((sen,i) => {
     if (sen.val == null) return;  // skip sensors without data
     const col = '#0e7490';  // dark blue/teal for DHW sensors
     const dotCol = '#5a86a8';
     const valTxt = sen.val.toFixed(1) + '°';
+    s+=`<g id="dhwSen${i}" style="cursor:pointer">`;
+    s+=`<rect x="0" y="${sen.y-9}" width="${dotX+5}" height="18" fill="transparent" pointer-events="all"/>`;
     s+=`<line x1="${dotX}" y1="${sen.y}" x2="${lblX+26}" y2="${sen.y}"
          stroke="${dotCol}" stroke-width="1" stroke-dasharray="3,2.5" opacity=".5"/>`;
     s+=`<circle cx="${dotX}" cy="${sen.y}" r="3.5" fill="${dotCol}" stroke="#07101e" stroke-width="1"/>`;
     s+=`<circle cx="${dotX}" cy="${sen.y}" r="1.5" fill="#fff" fill-opacity=".3"/>`;
     s+=`<text x="${lblX+24}" y="${sen.y+3.5}" text-anchor="end"
          font-size="10" font-family="DM Mono,monospace" fill="${col}">${valTxt}</text>`;
+    s+=`</g>`;
   });
 
   // ── Label above tank ──
@@ -1441,6 +1458,11 @@ function buildDHW(nibe) {
        fill="#6493b8" font-weight="500">${dt != null ? dt.toFixed(1) : '–'}<tspan font-size="10" fill="#2a6a8a"> K</tspan></text>`;
 
   document.getElementById('svgDHW').innerHTML = s;
+  sensors.forEach((sen,i) => {
+    if (sen.val == null) return;
+    const g = document.getElementById('dhwSen'+i);
+    if (g) btt(g, sen.tip, sen.hk, '°C');
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -1493,6 +1515,23 @@ function buildVPInternal(nibe) {
 
   // Elpatron (internal addition)
   el('vpiElp').textContent = '0,00 kW';
+
+  // Trend-tooltips på kjølekretsverdiene
+  btt(el('vpiBT2'),   'Turtemperatur BT2',         'supply', '°C');
+  btt(el('vpiBT3'),   'Returtemperatur BT3',       'ret',    '°C');
+  btt(el('vpiBT7'),   'Tappevann topp BT7',        'bt7',    '°C');
+  btt(el('vpiBT11'),  'Brine ut BT11',             'brineOt','°C');
+  btt(el('vpiBT10'),  'Brine inn BT10',            'brineIn','°C');
+  btt(el('vpiGP1'),   'Varmebærerpumpe GP1',       'hpPct',  '%');
+  btt(el('vpiGP2'),   'Brinepumpe GP2',            'srcPct', '%');
+  btt(el('vpiFlow'),  'Gjennomstrømning',          'flow',   'l/m');
+  btt(el('vpiBT6'),   'Varmtvann BT6',             'bt6',    '°C');
+  btt(el('vpiBT12'),  'Turtemp. kondensator BT12', 'bt12',   '°C');
+  btt(el('vpiBT15'),  'Væskeledning BT15',         'bt15',   '°C');
+  btt(el('vpiBT14'),  'Varmgass BT14',             'disch',  '°C');
+  btt(el('vpiBT17'),  'Sugegass BT17',             'bt17',   '°C');
+  btt(el('vpiHz'),    'Kompressor Hz',             'hz',     'Hz');
+  btt(el('vpiBrineDT'),'Brine ΔT',                 'brineDT','°C');
 }
 
 // ═══════════════════════════════════════════
