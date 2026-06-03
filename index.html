@@ -513,7 +513,8 @@ const N = {
   heatU  : 'meter_power_NIBE.i2291_used_heat_current_hour',
   hwP    : 'meter_power_NIBE.i2285_prod_water_current_hour',
   bt6    : 'measure_temperature_NIBE.i9_hot_water',
-  outAvg : 'measure_temperature_NIBE.i37_outside_avg',
+  outdoor: 'measure_temperature_NIBE.i1_outside',       // live BT1 (register 1)
+  outAvg : 'measure_temperature_NIBE.i37_outside_avg',  // midlet BT1 (register 37, tregere)
   hwU    : 'meter_power_NIBE.i2293_used_water_current_hour',
   hpPct  : 'measure_percentage_NIBE.i1102_heating_pump',
   srcPct : 'measure_percentage_NIBE.i1104_source_pump',
@@ -1178,7 +1179,7 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mPwr'),     'Strømtrekk',        'pwr',    'W');
   btt(document.getElementById('mGm'),      'Gradminutter',      'gm',     'GM');
   btt(document.getElementById('mBt7'),     'Tappevann BT7',     'bt7',    '°C');
-  btt(document.getElementById('mOutAvg'),  'Utetemperatur snitt','outAvg','°C');
+  btt(document.getElementById('mOutAvg'),  'Utetemperatur',      'outAvg','°C');
   btt(document.getElementById('mCompStarts'),'Kompressorstarter', 'compStarts','');
   btt(document.getElementById('mCompHours'), 'Driftstid',         'compHours','t');
   btt(document.getElementById('mDhwSnitt'), 'Tappevann snitt',    'dhwSnitt','°C');
@@ -1650,7 +1651,7 @@ async function doFetch() {
       heatP  : gvN(NIBE_DEV, N.heatP),
       heatU  : gvN(NIBE_DEV, N.heatU),
       hwP    : gvN(NIBE_DEV, N.hwP),
-      outAvg : gvN(NIBE_DEV, N.outAvg),
+      outAvg : gvN(NIBE_DEV, N.outdoor),  // live BT1 – i1_outside (ikke midlet i37)
       hwU    : gvN(NIBE_DEV, N.hwU),
       hpPct  : gvN(NIBE_DEV, N.hpPct),
       srcPct : gvN(NIBE_DEV, N.srcPct),
@@ -1704,7 +1705,7 @@ lodCfg(); lodH();
 render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
-   supply:55,ret:29,brineIn:8.2,brineOt:2.1,
+   supply:55,ret:29,brineIn:8.2,brineOt:2.1,outAvg:-3.5,
    bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160,bp8:6.8,bp9:23.5},
   false
 );
