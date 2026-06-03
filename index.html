@@ -363,6 +363,7 @@ body{font-family:var(--f);color:var(--t1);
 
       </div>
     </div>
+    <div id="scopChart" style="margin-top:14px;padding:0 2px"></div>
   </div>
   <!-- Tappevannstank illustrasjon -->
   <div class="panel" style="margin-top:.7rem">
@@ -1597,6 +1598,102 @@ function setStatus(txt,type){
   e.textContent=txt; e.className='hdr-s'+(type?' '+type:'');
 }
 
+// ── SCOP historikk-graf: 7 dager fra Homey Insights API ──
+let scopChartPts = null;
+
+async function fetchSCOPLog() {
+  const hid=document.getElementById('hid').value.trim();
+  const key=document.getElementById('hkey').value.trim();
+  if(!hid||!key)return;
+  const base=hid.includes('.')?`https://${hid}`:`https://${hid}.connect.athom.com`;
+  const uri=encodeURIComponent('homey:manager:logic');
+  try{
+    const r=await fetch(`${base}/api/manager/insights/log/${uri}/SCOP?resolution=last7Days`,
+                        {headers:{'Authorization':'Bearer '+key}});
+    if(!r.ok)return;
+    const d=await r.json();
+    let pts;
+    if(Array.isArray(d)){
+      pts=d.filter(p=>p.v!=null).map(p=>({t:new Date(p.t).getTime(),v:Number(p.v)}));
+    } else if(d&&d.start!=null&&Array.isArray(d.values)){
+      const t0=new Date(d.start).getTime(),step=(d.step||3600)*1000;
+      pts=d.values.map((v,i)=>({t:t0+i*step,v})).filter(p=>p.v!=null);
+    } else return;
+    if(pts.length<2)return;
+    scopChartPts=pts;
+    buildSCOPChart(pts);
+  }catch(e){}
+}
+
+function buildSCOPChart(pts){
+  const el=document.getElementById('scopChart');
+  if(!el||!pts||pts.length<2)return;
+  const W=360,H=154,PL=44,PR=8,PT=18,PB=22,pW=W-PL-PR,pH=H-PT-PB;
+  // Downsample if too dense
+  let cp=pts;
+  if(pts.length>300){const n=Math.ceil(pts.length/300);cp=pts.filter((_,i)=>i%n===0);if(cp[cp.length-1]!==pts[pts.length-1])cp.push(pts[pts.length-1]);}
+  const tMin=cp[0].t,tMax=cp[cp.length-1].t;
+  const vs=cp.map(p=>p.v),vRaw0=Math.min(...vs),vRaw1=Math.max(...vs);
+  // Nice y-axis ticks
+  function niceTicks(lo,hi){
+    const range=Math.max(hi-lo,0.05);
+    const rough=range/3,exp=Math.floor(Math.log10(rough));
+    const f=rough/Math.pow(10,exp);
+    const nice=f<1.5?1:f<2.5?2:f<3.5?3:f<7.5?5:10;
+    const step=nice*Math.pow(10,exp);
+    const start=Math.ceil(lo/step-1e-9)*step;
+    const tks=[];
+    for(let i=-1;i<=8;i++){
+      const tv=Math.round((start+i*step)*1e6)/1e6;
+      if(tv>=lo-step*.6&&tv<=hi+step*.6)tks.push(tv);
+    }
+    return tks;
+  }
+  const tks=niceTicks(vRaw0,vRaw1);
+  const v0=tks[0]-0.003,v1=tks[tks.length-1]+0.003;
+  const px=t=>PL+(t-tMin)/(tMax-tMin)*pW;
+  const py=v=>PT+(1-(v-v0)/(v1-v0))*pH;
+  // SVG paths
+  const linePts=cp.map(p=>`${px(p.t).toFixed(1)},${py(p.v).toFixed(1)}`).join(' ');
+  const areaBot=(PT+pH).toFixed(1);
+  const areaPts=linePts+` ${px(tMax).toFixed(1)},${areaBot} ${px(tMin).toFixed(1)},${areaBot}`;
+  // Midnight x-axis labels (local time)
+  const xLbls=[];
+  let mid=new Date(tMin);mid.setHours(0,0,0,0);mid=new Date(mid.getTime()+86400000);
+  while(mid.getTime()<=tMax+3600000){
+    if(px(mid.getTime())>=PL+8&&px(mid.getTime())<=W-PR-8)
+      xLbls.push({t:mid.getTime(),d:mid.getDate()});
+    mid=new Date(mid.getTime()+86400000);
+  }
+  // Build SVG
+  let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">`;
+  s+=`<defs><linearGradient id="scg" x1="0" y1="0" x2="0" y2="1">`;
+  s+=`<stop offset="0%" stop-color="#a855f7" stop-opacity=".32"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0"/></linearGradient></defs>`;
+  // Title
+  s+=`<text x="${PL}" y="11" font-size="8.5" fill="rgba(255,255,255,.35)" font-family="DM Mono,monospace" letter-spacing=".06em">SCOP SIDEN OPPSTART · 7 DAGER</text>`;
+  // Axis borders
+  s+=`<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT+pH}" stroke="rgba(255,255,255,.12)" stroke-width=".5"/>`;
+  s+=`<line x1="${PL}" y1="${PT+pH}" x2="${W-PR}" y2="${PT+pH}" stroke="rgba(255,255,255,.12)" stroke-width=".5"/>`;
+  // Grid + Y labels
+  tks.forEach(v=>{
+    const y=py(v).toFixed(1);
+    s+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="rgba(255,255,255,.07)" stroke-width="1" stroke-dasharray="3,3"/>`;
+    s+=`<text x="${PL-4}" y="${(parseFloat(y)+3.5).toFixed(1)}" text-anchor="end" font-size="8.5" fill="rgba(255,255,255,.42)" font-family="DM Mono,monospace">${v.toFixed(2)}</text>`;
+  });
+  // X labels
+  xLbls.forEach(({t,d})=>s+=`<text x="${px(t).toFixed(1)}" y="${H-5}" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,.42)" font-family="DM Mono,monospace">${d}</text>`);
+  // Area + line
+  s+=`<polygon points="${areaPts}" fill="url(#scg)"/>`;
+  s+=`<polyline points="${linePts}" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // Current value dot + label
+  const lp=cp[cp.length-1];
+  const lx=px(lp.t).toFixed(1),ly=py(lp.v).toFixed(1);
+  s+=`<circle cx="${lx}" cy="${ly}" r="2.5" fill="#a855f7" stroke="#07101e" stroke-width="1.5"/>`;
+  s+=`<text x="${parseFloat(lx)-4}" y="${parseFloat(ly)-5}" text-anchor="end" font-size="8.5" fill="#c084fc" font-family="DM Mono,monospace">${lp.v.toFixed(2)}</text>`;
+  s+='</svg>';
+  el.innerHTML=s;
+}
+
 async function doFetch() {
   savCfg();
   const hid=document.getElementById('hid').value.trim();
@@ -1712,6 +1809,8 @@ render(
 setStatus('Demo · Fyll inn tilkobling');
 startAutoRefresh();
 setTimeout(doFetch,400);
+setTimeout(fetchSCOPLog,800);      // første SCOP-graf-henting
+setInterval(fetchSCOPLog,300000);  // oppdater hvert 5. min
 </script>
 </body>
 </html>
