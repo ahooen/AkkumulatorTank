@@ -423,6 +423,27 @@ body{font-family:var(--f);color:var(--t1);
       <span class="vpi-l vpi-sm" id="vpiBrineDT" style="left:82%;top:68%">–</span>
     </div>
   </div>
+  <!-- Trykk → metningstemperatur (BP8/BP9) -->
+  <!-- SKJULT: BP8 (reg 2308) og BP9 (reg 2132) er ikke eksponert av NIBE-appen
+       eller MyUplink. Kun tilgjengelig via direkte Modbus TCP (utilgjengelig fra
+       HomeyScript-sandbox). All konvertering + fetch ligger klar i koden.
+       Fjern style="display:none" når trykkene blir tilgjengelige. -->
+  <div class="panel" style="margin-top:.7rem;display:none">
+    <div class="ph">
+      <div class="phd" style="background:#a855f7"></div>
+      <div class="pt">Kjølemedium · R454B trykk</div>
+    </div>
+    <div class="mg">
+      <div class="mc" id="mBP8">
+        <div class="ml">Fordampning · BP8</div>
+        <div class="mv" id="vEvapT">–<span class="mu">°C</span></div>
+        <div class="ml" id="vBP8" style="margin-top:2px;opacity:.7">– bar</div></div>
+      <div class="mc" id="mBP9">
+        <div class="ml">Kondensering · BP9</div>
+        <div class="mv" id="vCondT">–<span class="mu">°C</span></div>
+        <div class="ml" id="vBP9" style="margin-top:2px;opacity:.7">– bar</div></div>
+    </div>
+  </div>
   <div class="cfg">
     <button class="cft" id="cft"
       onclick="tCfg()" ontouchend="event.preventDefault();tCfg()">
@@ -502,15 +523,21 @@ const N = {
   bt17   : 'measure_temperature_NIBE.i16_suction_gas',
   compStarts: 'measure_count_NIBE.i1083_compressor_starts',
   compHours : 'measure_hour_NIBE.i1087_compressor_usage_total',
+  bp8    : 'measure_pressure_NIBE.i2308_low_pressure',   // BP8 lavtrykk (verifiser navn)
+  bp9    : 'measure_pressure_NIBE.i2132_high_pressure',  // BP9 høytrykk (verifiser navn)
 };
+// Trykk fra Modbus regnes som ABSOLUTT bar. Sett true hvis NIBE rapporterer overtrykk (barg).
+const BP_IS_GAUGE = false;
 const NIBE_DEV  = 'Nibe S-Series';
 const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
 const SCOP24_DEV  = 'Nibe SCOP 24t';  // rolling 24h SCOP
 const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) via MyUplink
 
 const REF = 25, KWH = 0.5815;
-const MAX_PTS = 48; // ~4h at 15s
-const LS_KEY  = 'vs5';
+const MAX_PTS = 144; // 12 t: 144 punkter × 5 min
+const HIST_EVERY = 20; // lagre historikk hvert 20. fetch (20×15s = 5 min)
+let _histTick = 0;
+const LS_KEY  = 'vs6';
 
 // ═══════════════════════════════════════════
 // HISTORY
@@ -520,6 +547,8 @@ const H = {
   snitt:[], energi:[], dtb:[], flow:[],
   scop:[], scopDC:[], scop24:[], brineIn:[], brineOt:[],
   hz:[], pwr:[], gm:[], pTerm:[],
+  bt7:[], outAvg:[], compStarts:[], compHours:[],
+  dhwSnitt:[], dhwKwh:[], dhwDusj:[], dhwDt:[],
 };
 
 const r1 = v => Math.round(v * 10) / 10;
@@ -1147,14 +1176,20 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mPwr'),     'Strømtrekk',        'pwr',    'W');
   btt(document.getElementById('mGm'),      'Gradminutter',      'gm',     'GM');
   btt(document.getElementById('mBt7'),     'Tappevann BT7',     'bt7',    '°C');
-  btt(document.getElementById('mOutAvg'),  'Utetemperatur snitt','gm',    '°C');
+  btt(document.getElementById('mOutAvg'),  'Utetemperatur snitt','outAvg','°C');
+  btt(document.getElementById('mCompStarts'),'Kompressorstarter', 'compStarts','');
+  btt(document.getElementById('mCompHours'), 'Driftstid',         'compHours','t');
+  btt(document.getElementById('mDhwSnitt'), 'Tappevann snitt',    'dhwSnitt','°C');
+  btt(document.getElementById('mDhwKwh'),   'Tappevann energi',   'dhwKwh', 'kWh');
+  btt(document.getElementById('mDhwDusj'),  'Forventet dusjtid',  'dhwDusj','min');
+  btt(document.getElementById('mDhwDT'),    'Tappevann ΔT',       'dhwDt',  'K');
 }
 
 // ═══════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════
 function render(temps, nibe, isLive) {
-  if (isLive) {
+  if (isLive && (_histTick++ % HIST_EVERY) === 0) {
     ph('t100',temps[0]); ph('t75',temps[1]); ph('t50',temps[2]);
     ph('t25', temps[3]); ph('t0', temps[4]);
     const vld=temps.filter(t=>t!=null);
@@ -1171,6 +1206,22 @@ function render(temps, nibe, isLive) {
     ph('hz',      nibe.hz);
     ph('pwr',     nibe.pwr);
     ph('gm',      nibe.gm);
+    ph('bt7',     nibe.bt7);
+    ph('outAvg',  nibe.outAvg);
+    ph('compStarts', nibe.compStarts);
+    ph('compHours',  nibe.compHours);
+    // Tappevann avledede verdier
+    const dhwV=[nibe.bt7,nibe.bt6,nibe.bt5].filter(t=>t!=null);
+    if(dhwV.length){
+      const dsn=r1(dhwV.reduce((a,b)=>a+b,0)/dhwV.length);
+      const KWH_K=180*4.186/3600;
+      const kwhv=dsn>35?KWH_K*(dsn-35):0;
+      const DUSJ=4*4.186*30/3600;
+      ph('dhwSnitt',dsn);
+      ph('dhwKwh', r1(kwhv));
+      ph('dhwDusj', kwhv>0?Math.round(kwhv/DUSJ):0);
+    }
+    if(nibe.bt7!=null&&nibe.bt6!=null) ph('dhwDt', r1(nibe.bt7-nibe.bt6));
     if(nibe.pwr!=null&&nibe.pwr>200){
       const scp=nibe.scopDC??nibe.scop24;
       if(scp!=null) ph('pTerm', r1(nibe.pwr/1000*scp));
@@ -1180,6 +1231,7 @@ function render(temps, nibe, isLive) {
   renderPanels(temps, nibe);
   buildDHW(nibe);
   buildVPInternal(nibe);
+  buildBP(nibe);
 }
 
 // ═══════════════════════════════════════════
@@ -1192,7 +1244,7 @@ function buildDHW(nibe) {
 
   const temps = [bt7, bt6, bt5].filter(v => v != null);
   const snitt = temps.length ? r1(temps.reduce((a,b)=>a+b,0)/temps.length) : null;
-  const dt    = (bt7 != null && bt5 != null) ? r1(bt7 - bt5) : null;
+  const dt    = (bt7 != null && bt6 != null) ? r1(bt7 - bt6) : null;
 
   // Energi over 35°C (brukbar til dusj)
   // 180L, 4.186 kJ/(kg·K), /3600 = kWh
@@ -1326,8 +1378,8 @@ function buildDHW(nibe) {
   // ── Sensor dots + labels on left ──
   const sensors = [
     {pct:100, y:tY+tH*0.10,  val:bt7,   name:'BT7 Topp'},
-    {pct:50,  y:tY+tH*0.50,  val:bt6,   name:'BT6 Oppv.'},
-    {pct:0,   y:tY+tH*0.88,  val:bt5,   name:'BT5 Bunn'},
+    {pct:50,  y:tY+tH*0.50,  val:bt5,   name:'BT6 Oppv.'},
+    {pct:0,   y:tY+tH*0.88,  val:bt6,   name:'BT5 Bunn'},
   ];
   const dotX = tX - tW/2 - 3;
   const lblX = 10;
@@ -1442,6 +1494,52 @@ function buildVPInternal(nibe) {
   // Elpatron (internal addition)
   el('vpiElp').textContent = '0,00 kW';
 }
+
+// ═══════════════════════════════════════════
+// R454B trykk → metningstemperatur (skjult oppslag)
+// Bobletemp (væske) og glid; duggtemp = boble + glid.
+// Anchors fra R454B metningskurve, utvidet til høytrykk.
+// ═══════════════════════════════════════════
+const R454B_BUBBLE = [
+  [0.5,-65.2],[0.8,-57.0],[1.013,-51.7],[1.5,-44.3],[2.0,-38.4],[2.5,-33.5],
+  [3.0,-29.2],[4.0,-22.0],[5.0,-15.8],[6.0,-10.5],[7.0,-5.8],[8.0,-1.5],
+  [9.0,2.4],[10.0,6.0],[11.0,9.2],[12.0,12.2],[13.0,15.0],[14.0,17.6],
+  [15.0,20.0],[16.0,22.2],[17.0,24.3],[18.0,26.3],[19.0,28.2],[20.0,30.0],
+  [21,32.4],[22,34.7],[23,36.9],[24,39.0],[25,41.0],[26,42.9],[27,44.8],
+  [28,46.6],[29,48.3],[30,50.0],[31,51.6],[32,53.2],[33,54.7],[34,56.2],
+  [35,57.6],[36,59.0],[37,60.3],[38,61.6],[39,62.9],[40,64.1]
+];
+const R454B_GLIDE = [
+  [0.5,2.3],[1.0,2.1],[2.0,1.9],[4.0,1.7],[6.0,1.5],[8.0,1.4],[10.0,1.3],
+  [12.0,1.2],[15.0,1.1],[18.0,1.0],[20.0,0.95],[25,0.8],[30,0.7],[35,0.6],[40,0.5]
+];
+function lerpPT(tbl, x) {
+  if (x <= tbl[0][0]) return tbl[0][1];
+  if (x >= tbl[tbl.length-1][0]) return tbl[tbl.length-1][1];
+  for (let i = 0; i < tbl.length-1; i++) {
+    if (x >= tbl[i][0] && x <= tbl[i+1][0]) {
+      const t = (x - tbl[i][0]) / (tbl[i+1][0] - tbl[i][0]);
+      return tbl[i][1] + t * (tbl[i+1][1] - tbl[i][1]);
+    }
+  }
+  return tbl[tbl.length-1][1];
+}
+function pToAbs(p) { return BP_IS_GAUGE ? p + 1.01325 : p; }
+function bubbleTempR454B(p_bar) { return lerpPT(R454B_BUBBLE, pToAbs(p_bar)); }
+function dewTempR454B(p_bar)    { return bubbleTempR454B(p_bar) + lerpPT(R454B_GLIDE, pToAbs(p_bar)); }
+
+function buildBP(nibe) {
+  const el = id => document.getElementById(id);
+  const bp8 = nibe.bp8, bp9 = nibe.bp9;
+  // Fordampning: duggtemp ved lavtrykk. Kondensering: bobletemp ved høytrykk.
+  const evapT = bp8 != null && bp8 > 0.2 ? dewTempR454B(bp8)    : null;
+  const condT = bp9 != null && bp9 > 0.2 ? bubbleTempR454B(bp9) : null;
+
+  el('vEvapT').innerHTML = evapT != null ? `${r1(evapT)}<span class="mu">°C</span>` : '–<span class="mu">°C</span>';
+  el('vCondT').innerHTML = condT != null ? `${r1(condT)}<span class="mu">°C</span>` : '–<span class="mu">°C</span>';
+  el('vBP8').textContent = bp8 != null ? `${r1(bp8)} bar` : '– bar';
+  el('vBP9').textContent = bp9 != null ? `${r1(bp9)} bar` : '– bar';
+}
 // FETCH FROM HOMEY
 // ═══════════════════════════════════════════
 const sv  = (k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};
@@ -1523,6 +1621,8 @@ async function doFetch() {
       bt12   : gvN(NIBE_DEV, N.bt12),
       bt15   : gvN(NIBE_DEV, N.bt15),
       bt17   : gvN(NIBE_DEV, N.bt17),
+      bp8    : gvN(NIBE_DEV, N.bp8),
+      bp9    : gvN(NIBE_DEV, N.bp9),
     };
 
     render(temps, nibe, true);
@@ -1566,7 +1666,7 @@ render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,brineIn:8.2,brineOt:2.1,
-   bt7:51,bt6:46,bt5:42,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
+   bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160,bp8:6.8,bp9:23.5},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
