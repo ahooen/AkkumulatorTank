@@ -570,7 +570,7 @@ function phR2(k, v) {
 }
 
 function savH() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(H)); } catch(_) {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify(H)); if(scopH7.length)localStorage.setItem('scopH7d',JSON.stringify(scopH7)); } catch(_) {}
 }
 function lodH() {
   try {
@@ -579,6 +579,7 @@ function lodH() {
       if (Array.isArray(d[k])) H[k] = d[k].slice(-MAX_PTS);
     });
   } catch(_) {}
+  try{const d7=localStorage.getItem('scopH7d');if(d7)scopH7=JSON.parse(d7).filter(p=>p&&p.t&&p.v!=null);}catch(_){}
 }
 
 // ═══════════════════════════════════════════
@@ -1242,6 +1243,11 @@ function render(temps, nibe, isLive) {
       const scp=nibe.scopDC??nibe.scop24;
       if(scp!=null) ph('pTerm', r1(nibe.pwr/1000*scp));
     }
+    if(nibe.scopDC!=null){
+      scopH7.push({t:Date.now(),v:nibe.scopDC});
+      if(scopH7.length>2016)scopH7.splice(0,scopH7.length-2016);
+      buildSCOPChart(scopH7);
+    }
   }
   buildSvg(temps, nibe);
   renderPanels(temps, nibe);
@@ -1598,36 +1604,13 @@ function setStatus(txt,type){
   e.textContent=txt; e.className='hdr-s'+(type?' '+type:'');
 }
 
-// ── SCOP historikk-graf: 7 dager fra Homey Insights API ──
-let scopChartPts = null;
-
-async function fetchSCOPLog() {
-  const hid=document.getElementById('hid').value.trim();
-  const key=document.getElementById('hkey').value.trim();
-  if(!hid||!key)return;
-  const base=hid.includes('.')?`https://${hid}`:`https://${hid}.connect.athom.com`;
-  const uri=encodeURIComponent('homey:manager:logic');
-  try{
-    const r=await fetch(`${base}/api/manager/insights/log/${uri}/SCOP?resolution=last7Days`,
-                        {headers:{'Authorization':'Bearer '+key}});
-    if(!r.ok)return;
-    const d=await r.json();
-    let pts;
-    if(Array.isArray(d)){
-      pts=d.filter(p=>p.v!=null).map(p=>({t:new Date(p.t).getTime(),v:Number(p.v)}));
-    } else if(d&&d.start!=null&&Array.isArray(d.values)){
-      const t0=new Date(d.start).getTime(),step=(d.step||3600)*1000;
-      pts=d.values.map((v,i)=>({t:t0+i*step,v})).filter(p=>p.v!=null);
-    } else return;
-    if(pts.length<2)return;
-    scopChartPts=pts;
-    buildSCOPChart(pts);
-  }catch(e){}
-}
+// ── SCOP historikk-graf: lokallagret 7 dager (5-min punkter) ──
+let scopH7 = [];
 
 function buildSCOPChart(pts){
   const el=document.getElementById('scopChart');
-  if(!el||!pts||pts.length<2)return;
+  if(!el)return;
+  if(!pts||pts.length<2){el.innerHTML='<p style="font-size:10px;color:rgba(255,255,255,.28);font-family:\'DM Mono\',monospace;text-align:center;padding:10px 0 2px">📈 Bygger SCOP-historikk – vises etter noen minutters drift</p>';return;}
   const W=360,H=154,PL=44,PR=8,PT=18,PB=22,pW=W-PL-PR,pH=H-PT-PB;
   // Downsample if too dense
   let cp=pts;
@@ -1670,7 +1653,9 @@ function buildSCOPChart(pts){
   s+=`<defs><linearGradient id="scg" x1="0" y1="0" x2="0" y2="1">`;
   s+=`<stop offset="0%" stop-color="#a855f7" stop-opacity=".32"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0"/></linearGradient></defs>`;
   // Title
-  s+=`<text x="${PL}" y="11" font-size="8.5" fill="rgba(255,255,255,.35)" font-family="DM Mono,monospace" letter-spacing=".06em">SCOP SIDEN OPPSTART · 7 DAGER</text>`;
+  const rangeMs=tMax-tMin;
+  const rangeStr=rangeMs>86400000*4?'7 DAGER':rangeMs>86400000?Math.round(rangeMs/86400000)+' DAGER':Math.round(rangeMs/3600000)+' TIMER';
+  s+=`<text x="${PL}" y="11" font-size="8.5" fill="rgba(255,255,255,.35)" font-family="DM Mono,monospace" letter-spacing=".06em">SCOP SIDEN OPPSTART · ${rangeStr}</text>`;
   // Axis borders
   s+=`<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT+pH}" stroke="rgba(255,255,255,.12)" stroke-width=".5"/>`;
   s+=`<line x1="${PL}" y1="${PT+pH}" x2="${W-PR}" y2="${PT+pH}" stroke="rgba(255,255,255,.12)" stroke-width=".5"/>`;
@@ -1798,7 +1783,7 @@ window.addEventListener('pagehide',()=>savH(),{passive:true});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{passive:true});
 
 // ── Startup ──
-lodCfg(); lodH();
+lodCfg(); lodH(); buildSCOPChart(scopH7);
 render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
@@ -1809,8 +1794,6 @@ render(
 setStatus('Demo · Fyll inn tilkobling');
 startAutoRefresh();
 setTimeout(doFetch,400);
-setTimeout(fetchSCOPLog,800);      // første SCOP-graf-henting
-setInterval(fetchSCOPLog,300000);  // oppdater hvert 5. min
 </script>
 </body>
 </html>
