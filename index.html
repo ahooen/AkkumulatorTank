@@ -504,6 +504,7 @@ const N = {
   hz     : 'measure_frequency_NIBE.i1046_compressor',
   pwr    : 'measure_power_NIBE.i2166_energy_usage',
   supply : 'measure_temperature_NIBE.i5_heating_supply',
+  calcSupply : 'measure_temperature_NIBE.i1017_calculated_supply', // beregnet turledning klimasystem 1
   ret    : 'measure_temperature_NIBE.i7_heating_return',
   brineIn: 'measure_temperature_NIBE.i10_source_in',
   brineOt: 'measure_temperature_NIBE.i11_source_out',
@@ -814,7 +815,9 @@ function buildSvg(temps, nibe) {
   const hTxt=temps[0]!=null?`${temps[0].toFixed(1)} °C`:'–';
   const cTxt=temps[4]!=null?`${temps[4].toFixed(1)} °C`:'–';
   s+=`<text x="${pmid}" y="${hotY-12}" text-anchor="middle" font-size="11" font-family="DM Mono,monospace" fill="#f97316" font-weight="500">${hTxt}</text>`;
-  s+=`<text x="${pmid}" y="${hotY-24}" text-anchor="middle" font-size="8" font-family="Syne,sans-serif" fill="#9a4a20" letter-spacing="1">VARM TUR</text>`;
+  s+=`<text x="${pmid-22}" y="${hotY-24}" text-anchor="middle" font-size="8" font-family="Syne,sans-serif" fill="#9a4a20" letter-spacing="1">VARM TUR</text>`;
+  const calcTxt = nibe.calcSupply!=null ? `(${nibe.calcSupply.toFixed(1)}°)` : '';
+  if(calcTxt) s+=`<text x="${pmid+25}" y="${hotY-24}" text-anchor="middle" font-size="8" font-family="DM Mono,monospace" fill="#9a4a20">${calcTxt}</text>`;
   s+=`<text x="${pmid}" y="${coldY+18}" text-anchor="middle" font-size="11" font-family="DM Mono,monospace" fill="#38bdf8" font-weight="500">${cTxt}</text>`;
   s+=`<text x="${pmid}" y="${coldY+29}" text-anchor="middle" font-size="8" font-family="Syne,sans-serif" fill="#1a608a" letter-spacing="1">KALD RETUR</text>`;
 
@@ -1722,6 +1725,7 @@ async function doFetch() {
       hz     : gvN(NIBE_DEV, N.hz),
       pwr    : gvN(NIBE_DEV, N.pwr),
       supply : gvN(NIBE_DEV, N.supply),
+      calcSupply : gvN(NIBE_DEV, N.calcSupply),
       ret    : gvN(NIBE_DEV, N.ret),
       brineIn: gvN(NIBE_DEV, N.brineIn),
       brineOt: gvN(NIBE_DEV, N.brineOt),
@@ -1787,7 +1791,7 @@ lodCfg(); lodH(); buildSCOPChart(scopH7);
 render(
   [58.4,49.2,40.1,33.7,29.3],
   {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
-   supply:55,ret:29,brineIn:8.2,brineOt:2.1,outAvg:-3.5,
+   supply:55,ret:29,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,
    bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160,bp8:6.8,bp9:23.5},
   false
 );
