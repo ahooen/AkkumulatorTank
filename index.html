@@ -1262,7 +1262,7 @@ function render(temps, nibe, isLive) {
       const kwhv=dsn>35?KWH_K*(dsn-35):0;
       ph('dhwSnitt',dsn);
       ph('dhwKwh', r1(kwhv));
-      ph('dhwDusj', showerMinutes(nibe.bt7,nibe.bt6,nibe.bt5));
+      ph('dhwDusj', showerMinutes({bt7:nibe.bt7, bt6:nibe.bt6, bt5:nibe.bt5}));
     }
     if(nibe.bt7!=null&&nibe.bt6!=null) ph('dhwDt', r1(nibe.bt7-nibe.bt6));
     if(nibe.pwr!=null&&nibe.pwr>200){
@@ -1281,16 +1281,30 @@ function render(temps, nibe, isLive) {
   buildVPInternal(nibe);
 }
 
-// Dusjtid – Nibes egen blandingsformel:
-// brukbar_L = 180 L × (T − 10°C) / (40°C − 10°C); minutter = brukbar_L / 10 L/min.
-// BT6 (kontrollsensoren) er primær; snitt av gyldige sensorer som fallback.
-function showerMinutes(bt7, bt6, bt5) {
-  const valid = [bt7, bt6, bt5].filter(t => t != null && isFinite(t));
-  if (!valid.length) return null;
-  const T = (bt6 != null && isFinite(bt6)) ? bt6
-          : valid.reduce((a,b) => a+b, 0) / valid.length;
-  if (T <= 40) return 0;
-  return Math.round(180 * (T - 10) / 30 / 10);
+/* Dusjtid for NIBE S1256-8 (178 l bereder) — sjiktet tankmodell.
+   Forankret i EN16147: full tank Middels (~52 °C) → 250 l V40 → 21 min @ 12 l/min.
+   bt7 = topp, bt6 = midt (NIBE-givere), bt5 = ekstra giver.
+   EXTRA_POS: 'bottom' hvis bt5 sitter i bunnen, 'mid' hvis mellom BT6 og BT7. */
+const TANK_L = 178, T_COLD = 10, T_SHOWER = 40, FLOW_LPM = 12, EXTRA_POS = 'bottom';
+
+function showerMinutes({ bt7, bt5, bt6 }) {
+  const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+  bt7 = num(bt7); bt5 = num(bt5); bt6 = num(bt6);
+  if (bt7 === null && bt6 === null) return null;
+  if (bt7 === null) bt7 = bt6;
+  if (bt6 === null) bt6 = bt7;
+
+  const tMid = (EXTRA_POS === 'mid' && bt5 !== null) ? bt5 : (bt7 + bt6) / 2;
+  const tBot = (EXTRA_POS === 'bottom' && bt5 !== null)
+             ? bt5
+             : Math.min(bt6, Math.max(T_COLD, bt6 - (tMid - bt6)));
+
+  let liters40 = 0;
+  for (const T of [bt7, tMid, bt6, tBot])
+    if (T >= T_SHOWER)
+      liters40 += (TANK_L / 4) * (T - T_COLD) / (T_SHOWER - T_COLD);
+
+  return Math.round(liters40 / FLOW_LPM);
 }
 
 // ═══════════════════════════════════════════
@@ -1311,8 +1325,8 @@ function buildDHW(nibe) {
   const KWH_K = 180 * 4.186 / 3600; // 0.2093 kWh/K
   const kwh   = snitt != null && snitt > 35 ? r1(KWH_K * (snitt - 35)) : 0;
 
-  // Dusjtid: Nibes blandingsformel (se showerMinutes over)
-  const dusjMin = showerMinutes(bt7, bt6, bt5) ?? 0;
+  // Dusjtid: sjiktet tankmodell (se showerMinutes over)
+  const dusjMin = showerMinutes({bt7, bt6, bt5}) ?? 0;
 
   // ── Oppdater fliser ──
   const el = id => document.getElementById(id);
