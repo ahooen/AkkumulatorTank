@@ -259,6 +259,11 @@ body{font-family:var(--f);color:var(--t1);
   color:var(--t1);font:400 12px/1 var(--m);padding:8px 10px;
   outline:none;width:100%;font-size:16px;transition:border-color .2s}
 .cfi:focus{border-color:rgba(45,124,246,.5)}
+.cfc{display:block;width:100%;margin-top:.85rem;padding:.7rem;
+  background:var(--acc);border:none;border-radius:9px;cursor:pointer;
+  font:700 13px/1 var(--f);color:#fff;letter-spacing:.03em;
+  -webkit-tap-highlight-color:transparent}
+.cfc:active{opacity:.75}
 .cfh{font:400 11px/1.6 var(--f);color:var(--t3);
   margin-top:.7rem;padding-top:.7rem;border-top:1px solid var(--b1)}
 .err{font:400 11px/1.6 var(--m);color:#f87171;
@@ -455,6 +460,7 @@ body{font-family:var(--f);color:var(--t1);
            style="color:#60a5fa;text-decoration:none">my.homey.app</a>
         → Innstillinger → API Keys → Opprett ny (kun <em>Devices: Read</em>).
       </div>
+      <button class="cfc" id="cfc" type="button" onclick="doFetch()">Koble til</button>
     </div>
     <div class="err" id="err"></div>
   </div>
@@ -513,13 +519,8 @@ const N = {
   bt7    : 'measure_temperature_NIBE.i8_warmwater_top',
   gm     : 'measure_degree_minutes_NIBE.h11_degree_minutes',
   flow   : 'measure_water_NIBE.i40_flow_sensor',
-  heatP  : 'meter_power_NIBE.i2283_prod_heat_current_hour',
-  heatU  : 'meter_power_NIBE.i2291_used_heat_current_hour',
-  hwP    : 'meter_power_NIBE.i2285_prod_water_current_hour',
   bt6    : 'measure_temperature_NIBE.i9_hot_water',
-  outdoor: 'measure_temperature_NIBE.i1_outside',       // live BT1 (register 1)
-  outAvg : 'measure_temperature_NIBE.i37_outside_avg',  // midlet BT1 (register 37, tregere)
-  hwU    : 'meter_power_NIBE.i2293_used_water_current_hour',
+  outdoor: 'measure_temperature_NIBE.i1_outside',  // live BT1 (reg 1; reg 37 = midlet, ubrukt)
   hpPct  : 'measure_percentage_NIBE.i1102_heating_pump',
   srcPct : 'measure_percentage_NIBE.i1104_source_pump',
   disch  : 'measure_temperature_NIBE.i13_discharge',
@@ -528,8 +529,6 @@ const N = {
   bt17   : 'measure_temperature_NIBE.i16_suction_gas',
   compStarts: 'measure_count_NIBE.i1083_compressor_starts',
   compHours : 'measure_hour_NIBE.i1087_compressor_usage_total',
-  bp8    : 'measure_pressure_NIBE.i2308_low_pressure',   // BP8 lavtrykk (verifiser navn)
-  bp9    : 'measure_pressure_NIBE.i2132_high_pressure',  // BP9 høytrykk (verifiser navn)
 };
 const NIBE_DEV  = 'Nibe S-Series';
 const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
@@ -548,7 +547,7 @@ const LS_KEY  = 'vs6';
 const H = {
   t100:[], t75:[], t50:[], t25:[], t0:[],
   snitt:[], energi:[], dtb:[], flow:[],
-  scop:[], scopDC:[], scop24:[], brineIn:[], brineOt:[],
+  scopDC:[], scop24:[], brineIn:[], brineOt:[],
   hz:[], pwr:[], gm:[], pTerm:[],
   bt7:[], outAvg:[], compStarts:[], compHours:[],
   dhwSnitt:[], dhwKwh:[], dhwDusj:[], dhwDt:[],
@@ -1697,7 +1696,6 @@ async function doFetch() {
     document.getElementById('cft').classList.add('open');
     return;
   }
-  setSpin(true);
   const base=hid.includes('.')?`https://${hid}`:`https://${hid}.connect.athom.com`;
   try {
     const res=await fetch(`${base}/api/manager/devices/device`,
@@ -1736,11 +1734,7 @@ async function doFetch() {
       bt5    : gvN(BT5_DEV, 'devicecapabilities_number.number1'),  // BT5 from DC
       gm     : gvN(NIBE_DEV, N.gm),
       flow   : gvN(NIBE_DEV, N.flow),
-      heatP  : gvN(NIBE_DEV, N.heatP),
-      heatU  : gvN(NIBE_DEV, N.heatU),
-      hwP    : gvN(NIBE_DEV, N.hwP),
       outAvg : gvN(NIBE_DEV, N.outdoor),  // live BT1 – i1_outside (ikke midlet i37)
-      hwU    : gvN(NIBE_DEV, N.hwU),
       hpPct  : gvN(NIBE_DEV, N.hpPct),
       srcPct : gvN(NIBE_DEV, N.srcPct),
       compStarts: gvN(NIBE_DEV, N.compStarts),
@@ -1749,8 +1743,6 @@ async function doFetch() {
       bt12   : gvN(NIBE_DEV, N.bt12),
       bt15   : gvN(NIBE_DEV, N.bt15),
       bt17   : gvN(NIBE_DEV, N.bt17),
-      bp8    : gvN(NIBE_DEV, N.bp8),
-      bp9    : gvN(NIBE_DEV, N.bp9),
     };
 
     render(temps, nibe, true);
@@ -1761,15 +1753,20 @@ async function doFetch() {
     const pts=H.t100.length;
     setStatus('Live · '+new Date().toLocaleTimeString('nb-NO',
       {hour:'2-digit',minute:'2-digit'})+''  ,'live');
+    // Lukk tilkoblingsskuffen automatisk ved vellykket tilkobling
+    document.getElementById('cfb').classList.remove('open');
+    document.getElementById('cft').classList.remove('open');
 
   } catch(e) {
     setStatus('Tilkoblingsfeil','err');
     errEl.style.display='block';
-    errEl.innerHTML=`<strong>Feil:</strong> ${e.message}`;
+    errEl.textContent='';
+    const _b=document.createElement('strong');_b.textContent='Feil: ';
+    errEl.appendChild(_b);errEl.appendChild(document.createTextNode(e.message));
     _failCount=Math.min(_failCount+1,3);
     const backoff=30000*Math.pow(2,_failCount-1);
     setTimeout(()=>{if(!document.hidden)doFetch();},backoff);
-  } finally { setSpin(false); }
+  }
 }
 
 function tCfg(){
@@ -1788,13 +1785,20 @@ document.addEventListener('visibilitychange',()=>{
 window.addEventListener('pagehide',()=>savH(),{passive:true});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{passive:true});
 
+// Enter i tilkoblingsfeltene utløser tilkobling
+['hid','hkey'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.setAttribute('enterkeyhint','go');
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();el.blur();doFetch();}});
+});
+
 // ── Startup ──
 lodCfg(); lodH(); buildSCOPChart(scopH7);
 render(
   [58.4,49.2,40.1,33.7,29.3],
-  {scop:3.84,scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
+  {scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,
-   bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160,bp8:6.8,bp9:23.5},
+   bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
