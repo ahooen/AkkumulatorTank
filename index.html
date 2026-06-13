@@ -2,6 +2,9 @@
 <html lang="nb">
 <head>
 <meta charset="UTF-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -461,6 +464,7 @@ body{font-family:var(--f);color:var(--t1);
         → Innstillinger → API Keys → Opprett ny (kun <em>Devices: Read</em>).
       </div>
       <button class="cfc" id="cfc" type="button" onclick="doFetch()">Koble til</button>
+      <div class="cfh" id="cfver" style="text-align:center;margin-top:.6rem;opacity:.7">Versjon –</div>
     </div>
     <div class="err" id="err"></div>
   </div>
@@ -469,6 +473,11 @@ body{font-family:var(--f);color:var(--t1);
 
 <script>
 'use strict';
+
+// ── App-versjon ──
+// Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
+// Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
+const APP_VERSION = 1;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -1281,11 +1290,28 @@ function render(temps, nibe, isLive) {
   buildVPInternal(nibe);
 }
 
-/* Dusjtid for NIBE S1256-8 (178 l bereder) — sjiktet tankmodell.
-   Forankret i EN16147: full tank Middels (~52 °C) → 250 l V40 → 21 min @ 12 l/min.
-   bt7 = topp, bt6 = midt (NIBE-givere), bt5 = ekstra giver.
-   EXTRA_POS: 'bottom' hvis bt5 sitter i bunnen, 'mid' hvis mellom BT6 og BT7. */
-const TANK_L = 178, T_COLD = 10, T_SHOWER = 40, FLOW_LPM = 12, EXTRA_POS = 'bottom';
+/* ── DUSJTID — sjiktet tankmodell forankret i EN16147 ────
+   Kilder (NIBE produktblad S1256 + installatørhåndbok S-serien):
+   • Berederen i S1256-8 EM rommer 178 liter.
+   • Sertifisert tappevolum 40 °C (V40, EN16147) ved full lading:
+     235 / 250 / 275 l i komfort Lite / Middels / Stor.
+   • BT7 sitter i toppen, BT6 i midten av berederen; (NIBE-)BT5 er
+     en valgfri giver MELLOM BT6 og BT7.
+
+   Modell: tanken deles i fire like sjikt. Ved tapping presses varmt
+   vann ut i toppen mens kaldt fyller på i bunnen — et sjikt under
+   dusjtemperatur (40 °C) kan derfor ALDRI tappes som dusjvann og
+   bidrar med null. Sjikt ≥40 °C bidrar med blandevolum
+   V/4 · (T − T_kald)/(40 − T_kald). Summen er liter 40 °C-vann;
+   delt på dusjens vannmengde gir det minutter.
+   Kontroll mot fasit: full tank i Middels (~52 °C jevnt) gir
+   178·(52,1−10)/30 = 250 l — nøyaktig NIBEs sertifiserte V40. */
+const TANK_L     = 178;   // bereder, S1256-8 EM
+const T_COLD     = 10;    // kaldtvann inn (EN16147-referanse)
+const T_SHOWER   = 40;    // ferdig blandet dusjtemperatur
+const FLOW_LPM   = 10.2;  // kalibrert mot NIBE-appen (234 l → 23 min ved 48/51/53 °C)
+const EXTRA_POS  = 'mid'; // myUplink 10894 = «Hot water start (BT5)» — sitter MELLOM BT6 og BT7
+                          // alternativ: 'bottom' hvis du senere får egen giver i bunnen
 
 function showerMinutes({ bt7, bt5, bt6 }) {
   const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
@@ -1818,6 +1844,9 @@ render(
 setStatus('Demo · Fyll inn tilkobling');
 startAutoRefresh();
 setTimeout(doFetch,400);
+
+// Vis versjonsnummer i innstillinger-skuffen
+(function(){ const v=document.getElementById('cfver'); if(v) v.textContent='Versjon '+APP_VERSION; })();
 </script>
 </body>
 </html>
