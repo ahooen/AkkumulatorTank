@@ -1188,7 +1188,15 @@ function renderPanels(temps, nibe) {
   fmtT(nibe.brineIn,'vBrineIn');
   fmtT(nibe.brineOt,'vBrineOut');
   fmtT(nibe.bt7,    'vBt7');
-  fmtT(nibe.outAvg, 'vOutAvg');
+  // Utetemp: live BT1, med snitt (register 37) i nedtonet parentes bak
+  (()=>{
+    const el=document.getElementById('vOutAvg');
+    if(nibe.outAvg==null){ el.innerHTML='–'; return; }
+    let html=`${nibe.outAvg.toFixed(1)}<span class="mu">°C</span>`;
+    if(nibe.outAvg37!=null)
+      html+=`<span style="opacity:.45;font-size:.8em;margin-left:.25em">(${nibe.outAvg37.toFixed(1)}°)</span>`;
+    el.innerHTML=html;
+  })();
 
   // Extra metrics
   document.getElementById('vHz').innerHTML = nibe.hz!=null&&pwr>0.2
@@ -1754,6 +1762,18 @@ async function doFetch() {
     };
     const gvN=(devName,capKey)=>{const v=gv(devName,capKey);return(v!=null&&isFinite(v))?Number(v):null;};
 
+    // Finn capability-verdi der nøkkelen STARTER med gitt prefiks.
+    // Brukes for register 37 (snitt utetemp), sifra suffikset i
+    // capability-navnet kan variere mellom app-versjoner.
+    const gvPrefix=(devName,capPrefix)=>{
+      const d=devs.find(x=>x.name===devName);
+      if(!d||!d.capabilitiesObj) return null;
+      const key=Object.keys(d.capabilitiesObj).find(k=>k.startsWith(capPrefix));
+      if(!key) return null;
+      const v=d.capabilitiesObj[key]?.value;
+      return(v!=null&&isFinite(v))?Number(v):null;
+    };
+
     // Tank sensors (via Device Capabilities)
     const temps=TANK_SENSORS.map(s=>gvN(s.dev,s.cap));
 
@@ -1775,6 +1795,7 @@ async function doFetch() {
       gm     : gvN(NIBE_DEV, N.gm),
       flow   : gvN(NIBE_DEV, N.flow),
       outAvg : gvN(NIBE_DEV, N.outdoor),  // live BT1 – i1_outside (ikke midlet i37)
+      outAvg37: gvPrefix(NIBE_DEV, 'measure_temperature_NIBE.i37'),  // snitt utetemp, register 37
       hpPct  : gvN(NIBE_DEV, N.hpPct),
       srcPct : gvN(NIBE_DEV, N.srcPct),
       compStarts: gvN(NIBE_DEV, N.compStarts),
@@ -1837,7 +1858,7 @@ lodCfg(); lodH(); buildSCOPChart(scopH7);
 render(
   [58.4,49.2,40.1,33.7,29.3],
   {scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
-   supply:55,ret:29,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,
+   supply:55,ret:29,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,outAvg37:-1.8,
    bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
