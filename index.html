@@ -477,7 +477,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 1;
+const APP_VERSION = 2;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -711,12 +711,22 @@ function buildSvg(temps, nibe) {
   // bClass: stop brine animation when compressor < 1 Hz (standby only)
   const bClass = (nibe.hz != null && nibe.hz >= 1) ? '' : 'pf-geo-off';
 
-  let fillF;
-  if (vpHeat) {
-    const rng = turVP - returT;
-    fillF = rng > 1 ? Math.min(.96,Math.max(.04,(snitt-returT)/rng)) : 0.5;
+  // Fyllingsgrad = lagret NYTTBAR bufferenergi.
+  //   Gulv = 25 °C  → under dette kan tanken ikke avgi varme til rom.
+  //   Tak  = calcSupply (varmekurvens «beregnet turledning») → temperaturen
+  //          vannet TRENGER for å dekke husets behov akkurat nå. Taket følger
+  //          utetemperaturen automatisk via varmekurven (kaldt ute → høyt tak).
+  //   snitt > tak  → tanken har overskudd (ekstra buffer), vises som badge.
+  // calcSupply mangler → fall tilbake til dagens faste 25→40 °C-skala.
+  const FLOOR = 25;
+  let fillF, surplusDeg = null;
+  const target = nibe.calcSupply;
+  if (target != null && isFinite(target)) {
+    const span = Math.max(3, target - FLOOR);   // klamret så baren ikke kollapser i mildvær
+    fillF = Math.min(.96, Math.max(.04, (snitt - FLOOR) / span));
+    surplusDeg = snitt - target;                 // > 0 = overskudd over behovet
   } else {
-    fillF = Math.min(.96,Math.max(.04,(snitt-25)/15));
+    fillF = Math.min(.96, Math.max(.04, (snitt - FLOOR) / 15));
   }
 
   const fillY = tBot - tH*fillF;
@@ -1093,6 +1103,18 @@ function buildSvg(temps, nibe) {
     s+=`<rect x="${tCX-tW/2+2}" y="${by-3}" width="${tW-4}" height="5.5" rx="2" fill="url(#bg2)" stroke="rgba(255,255,255,.05)" stroke-width=".5" opacity=".7"/>`;
   });
   s+=`<rect x="${tCX-tW/2+7}" y="${tTop+eRy}" width="7" height="${tH-eRy*2}" rx="3" fill="#fff" fill-opacity=".04"/>`;
+
+  // Overskuddsindikator: snittet er varmere enn varmekurvens mål → ekstra
+  // bufferenergi utover dagens behov. Ravfarget badge øverst i tanken.
+  if (surplusDeg != null && surplusDeg > 0.3) {
+    const by = tTop + eRy*2 + 16;
+    const stxt = '+' + surplusDeg.toFixed(1) + '°';
+    const sbw = 14 + stxt.length * 6.4;
+    s+=`<g opacity=".93">`
+      +`<rect x="${(tCX-sbw/2).toFixed(1)}" y="${by-9}" width="${sbw.toFixed(1)}" height="16" rx="8" fill="#7c2d12" fill-opacity=".58" stroke="#fb923c" stroke-width=".75" stroke-opacity=".65"/>`
+      +`<text x="${tCX}" y="${by+3}" text-anchor="middle" font-size="9.5" font-family="DM Mono,monospace" fill="#fdba74" font-weight="500">${stxt}</text>`
+      +`</g>`;
+  }
 
   // Sensor markers
   const HK=['t100','t75','t50','t25','t0'];
