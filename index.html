@@ -196,6 +196,20 @@ body{font-family:var(--f);color:var(--t1);
   margin-bottom:7px;cursor:pointer;
   touch-action:manipulation;transition:border-color .12s}
 .scop-c:active{border-color:rgba(0,201,167,.32)}
+
+/* ── Kapasitetslinje: andel av samlet ytelse i bruk ── */
+.cap-w{margin-top:12px;padding:0 2px}
+.cap-hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.cap-l{font:700 8px/1 var(--f);color:var(--t3);letter-spacing:1.4px;text-transform:uppercase}
+.cap-p{font:500 10px/1 var(--fm);color:#4ade80}
+.cap-t{position:relative;height:6px;border-radius:3px;overflow:hidden;
+  background:rgba(255,255,255,.055);box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+/* Gradienten ligger fast over HELE skalaen: lys grønn venstre → mørk grønn høyre.
+   Fyllet avdekker den med clip-path, så fargen på et gitt punkt alltid er den samme. */
+.cap-f{position:absolute;inset:0;border-radius:3px;
+  background:linear-gradient(90deg,#bbf7d0 0%,#4ade80 28%,#16a34a 62%,#15803d 84%,#14532d 100%);
+  transition:clip-path .5s cubic-bezier(.4,0,.2,1)}
+.cap-s{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.14)}
 .scop-i{width:38px;height:38px;border-radius:8px;flex-shrink:0;
   background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.16);
   display:flex;align-items:center;justify-content:center;font-size:17px}
@@ -348,6 +362,12 @@ body{font-family:var(--f);color:var(--t1);
       <div class="mc" id="mPwr">
         <div class="ml">Effekt</div>
         <div class="mv" id="vPwr">–<span class="mu">W</span></div></div>
+      <div class="mc" id="mElAdd">
+        <div class="ml">Spisslast</div>
+        <div class="mv" id="vElAdd">–<span class="mu">kW</span></div></div>
+      <div class="mc" id="mPTerm">
+        <div class="ml">Termisk effekt</div>
+        <div class="mv" id="vPTerm">–<span class="mu">kWt</span></div></div>
       <div class="mc" id="mGm">
         <div class="ml">Gradminutter</div>
         <div class="mv" id="vGm">–<span class="mu">GM</span></div></div>
@@ -372,6 +392,16 @@ body{font-family:var(--f);color:var(--t1);
         <div class="scop-l" style="margin-bottom:2px">Snitt COP siste 24t</div>
         <div class="scop-v" id="vScop24">–</div>
 
+      </div>
+    </div>
+    <div class="cap-w" id="mCap">
+      <div class="cap-hd">
+        <div class="cap-l">Kapasitet i bruk</div>
+        <div class="cap-p" id="vCapPct">–</div>
+      </div>
+      <div class="cap-t">
+        <div class="cap-f" id="vCapFill" style="clip-path:inset(0 100% 0 0)"></div>
+        <div class="cap-s" style="left:55.2%"></div>
       </div>
     </div>
     <div id="scopChart" style="margin-top:14px;padding:0 2px"></div>
@@ -477,7 +507,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 2;
+const APP_VERSION = 4;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -539,6 +569,16 @@ const N = {
   compStarts: 'measure_count_NIBE.i1083_compressor_starts',
   compHours : 'measure_hour_NIBE.i1087_compressor_usage_total',
 };
+
+// ── Spisslast (internt eltilskudd) ──────────────────────────
+// Modbus input-register 1027 = eS16TotIntEffect ("total intern eleffekt").
+// Leses via prefiks siden suffikset i Homey-appens capability-navn kan variere.
+// S1256-8 3x400V: 0 – 6,5 kW i 0,5 kW-trinn (meny 7.1.5.1 Internt eltilskudd).
+const EL_CAP_PREFIX = 'i1027';
+const HZ_MAX        = 106;   // kompressor maks frekvens
+const EL_MAX_KW     = 6.5;   // elkolbe maks effekt
+const CPR_KW_MAX    = 8.0;   // kompressorens nominelle termiske effekt
+const TOT_KW_MAX    = CPR_KW_MAX + EL_MAX_KW;  // 14,5 kW samlet kapasitet
 const NIBE_DEV  = 'Nibe S-Series';
 const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
 const SCOP24_DEV  = 'Nibe SCOP 24t';  // rolling 24h SCOP
@@ -557,7 +597,7 @@ const H = {
   t100:[], t75:[], t50:[], t25:[], t0:[],
   snitt:[], energi:[], dtb:[], flow:[],
   scopDC:[], scop24:[], brineIn:[], brineOt:[],
-  hz:[], pwr:[], gm:[], pTerm:[],
+  hz:[], pwr:[], gm:[], pTerm:[], elAdd:[],
   bt7:[], outAvg:[], compStarts:[], compHours:[],
   dhwSnitt:[], dhwKwh:[], dhwDusj:[], dhwDt:[],
   bt5:[], bt6:[], supply:[], ret:[], hpPct:[], srcPct:[],
@@ -955,9 +995,15 @@ function buildSvg(temps, nibe) {
   const hz = nibe.hz;
   // Hz, thermal kWt, GM displayed in VP internals
   const hzStr  = hz!=null && pwr>0.2 ? `${hz.toFixed(1)} Hz` : '';  // mode shown at bottom
-  // kWt = electrical power (kW) × SCOP. Use scopDC, fallback to scop24
+  // kWt = kompressorens el × COP + spisslast × 1,0.
+  // Spisslasten MÅ trekkes fra før COP-multiplikasjonen: elkolben har
+  // virkningsgrad 1, ikke COP. Uten dette blir termisk effekt (og COP)
+  // sterkt overdrevet så snart elkolben går.
   const scopForKwt = nibe.scopDC ?? nibe.scop24;
-  const kwt    = scopForKwt!=null && pwr>0.2 ? r1(pwr*scopForKwt) : null;
+  const elKW    = (nibe.elAdd ?? 0) / 1000;
+  const cprKW   = Math.max(0, pwr - elKW);          // pwr er allerede kW
+  const kwt     = scopForKwt!=null && pwr>0.2
+                  ? r1(cprKW * scopForKwt + elKW) : null;
   const kwtStr = kwt!=null ? `${kwt} kWt` : '';
   const gmStr  = nibe.gm!=null ? `${Math.round(nibe.gm)} GM` : '– GM';
   const hzCol  = isHeat?'#2dd4bf':isDHW?'#fbbf24':pwr>0.2?'#7dd3fc':'#2e4d6a';
@@ -1232,6 +1278,31 @@ function renderPanels(temps, nibe) {
   document.getElementById('vCompHours').innerHTML = nibe.compHours!=null
     ?`${Math.round(nibe.compHours)}<span class="mu"> t</span>`:'–';
 
+  // ── Spisslast + termisk effekt ──
+  const elKW  = (nibe.elAdd ?? 0)/1000;
+  const cprKW = Math.max(0, pwr - elKW);
+  document.getElementById('vElAdd').innerHTML = nibe.elAdd!=null
+    ?`${elKW.toFixed(1)}<span class="mu"> kW</span>`:'–';
+  const scpT = nibe.scopDC ?? nibe.scop24;
+  const pTermNow = (scpT!=null && pwr>0.2) ? cprKW*scpT + elKW : null;
+  document.getElementById('vPTerm').innerHTML = pTermNow!=null
+    ?`${pTermNow.toFixed(1)}<span class="mu"> kWt</span>`:'–';
+
+  // ── Kapasitetslinje ──
+  // Andel av samlet ytelse: kompressorens frekvens skalert mot nominell
+  // termisk effekt, pluss spisslasten. 106 Hz ≈ 8 kW, elkolbe 0–6,5 kW.
+  {
+    const hzNow  = (nibe.hz!=null && pwr>0.2) ? nibe.hz : 0;
+    const cprCap = Math.min(1, Math.max(0, hzNow/HZ_MAX)) * CPR_KW_MAX;
+    const elCap  = Math.min(EL_MAX_KW, Math.max(0, elKW));
+    const usedKW = cprCap + elCap;
+    const pct    = Math.min(100, Math.max(0, usedKW/TOT_KW_MAX*100));
+    document.getElementById('vCapFill').style.clipPath =
+      `inset(0 ${(100-pct).toFixed(1)}% 0 0)`;
+    document.getElementById('vCapPct').textContent =
+      `${usedKW.toFixed(1)} / ${TOT_KW_MAX.toFixed(1)} kW · ${pct.toFixed(0)} %`;
+  }
+
   // Tooltips
   btt(document.getElementById('mSnitt'),   'Snitt temperatur',  'snitt',  '°C');
   btt(document.getElementById('mEnergi'),  'Energi i tank',     'energi', 'kWh');
@@ -1243,6 +1314,8 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mBrineOut'),'Brine ut BT11',     'brineOt','°C');
   btt(document.getElementById('mHz'),      'Kompressor Hz',     'hz',     'Hz');
   btt(document.getElementById('mPwr'),     'Strømtrekk',        'pwr',    'W');
+  btt(document.getElementById('mElAdd'),   'Spisslast',         'elAdd',  'kW');
+  btt(document.getElementById('mPTerm'),   'Termisk effekt',    'pTerm',  'kWt');
   btt(document.getElementById('mGm'),      'Gradminutter',      'gm',     'GM');
   btt(document.getElementById('mBt7'),     'Tappevann BT7',     'bt7',    '°C');
   btt(document.getElementById('mOutAvg'),  'Utetemperatur',      'outAvg','°C');
@@ -1304,10 +1377,16 @@ function render(temps, nibe, isLive) {
       ph('dhwDusj', showerMinutes({bt7:nibe.bt7, bt6:nibe.bt6, bt5:nibe.bt5}));
     }
     if(nibe.bt7!=null&&nibe.bt6!=null) ph('dhwDt', r1(nibe.bt7-nibe.bt6));
+    // Termisk effekt: kompressor × COP + spisslast × 1,0 (se buildSvg)
     if(nibe.pwr!=null&&nibe.pwr>200){
       const scp=nibe.scopDC??nibe.scop24;
-      if(scp!=null) ph('pTerm', r1(nibe.pwr/1000*scp));
+      if(scp!=null){
+        const elKW  = (nibe.elAdd ?? 0)/1000;
+        const cprKW = Math.max(0, nibe.pwr/1000 - elKW);
+        ph('pTerm', r1(cprKW*scp + elKW));
+      }
     }
+    if(nibe.elAdd!=null) ph('elAdd', r1(nibe.elAdd/1000));
     if(nibe.scopDC!=null){
       scopH7.push({t:Date.now(),v:nibe.scopDC});
       if(scopH7.length>2016)scopH7.splice(0,scopH7.length-2016);
@@ -1796,6 +1875,19 @@ async function doFetch() {
       return(v!=null&&isFinite(v))?Number(v):null;
     };
 
+    // Finn capability-verdi der nøkkelen INNEHOLDER gitt registerdel,
+    // f.eks. '.i1027' i 'measure_power_NIBE.i1027_int_el_add'. Robust når
+    // verken namespace eller suffiks er kjent på forhånd.
+    const gvReg=(devName,regPart)=>{
+      const d=devs.find(x=>x.name===devName);
+      if(!d||!d.capabilitiesObj) return null;
+      const key=Object.keys(d.capabilitiesObj)
+        .find(k=>k.includes('.'+regPart+'_') || k.endsWith('.'+regPart));
+      if(!key) return null;
+      const v=d.capabilitiesObj[key]?.value;
+      return(v!=null&&isFinite(v))?Number(v):null;
+    };
+
     // Tank sensors (via Device Capabilities)
     const temps=TANK_SENSORS.map(s=>gvN(s.dev,s.cap));
 
@@ -1818,6 +1910,13 @@ async function doFetch() {
       flow   : gvN(NIBE_DEV, N.flow),
       outAvg : gvN(NIBE_DEV, N.outdoor),  // live BT1 – i1_outside (ikke midlet i37)
       outAvg37: gvPrefix(NIBE_DEV, 'measure_temperature_NIBE.i37'),  // snitt utetemp, register 37
+      // Spisslast, register 1027. Homey measure_power er W, men enkelte
+      // capability-typer rapporterer kW – normaliser til W.
+      elAdd  : (()=>{
+        const v = gvReg(NIBE_DEV, EL_CAP_PREFIX);
+        if (v == null) return null;
+        return v <= 10 ? v * 1000 : v;   // ≤10 tolkes som kW
+      })(),
       hpPct  : gvN(NIBE_DEV, N.hpPct),
       srcPct : gvN(NIBE_DEV, N.srcPct),
       compStarts: gvN(NIBE_DEV, N.compStarts),
@@ -1881,7 +1980,7 @@ render(
   [58.4,49.2,40.1,33.7,29.3],
   {scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
    supply:55,ret:29,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,outAvg37:-1.8,
-   bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
+   bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,elAdd:0,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
