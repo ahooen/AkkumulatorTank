@@ -209,6 +209,17 @@ body{font-family:var(--f);color:var(--t1);
 .cap-f{position:absolute;inset:0;border-radius:3px;
   background:linear-gradient(90deg,#bbf7d0 0%,#4ade80 28%,#16a34a 62%,#15803d 84%,#14532d 100%);
   transition:clip-path .5s cubic-bezier(.4,0,.2,1)}
+
+/* ── Tidsvindu-velger for SCOP-grafen ── */
+.sr-w{display:flex;gap:5px;justify-content:flex-end;margin-top:13px;padding:0 2px}
+.sr-b{appearance:none;-webkit-appearance:none;cursor:pointer;
+  font:700 8.5px/1 var(--f);letter-spacing:1.1px;color:var(--t3);
+  padding:5px 10px;border-radius:6px;
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);
+  transition:color .18s,background .18s,border-color .18s}
+.sr-b:active{background:rgba(255,255,255,.08)}
+.sr-b.on{color:#c084fc;background:rgba(168,85,247,.13);
+  border-color:rgba(168,85,247,.34)}
 .cap-s{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.14)}
 .scop-i{width:38px;height:38px;border-radius:8px;flex-shrink:0;
   background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.16);
@@ -404,7 +415,8 @@ body{font-family:var(--f);color:var(--t1);
         <div class="cap-s" style="left:55.2%"></div>
       </div>
     </div>
-    <div id="scopChart" style="margin-top:14px;padding:0 2px"></div>
+    <div class="sr-w" id="scopRangeBtns"></div>
+    <div id="scopChart" style="margin-top:6px;padding:0 2px"></div>
   </div>
   <!-- Tappevannstank illustrasjon -->
   <div class="panel" style="margin-top:.7rem">
@@ -507,7 +519,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 4;
+const APP_VERSION = 7;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -572,13 +584,30 @@ const N = {
 
 // ── Spisslast (internt eltilskudd) ──────────────────────────
 // Modbus input-register 1027 = eS16TotIntEffect ("total intern eleffekt").
-// Leses via prefiks siden suffikset i Homey-appens capability-navn kan variere.
+// Bekreftet capability i Homey: meter_power_NIBE.i1027_additive_effect
+// (appen bruker meter_power-typen, men verdien er momentan effekt, ikke kWh).
+// Leses primært på fullt navn, med register-søk som reserve.
 // S1256-8 3x400V: 0 – 6,5 kW i 0,5 kW-trinn (meny 7.1.5.1 Internt eltilskudd).
+const EL_CAP       = 'meter_power_NIBE.i1027_additive_effect';
 const EL_CAP_PREFIX = 'i1027';
 const HZ_MAX        = 106;   // kompressor maks frekvens
 const EL_MAX_KW     = 6.5;   // elkolbe maks effekt
 const CPR_KW_MAX    = 8.0;   // kompressorens nominelle termiske effekt
 const TOT_KW_MAX    = CPR_KW_MAX + EL_MAX_KW;  // 14,5 kW samlet kapasitet
+
+// Normaliserer spisslast til kW uansett om appen leverer kW, rå
+// centi-kW (0–650) eller watt. Spisslasten kan aldri overstige det
+// samlede strømtrekket (register 2166) – den fysiske grensen gjør
+// tolkningen entydig.
+function elToKW(raw, totW){
+  if(!(typeof raw==='number' && isFinite(raw)) || raw<=0) return 0;
+  const limit = totW>0 ? Math.min(EL_MAX_KW, totW/1000*1.05) : EL_MAX_KW;
+  for(const f of [1, 1/100, 1/1000]){
+    const v = raw*f;
+    if(v <= limit+0.01) return v;
+  }
+  return 0;
+}
 const NIBE_DEV  = 'Nibe S-Series';
 const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
 const SCOP24_DEV  = 'Nibe SCOP 24t';  // rolling 24h SCOP
@@ -629,7 +658,26 @@ function lodH() {
       if (Array.isArray(d[k])) H[k] = d[k].slice(-MAX_PTS);
     });
   } catch(_) {}
-  try{const d7=localStorage.getItem('scopH7d');if(d7)scopH7=JSON.parse(d7).filter(p=>p&&p.t&&p.v!=null);}catch(_){}
+  // Last SCOP-historikk og migrer gammelt format. Tidligere ble ett
+  // punkt lagret per oppslag (hvert 15. sek); de foldes ned til samme
+  // 15-min bøtter som nye punkter, så grafen får jevn oppløsning.
+  try{
+    const d7=localStorage.getItem('scopH7d');
+    if(d7){
+      const raw=JSON.parse(d7).filter(p=>p&&p.t&&p.v!=null);
+      const cut=Date.now()-SCOP_RETAIN_DAYS*86400000;
+      const out=[];
+      for(const p of raw){
+        if(p.t<cut) continue;
+        const b=Math.floor(p.t/SCOP_BUCKET_MS)*SCOP_BUCKET_MS;
+        const last=out[out.length-1];
+        if(last&&last.t===b) last.v=p.v;      // siste verdi i bøtta vinner
+        else out.push({t:b,v:p.v});
+      }
+      out.sort((a,b)=>a.t-b.t);
+      scopH7=out.length>SCOP_MAX_PTS?out.slice(-SCOP_MAX_PTS):out;
+    }
+  }catch(_){}
 }
 
 // ═══════════════════════════════════════════
@@ -1388,8 +1436,18 @@ function render(temps, nibe, isLive) {
     }
     if(nibe.elAdd!=null) ph('elAdd', r1(nibe.elAdd/1000));
     if(nibe.scopDC!=null){
-      scopH7.push({t:Date.now(),v:nibe.scopDC});
-      if(scopH7.length>2016)scopH7.splice(0,scopH7.length-2016);
+      // Én verdi per 15-min bøtte; innenfor samme bøtte oppdateres
+      // punktet, så grafen alltid ender på ferskeste måling.
+      const now=Date.now();
+      const bucket=Math.floor(now/SCOP_BUCKET_MS)*SCOP_BUCKET_MS;
+      const last=scopH7[scopH7.length-1];
+      if(last && last.t===bucket) last.v=nibe.scopDC;
+      else scopH7.push({t:bucket,v:nibe.scopDC});
+      // Behold siste SCOP_RETAIN_DAYS døgn
+      const cutoff=now-SCOP_RETAIN_DAYS*86400000;
+      let drop=0; while(drop<scopH7.length && scopH7[drop].t<cutoff) drop++;
+      if(drop) scopH7.splice(0,drop);
+      if(scopH7.length>SCOP_MAX_PTS) scopH7.splice(0,scopH7.length-SCOP_MAX_PTS);
       buildSCOPChart(scopH7);
     }
   }
@@ -1757,12 +1815,53 @@ function setStatus(txt,type){
 }
 
 // SCOP CHART – buildSCOPChart(pts)
-// Lokallagret 7-dagers SCOP-historikk (scopH7, 2016 × 5min)
+// ── SCOP-historikk ──────────────────────────────────────────
+// Lagres i 15-minutters bøtter, ikke ett punkt per oppslag. Appen
+// henter hvert 15. sekund, så rå lagring ga bare ~8 timers dekning
+// før taket på 2016 punkter slo inn. SCOP siden oppstart er en treg,
+// kumulativ verdi – 15 min oppløsning er rikelig og gir plass til
+// måneder med historikk (92 døgn ≈ 8 800 punkter, ca. 0,2 MB).
+const SCOP_BUCKET_MS   = 15*60000;   // oppløsning
+const SCOP_RETAIN_DAYS = 92;         // hvor lenge punkter tas vare på
+const SCOP_MAX_PTS     = 9000;       // hardt tak (sikkerhetsnett)
+// Valgbare visningsvinduer i grafen
+const SCOP_RANGES = [
+  {k:'7d',  lbl:'7 D',  days:7},
+  {k:'30d', lbl:'30 D', days:30},
+  {k:'90d', lbl:'90 D', days:90},
+];
+let scopRange = localStorage.getItem('scopRange') || '30d';
 let scopH7 = [];
 
-function buildSCOPChart(pts){
+// Bygger tidsvindu-knappene over SCOP-grafen. Valget huskes lokalt.
+function buildScopRangeBtns(){
+  const w=document.getElementById('scopRangeBtns');
+  if(!w)return;
+  w.innerHTML=SCOP_RANGES.map(r=>
+    `<button type="button" class="sr-b${r.k===scopRange?' on':''}" data-r="${r.k}">${r.lbl}</button>`
+  ).join('');
+  w.querySelectorAll('.sr-b').forEach(b=>{
+    b.addEventListener('click',()=>{
+      scopRange=b.dataset.r;
+      try{localStorage.setItem('scopRange',scopRange);}catch(_){}
+      buildScopRangeBtns();
+      buildSCOPChart(scopH7);
+    });
+  });
+}
+
+function buildSCOPChart(all){
   const el=document.getElementById('scopChart');
   if(!el)return;
+  // Klipp til valgt vindu. Har vinduet for lite data, faller vi tilbake
+  // til alt som finnes, slik at grafen aldri blir tom rett etter bytte.
+  const rng=SCOP_RANGES.find(r=>r.k===scopRange)||SCOP_RANGES[1];
+  let pts=all;
+  if(all&&all.length){
+    const cut=Date.now()-rng.days*86400000;
+    const win=all.filter(p=>p.t>=cut);
+    if(win.length>=2) pts=win;
+  }
   if(!pts||pts.length<2){el.innerHTML='<p style="font-size:10px;color:rgba(255,255,255,.28);font-family:\'DM Mono\',monospace;text-align:center;padding:10px 0 2px">📈 Bygger SCOP-historikk – vises etter noen minutters drift</p>';return;}
   const W=360,H=154,PL=44,PR=8,PT=18,PB=22,pW=W-PL-PR,pH=H-PT-PB;
   // Downsample if too dense
@@ -1793,13 +1892,33 @@ function buildSCOPChart(pts){
   const linePts=cp.map(p=>`${px(p.t).toFixed(1)},${py(p.v).toFixed(1)}`).join(' ');
   const areaBot=(PT+pH).toFixed(1);
   const areaPts=linePts+` ${px(tMax).toFixed(1)},${areaBot} ${px(tMin).toFixed(1)},${areaBot}`;
-  // Midnight x-axis labels (local time)
+  // X-etiketter ved midnatt (lokal tid). Historikken kan spenne over
+  // langt mer enn 7 dager når appen brukes sporadisk, så kandidatene
+  // tynnes ut til de har nok plass til ikke å overlappe.
+  // setDate() brukes framfor +86400000 ms, så sommertid ikke gir drift.
+  const spanDays = (tMax-tMin)/86400000;
+  const longSpan = spanDays > 8;
+  const MIN_GAP  = longSpan ? 54 : 34;      // px mellom etiketter
+  const cand=[];
+  {
+    const mid=new Date(tMin); mid.setHours(0,0,0,0); mid.setDate(mid.getDate()+1);
+    while(mid.getTime()<=tMax+3600000){
+      const x=px(mid.getTime());
+      if(x>=PL+8 && x<=W-PR-8)
+        cand.push({x, d: longSpan ? `${mid.getDate()}.${mid.getMonth()+1}`
+                                  : String(mid.getDate())});
+      mid.setDate(mid.getDate()+1);
+    }
+  }
+  // Behold jevnt fordelte etiketter, forankret i den nyeste datoen.
   const xLbls=[];
-  let mid=new Date(tMin);mid.setHours(0,0,0,0);mid=new Date(mid.getTime()+86400000);
-  while(mid.getTime()<=tMax+3600000){
-    if(px(mid.getTime())>=PL+8&&px(mid.getTime())<=W-PR-8)
-      xLbls.push({t:mid.getTime(),d:mid.getDate()});
-    mid=new Date(mid.getTime()+86400000);
+  if(cand.length){
+    const maxLbl=Math.max(2,Math.floor(pW/MIN_GAP));
+    const step=Math.max(1,Math.ceil(cand.length/maxLbl));
+    for(let i=cand.length-1;i>=0;i-=step) xLbls.unshift(cand[i]);
+    // Sikkerhetsnett mot rester som fortsatt ligger for tett
+    for(let i=xLbls.length-1;i>0;i--)
+      if(xLbls[i].x-xLbls[i-1].x < MIN_GAP) xLbls.splice(i-1,1);
   }
   // Build SVG
   let s=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block">`;
@@ -1807,7 +1926,11 @@ function buildSCOPChart(pts){
   s+=`<stop offset="0%" stop-color="#a855f7" stop-opacity=".32"/><stop offset="100%" stop-color="#a855f7" stop-opacity="0"/></linearGradient></defs>`;
   // Title
   const rangeMs=tMax-tMin;
-  const rangeStr=rangeMs>86400000*4?'7 DAGER':rangeMs>86400000?Math.round(rangeMs/86400000)+' DAGER':Math.round(rangeMs/3600000)+' TIMER';
+  // Vis faktisk spenn – tidligere sto det alltid "7 DAGER" over 4 døgn,
+  // selv når historikken i praksis dekket langt mer.
+  const rangeStr = rangeMs>=86400000*2
+    ? Math.round(rangeMs/86400000)+' DAGER'
+    : Math.max(1,Math.round(rangeMs/3600000))+' TIMER';
   s+=`<text x="${PL}" y="11" font-size="8.5" fill="rgba(255,255,255,.35)" font-family="DM Mono,monospace" letter-spacing=".06em">SCOP SIDEN OPPSTART · ${rangeStr}</text>`;
   // Axis borders
   s+=`<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT+pH}" stroke="rgba(255,255,255,.12)" stroke-width=".5"/>`;
@@ -1819,7 +1942,7 @@ function buildSCOPChart(pts){
     s+=`<text x="${PL-4}" y="${(parseFloat(y)+3.5).toFixed(1)}" text-anchor="end" font-size="8.5" fill="rgba(255,255,255,.42)" font-family="DM Mono,monospace">${v.toFixed(2)}</text>`;
   });
   // X labels
-  xLbls.forEach(({t,d})=>s+=`<text x="${px(t).toFixed(1)}" y="${H-5}" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,.42)" font-family="DM Mono,monospace">${d}</text>`);
+  xLbls.forEach(({x,d})=>s+=`<text x="${x.toFixed(1)}" y="${H-5}" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,.42)" font-family="DM Mono,monospace">${d}</text>`);
   // Area + line
   s+=`<polygon points="${areaPts}" fill="url(#scg)"/>`;
   s+=`<polyline points="${linePts}" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
@@ -1910,12 +2033,12 @@ async function doFetch() {
       flow   : gvN(NIBE_DEV, N.flow),
       outAvg : gvN(NIBE_DEV, N.outdoor),  // live BT1 – i1_outside (ikke midlet i37)
       outAvg37: gvPrefix(NIBE_DEV, 'measure_temperature_NIBE.i37'),  // snitt utetemp, register 37
-      // Spisslast, register 1027. Homey measure_power er W, men enkelte
-      // capability-typer rapporterer kW – normaliser til W.
+      // Spisslast, register 1027. Pinnet capability-navn, med register-
+      // søk som reserve. Normaliseres til W via elToKW (se konstanter).
       elAdd  : (()=>{
-        const v = gvReg(NIBE_DEV, EL_CAP_PREFIX);
-        if (v == null) return null;
-        return v <= 10 ? v * 1000 : v;   // ≤10 tolkes som kW
+        const raw = gvN(NIBE_DEV, EL_CAP) ?? gvReg(NIBE_DEV, EL_CAP_PREFIX);
+        if (raw == null) return null;
+        return elToKW(raw, gvN(NIBE_DEV, N.pwr) ?? 0) * 1000;
       })(),
       hpPct  : gvN(NIBE_DEV, N.hpPct),
       srcPct : gvN(NIBE_DEV, N.srcPct),
@@ -1975,7 +2098,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{p
 });
 
 // ── Startup ──
-lodCfg(); lodH(); buildSCOPChart(scopH7);
+lodCfg(); lodH(); buildScopRangeBtns(); buildSCOPChart(scopH7);
 render(
   [58.4,49.2,40.1,33.7,29.3],
   {scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
