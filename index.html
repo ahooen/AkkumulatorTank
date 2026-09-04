@@ -519,7 +519,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -588,9 +588,40 @@ const N = {
 // (appen bruker meter_power-typen, men verdien er momentan effekt, ikke kWh).
 // Leses primært på fullt navn, med register-søk som reserve.
 // S1256-8 3x400V: 0 – 6,5 kW i 0,5 kW-trinn (meny 7.1.5.1 Internt eltilskudd).
+// ── Termisk effekt, målt fysisk ─────────────────────────────
+// Q = ṁ · cp · ΔT. Flowmåler BF1 (register 40) i l/min, ΔT over
+// kondensatoren (BT12 tur − BT3 retur) – begge sitter i samme
+// krets som flowmåleren. Distribusjonssiden er rent vann etter
+// glykolspylingen, så ρ·cp ≈ 4,151 kJ/(l·K) ved ~35 °C.
+//
+// Dette erstatter det gamle estimatet (strømtrekk × SCOP), som
+// brukte et kumulativt snitt som om det var øyeblikkets COP.
+// Målingen fanger dessuten spisslasten automatisk: elkolben varmer
+// samme vann, så bidraget ligger allerede i ΔT.
+const K_WATER = 4.151/60;   // kW per (l/min · K)
+
+function thermalKW(n){
+  if(!n) return null;
+  const f = n.flow;
+  if(f==null || !isFinite(f) || f<=0) return null;
+  const sup = n.bt12 ?? n.supply;      // BT12 foretrekkes (kondensator ut)
+  const ret = n.ret;
+  if(sup==null || ret==null) return null;
+  const dT = sup - ret;
+  if(!(dT > 0.2)) return 0;            // ingen målbar varmeavgivelse
+  return f * K_WATER * dT;
+}
+
+// Reserve når flowmåler eller givere mangler: gammelt estimat.
+function thermalEstKW(n, pwrKW){
+  const scp = n.scopDC ?? n.scop24;
+  if(scp==null || !(pwrKW>0.2)) return null;
+  const elKW = (n.elAdd ?? 0)/1000;
+  return Math.max(0, pwrKW - elKW)*scp + elKW;
+}
+
 const EL_CAP       = 'meter_power_NIBE.i1027_additive_effect';
 const EL_CAP_PREFIX = 'i1027';
-const HZ_MAX        = 106;   // kompressor maks frekvens
 const EL_MAX_KW     = 6.5;   // elkolbe maks effekt
 const CPR_KW_MAX    = 8.0;   // kompressorens nominelle termiske effekt
 const TOT_KW_MAX    = CPR_KW_MAX + EL_MAX_KW;  // 14,5 kW samlet kapasitet
@@ -1043,15 +1074,11 @@ function buildSvg(temps, nibe) {
   const hz = nibe.hz;
   // Hz, thermal kWt, GM displayed in VP internals
   const hzStr  = hz!=null && pwr>0.2 ? `${hz.toFixed(1)} Hz` : '';  // mode shown at bottom
-  // kWt = kompressorens el × COP + spisslast × 1,0.
-  // Spisslasten MÅ trekkes fra før COP-multiplikasjonen: elkolben har
-  // virkningsgrad 1, ikke COP. Uten dette blir termisk effekt (og COP)
-  // sterkt overdrevet så snart elkolben går.
-  const scopForKwt = nibe.scopDC ?? nibe.scop24;
-  const elKW    = (nibe.elAdd ?? 0) / 1000;
-  const cprKW   = Math.max(0, pwr - elKW);          // pwr er allerede kW
-  const kwt     = scopForKwt!=null && pwr>0.2
-                  ? r1(cprKW * scopForKwt + elKW) : null;
+  // Termisk effekt fra flowmåler × ΔT (fysisk måling).
+  // Faller tilbake til estimatet strømtrekk × COP hvis flow mangler.
+  const kwtMeas = thermalKW(nibe);
+  const kwtVal  = kwtMeas ?? thermalEstKW(nibe, pwr);
+  const kwt     = (kwtVal!=null && pwr>0.2) ? r1(kwtVal) : null;
   const kwtStr = kwt!=null ? `${kwt} kWt` : '';
   const gmStr  = nibe.gm!=null ? `${Math.round(nibe.gm)} GM` : '– GM';
   const hzCol  = isHeat?'#2dd4bf':isDHW?'#fbbf24':pwr>0.2?'#7dd3fc':'#2e4d6a';
@@ -1328,23 +1355,22 @@ function renderPanels(temps, nibe) {
 
   // ── Spisslast + termisk effekt ──
   const elKW  = (nibe.elAdd ?? 0)/1000;
-  const cprKW = Math.max(0, pwr - elKW);
   document.getElementById('vElAdd').innerHTML = nibe.elAdd!=null
     ?`${elKW.toFixed(1)}<span class="mu"> kW</span>`:'–';
-  const scpT = nibe.scopDC ?? nibe.scop24;
-  const pTermNow = (scpT!=null && pwr>0.2) ? cprKW*scpT + elKW : null;
+  // Målt via flowmåler × ΔT; estimat kun som reserve.
+  const kwtMeas  = thermalKW(nibe);
+  const pTermNow = (pwr>0.2) ? (kwtMeas ?? thermalEstKW(nibe, pwr)) : null;
   document.getElementById('vPTerm').innerHTML = pTermNow!=null
     ?`${pTermNow.toFixed(1)}<span class="mu"> kWt</span>`:'–';
 
   // ── Kapasitetslinje ──
-  // Andel av samlet ytelse: kompressorens frekvens skalert mot nominell
-  // termisk effekt, pluss spisslasten. 106 Hz ≈ 8 kW, elkolbe 0–6,5 kW.
+  // Andel av samlet ytelse (8 kW kompressor + 6,5 kW spisslast).
+  // Bruker SAMME målte termiske effekt som flisen over, så tallene
+  // aldri spriker. Målingen dekker begge varmekilder, siden elkolben
+  // varmer samme vann som flowmåleren står i.
   {
-    const hzNow  = (nibe.hz!=null && pwr>0.2) ? nibe.hz : 0;
-    const cprCap = Math.min(1, Math.max(0, hzNow/HZ_MAX)) * CPR_KW_MAX;
-    const elCap  = Math.min(EL_MAX_KW, Math.max(0, elKW));
-    const usedKW = cprCap + elCap;
-    const pct    = Math.min(100, Math.max(0, usedKW/TOT_KW_MAX*100));
+    const usedKW = Math.min(TOT_KW_MAX, Math.max(0, pTermNow ?? 0));
+    const pct    = usedKW/TOT_KW_MAX*100;
     document.getElementById('vCapFill').style.clipPath =
       `inset(0 ${(100-pct).toFixed(1)}% 0 0)`;
     document.getElementById('vCapPct').textContent =
@@ -1425,14 +1451,10 @@ function render(temps, nibe, isLive) {
       ph('dhwDusj', showerMinutes({bt7:nibe.bt7, bt6:nibe.bt6, bt5:nibe.bt5}));
     }
     if(nibe.bt7!=null&&nibe.bt6!=null) ph('dhwDt', r1(nibe.bt7-nibe.bt6));
-    // Termisk effekt: kompressor × COP + spisslast × 1,0 (se buildSvg)
+    // Termisk effekt: målt via flowmåler × ΔT (se thermalKW)
     if(nibe.pwr!=null&&nibe.pwr>200){
-      const scp=nibe.scopDC??nibe.scop24;
-      if(scp!=null){
-        const elKW  = (nibe.elAdd ?? 0)/1000;
-        const cprKW = Math.max(0, nibe.pwr/1000 - elKW);
-        ph('pTerm', r1(cprKW*scp + elKW));
-      }
+      const v = thermalKW(nibe) ?? thermalEstKW(nibe, nibe.pwr/1000);
+      if(v!=null) ph('pTerm', r1(v));
     }
     if(nibe.elAdd!=null) ph('elAdd', r1(nibe.elAdd/1000));
     if(nibe.scopDC!=null){
@@ -2102,8 +2124,8 @@ lodCfg(); lodH(); buildScopRangeBtns(); buildSCOPChart(scopH7);
 render(
   [58.4,49.2,40.1,33.7,29.3],
   {scopDC:5.21,scop24:5.48,prio:'Heating',hz:42.5,pwr:1100,
-   supply:55,ret:29,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,outAvg37:-1.8,
-   bt7:51,bt6:42,bt5:46,disch:78,bt12:48,bt15:26,bt17:9,gm:-248,elAdd:0,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
+   supply:55,ret:32.5,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,outAvg37:-1.8,
+   bt7:51,bt6:42,bt5:46,disch:78,bt12:40.3,bt15:26,bt17:9,gm:-248,elAdd:0,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
