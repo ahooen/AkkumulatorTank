@@ -535,7 +535,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -1333,13 +1333,15 @@ function renderPanels(temps, nibe) {
 
   // NIBE SCOP
   document.getElementById('vScopDC').textContent = nibe.scopDC!=null?r2(nibe.scopDC).toFixed(2):'–';
-  document.getElementById('vScop24').textContent = nibe.scop24!=null?r2(nibe.scop24).toFixed(2):'–';
-  // Tappevann viser '–' til første syklus er logget; scriptet skriver
-  // ikke DC-enheten før det finnes data å regne på.
-  document.getElementById('vCopHeat').textContent = nibe.copHeat!=null?r2(nibe.copHeat).toFixed(2):'–';
-  document.getElementById('vCopHw').textContent   = nibe.copHw  !=null?r2(nibe.copHw).toFixed(2):'–';
-  document.getElementById('vCopHeatT').textContent = nibe.copHeatT!=null?r2(nibe.copHeatT).toFixed(2):'–';
-  document.getElementById('vCopHwT').textContent   = nibe.copHwT  !=null?r2(nibe.copHwT).toFixed(2):'–';
+  // COP-verdiene: scriptet skriver 0 når grunnlaget mangler (f.eks.
+  // ingen tappevannsproduksjon i vinduet). 0 er ingen mulig COP, så
+  // den vises som '–' framfor et misvisende tall.
+  const visCop = v => (v!=null && v>0) ? r2(v).toFixed(2) : '–';
+  document.getElementById('vScop24').textContent   = visCop(nibe.scop24);
+  document.getElementById('vCopHeat').textContent  = visCop(nibe.copHeat);
+  document.getElementById('vCopHw').textContent    = visCop(nibe.copHw);
+  document.getElementById('vCopHeatT').textContent = visCop(nibe.copHeatT);
+  document.getElementById('vCopHwT').textContent   = visCop(nibe.copHwT);
 
   // Mode from priority (direct from Modbus!)
   const pwr=(nibe.pwr??0)/1000;
@@ -1447,11 +1449,12 @@ function render(temps, nibe, isLive) {
     if(temps[0]!=null&&temps[4]!=null) ph('dtb',r1(temps[0]-temps[4]));
     ph('flow',    nibe.flow);
     phR2('scopDC', nibe.scopDC);  // cumulative SCOP
-    phR2('scop24', nibe.scop24);  // rolling 24h SCOP
-    phR2('copHeat', nibe.copHeat);
-    phR2('copHw',   nibe.copHw);
-    phR2('copHeatT', nibe.copHeatT);
-    phR2('copHwT',   nibe.copHwT);
+    // 0 betyr "ingen data" og skal ikke bli et punkt i trendgrafen
+    if(nibe.scop24  >0) phR2('scop24',  nibe.scop24);
+    if(nibe.copHeat >0) phR2('copHeat', nibe.copHeat);
+    if(nibe.copHw   >0) phR2('copHw',   nibe.copHw);
+    if(nibe.copHeatT>0) phR2('copHeatT',nibe.copHeatT);
+    if(nibe.copHwT  >0) phR2('copHwT',  nibe.copHwT);
     ph('brineIn', nibe.brineIn);
     ph('brineOt', nibe.brineOt);
     ph('hz',      nibe.hz);
