@@ -550,7 +550,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2183,7 +2183,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{p
 // har tilgangen «Vis variabler» (homey.logic.readonly).
 // ═══════════════════════════════════════════
 const BRINE_VAR   = 'nibe_brine_history';
-const BRINE_RB    = 0.07;           // K·m/W – må samsvare med scriptet
+const BRINE_RB    = 0.09;           // K·m/W – må samsvare med scriptet
 const BRINE_EVERY = 5*60000;        // hent maks hvert 5. minutt
 let brineData = null, brineErr = null, brineLast = 0;
 try { const c = localStorage.getItem('brineCache'); if (c) brineData = JSON.parse(c); } catch(_) {}
@@ -2206,7 +2206,7 @@ async function fetchBrine(base, key){
         brineErr = 'Venter på første kjøring av brønnscriptet i Homey';
       } else {
         const p = JSON.parse(v.value);
-        if (p && p.v === 1 && Array.isArray(p.weeks) && Array.isArray(p.runs)) {
+        if (p && (p.v === 1 || p.v === 2) && Array.isArray(p.weeks) && Array.isArray(p.runs)) {
           brineData = p; brineErr = null;
           try { localStorage.setItem('brineCache', v.value); } catch(_) {}
         } else brineErr = 'Uventet format i ' + BRINE_VAR;
