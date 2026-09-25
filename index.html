@@ -456,21 +456,6 @@ body{font-family:var(--f);color:var(--t1);
     <div class="sr-w" id="scopRangeBtns"></div>
     <div id="scopChart" style="margin-top:6px;padding:0 2px"></div>
   </div>
-  <!-- Energibrønn: borehullsveggens temperatur over tid -->
-  <div class="panel" style="margin-top:.7rem">
-    <div class="ph">
-      <div class="phd" style="background:#38bdf8"></div>
-      <div class="pt">Energibrønn · 250 m</div>
-    </div>
-    <div id="brineChart" style="margin:0 -.55rem"></div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font:400 8.5px/1.4 var(--m);color:var(--t3)">
-      <span><span style="color:#38bdf8">━</span> ukesmedian</span>
-      <span><span style="color:rgba(56,189,248,.55)">▮</span> 25–75 %</span>
-      <span><span style="color:rgba(255,255,255,.45)">┅</span> rå BT10</span>
-      <span><span style="color:rgba(125,211,252,.6)">●</span> enkeltmåling</span>
-      <span>tall = målinger per uke</span>
-    </div>
-  </div>
   <!-- Tappevannstank illustrasjon -->
   <div class="panel" style="margin-top:.7rem">
     <div class="ph">
@@ -538,6 +523,21 @@ body{font-family:var(--f);color:var(--t1);
     </div>
     <div id="wellPanel"></div>
   </div>
+  <!-- Energibrønn: historisk middeltemperatur ved borehullsveggen -->
+  <div class="panel" style="margin-top:.7rem">
+    <div class="ph">
+      <div class="phd" style="background:#38bdf8"></div>
+      <div class="pt">Energibrønn · historikk</div>
+    </div>
+    <div id="brineChart" style="margin:0 -.55rem"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font:400 8.5px/1.4 var(--m);color:var(--t3)">
+      <span><span style="color:#38bdf8">━</span> ukesmedian</span>
+      <span><span style="color:rgba(56,189,248,.55)">▮</span> 25–75 %</span>
+      <span><span style="color:rgba(255,255,255,.45)">┅</span> rå BT10</span>
+      <span><span style="color:rgba(125,211,252,.6)">●</span> enkeltmåling</span>
+      <span>tall = målinger per uke</span>
+    </div>
+  </div>
   <div class="cfg">
     <button class="cft" id="cft"
       onclick="tCfg()" ontouchend="event.preventDefault();tCfg()">
@@ -580,7 +580,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2599,7 +2599,7 @@ const WELLX = {
   pipe: { inne: 4, ute: 1, jord: 10, Rluft: 2.48, Rjord: 2.41, Trom: 24 },
 };
 let trtData = null, trtErr = null, trtLast = 0, trtFit = null;
-try { const c = localStorage.getItem('trtCache'); if (c) { trtData = JSON.parse(c); } } catch(_) {}
+try { const c = localStorage.getItem('trtCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 2) trtData = p; } } catch(_) {}
 
 async function fetchTrt(base, key){
   const wait = trtErr ? 60000 : TRT_EVERY;
@@ -2614,7 +2614,7 @@ async function fetchTrt(base, key){
       if (!v || !v.value) trtErr = 'Venter på første kjøring av «Brønnens egenskaper» i Homey';
       else {
         const p = JSON.parse(v.value);
-        if (p && p.v === 1 && Array.isArray(p.q)) {
+        if (p && p.v === 2 && Array.isArray(p.q)) {
           trtData = p; trtErr = null; trtFit = null;           // ny data → ny tilpasning
           try { localStorage.setItem('trtCache', v.value); } catch(_) {}
         } else trtErr = 'Uventet format i ' + TRT_VAR;
@@ -2624,10 +2624,20 @@ async function fetchTrt(base, key){
   buildWellPanel();
 }
 
-function wellRe(gp2){
-  if (!(gp2 > 0)) return null;
-  const Q = 0.8 * gp2 / 100 / 1000;                          // m³/s
-  return 4 * Q / (Math.PI * WELLX.ID * WELLX.nu);
+// Faktisk flow i kuldebæreren fra energibalansen over fordamperen:
+// opptak = kondensator − kompressor, og væsken kjøles fra BT10 til BT11.
+// Pumpekurven (0,8 l/s × GP2 %) gjelder ved null trykkfall og overvurderte
+// flowen med ~35 % mot det 250 m kollektor faktisk gir.
+function wellFlowLps(n){
+  const kwt = (typeof thermalKW === 'function') ? thermalKW(n) : null;
+  if (kwt == null || n.pwr == null || n.brineIn == null || n.brineOt == null) return null;
+  const evap = kwt * 1000 - n.pwr, dT = n.brineIn - n.brineOt;
+  if (!(evap > 200) || !(dT >= 1)) return null;
+  return evap / (3700 * dT);
+}
+function wellRe(flowLps){
+  if (!(flowLps > 0)) return null;
+  return 4 * flowLps / 1000 / (Math.PI * WELLX.ID * WELLX.nu);
 }
 function wellGround05(ts){
   const d = new Date(ts);
@@ -2689,8 +2699,8 @@ function wellSVG(fit, live){
   s += `<text x="${(126 + X - 14) / 2}" y="${pY + 16}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.45)" ${mono}>10 m i grunnen · 0,5 m overdekke</text>`;
 
   // Kuldebærer ved brønnhodet, korrigert for rørenes varmeopptak
-  if (live && live.bt10 != null && live.bt11 != null && live.gp2 > 0) {
-    const WK = 0.8 * live.gp2 / 100 * 3700;
+  if (live && live.bt10 != null && live.bt11 != null && live.flow > 0) {
+    const WK = live.flow * 3700;
     const ut = live.bt10 - wellLegGain(live.bt10, live.out) / WK;
     const inn = live.bt11 + wellLegGain(live.bt11, live.out) / WK;
     s += `<text x="${X - 10}" y="${top - 24}" text-anchor="end" font-size="8.5" fill="#fdba74" ${mono}>↑ ut ${f1(ut)} °C</text>`;
@@ -2779,9 +2789,8 @@ function wellScales(fit, live){
   const lam = ok ? fit.lambda : null;
   const eLam = ok ? Math.hypot(fit.sLambda, W.sysLam * fit.lambda) : null;
   const ratio = ok ? lam / W.lamPrior : null;
-  const re = wellRe(live && live.gp2);
-  const wait = ok ? null : (fit && fit.why === 'samler data'
-    ? `samler data · ${(fit.days || 0).toFixed(1)} av ${fit.need} døgn` : (fit && fit.why) || 'samler data');
+  const re = wellRe(live && live.flow);
+  const wait = '–';                     // fremdriften står én gang, under illustrasjonen
   const lamNote = !ok ? 'Bergartene i Lindåsdekket er kvartsfattige og leder varme dårlig. Målt verdi over båndet peker mot grunnvann.'
     : lam > W.lamRock[1] + 0.2 ? 'Over det bergarten alene kan gi — grunnvann bidrar trolig til varmetilførselen.'
     : lam < W.lamRock[0] - 0.2 ? 'Under forventet for bergarten. Sjekk borehullsdiameter og antatt varmekapasitet.'
@@ -2817,7 +2826,8 @@ function wellScales(fit, live){
     wellScale({ label: 'Strømning i kollektoren', unit: 'Re', dec: 0, min: 800, max: 3200,
       zones: [{ to: 1800, col: '#b45309', name: 'laminær' }, { to: 3200, col: '#15803d', name: 'turbulent' }],
       val: re, wait: 'kompressor står',
-      note: re ? `GP2 ${live.gp2} %. TurboCollector blir turbulent ved Re 1800.` : 'Vises når kuldebærerpumpa går.' }),
+      note: re ? `Målt flow ${(live.flow * 60).toFixed(1)} l/min ved GP2 ${live.gp2} %, fra energibalansen over fordamperen. TurboCollector blir turbulent ved Re 1800.`
+               : 'Vises når kompressoren går. Flowen regnes fra energibalansen, ikke pumpekurven.' }),
   ].join('');
 }
 
@@ -2830,11 +2840,12 @@ function buildWellPanel(){
   }
   const n = (typeof nibe_last !== 'undefined' && nibe_last) || {};
   // Dashbordets navn: brineIn = BT10, brineOt = BT11, srcPct = GP2, outAvg = BT1
-  const live = { bt10: n.brineIn, bt11: n.brineOt, gp2: n.srcPct, out: n.outAvg };
+  const live = { bt10: n.brineIn, bt11: n.brineOt, gp2: n.srcPct, out: n.outAvg, flow: wellFlowLps(n) };
   const f = trtFit;
   let status;
   if (!trtData) status = trtErr ? '⚠️ ' + trtErr : 'Venter på data fra «Brønnens egenskaper» i Homey';
   else if (f && f.ok) status = `${f.days.toFixed(1)} døgn · ${f.n} målepunkt · R² ${f.r2.toFixed(3)} · avvik ${(f.rms * 1000).toFixed(0)} mK`;
+  else if (f && f.why && !/samler|for få/.test(f.why)) status = '⚠️ ' + f.why;
   else status = `Samler data: ${((trtData.q || []).length / 96).toFixed(1)} av ${WELL.minDays} døgn · ${(trtData.pts || []).length} målepunkt`;
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(f, live) + '</div>' +
     `<div class="wp-st">${status}</div>` + wellScales(f, live) +
