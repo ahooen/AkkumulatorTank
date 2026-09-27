@@ -580,7 +580,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 22;
+const APP_VERSION = 23;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2303,7 +2303,7 @@ function brineSVG(d, err){
   // Eldre uker (90-min-referanse, uten w[6]) utelates – de ville gitt et sprang.
   const weeks = (d && Array.isArray(d.weeks)) ? d.weeks.filter(w => Array.isArray(w) && isFinite(w[2]) && isFinite(w[6])) : [];
   const dots  = (d && Array.isArray(d.runs) ? d.runs : [])
-    .filter(r => Array.isArray(r) && Array.isArray(r[3]) && r[8] === BRINE_REF && (r[3][8] ?? 0) >= BRINE_LOOPS)
+    .filter(r => Array.isArray(r) && Array.isArray(r[3]) && r[8] === BRINE_REF && r[9] === 1 && (r[3][8] ?? 0) >= BRINE_LOOPS)
     .map(r => ({ t: r[0], v: wallOf(r[3]) }))
     .filter(p => isFinite(p.v));
   if (!weeks.length && !dots.length)
