@@ -309,6 +309,19 @@ body{font-family:var(--f);color:var(--t1);
   color:var(--t1);font:400 12px/1 var(--m);padding:8px 10px;
   outline:none;width:100%;font-size:16px;transition:border-color .2s}
 .cfi:focus{border-color:rgba(45,124,246,.5)}
+.ex{display:flex;flex-direction:column;gap:9px;font:400 11px/1.45 var(--f);color:var(--t2)}
+.ex-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ex-r input{accent-color:#a78bfa}
+label.ex-r{flex-wrap:nowrap;align-items:flex-start}
+label.ex-r input{margin:2px 0 0;flex:none}
+label.ex-r>span{flex:1;min-width:0}
+.ex-n{display:block;font:400 9px/1.3 var(--m);color:var(--t3)}
+.ex select{background:transparent;color:var(--t2);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:4px 6px;font:inherit}
+.ex .cfc{margin-top:.2rem}
+.ex-st{font:400 10px/1.5 var(--m);color:var(--t3);white-space:pre-wrap}
+.ex-st:empty{display:none}
+.ex-b{display:flex;gap:8px}
+.ex .sr-b:disabled{opacity:.3;cursor:default}
 .cfc{display:block;width:100%;margin-top:.85rem;padding:.7rem;
   background:var(--acc);border:none;border-radius:9px;cursor:pointer;
   font:700 13px/1 var(--f);color:#fff;letter-spacing:.03em;
@@ -538,6 +551,32 @@ body{font-family:var(--f);color:var(--t1);
       <span>tall = målinger per uke</span>
     </div>
   </div>
+  <!-- Eksport for analyse (midlertidig) -->
+  <div class="panel" style="margin-top:.7rem">
+    <div class="ph">
+      <div class="phd" style="background:#a78bfa"></div>
+      <div class="pt">Eksport for analyse · midlertidig</div>
+    </div>
+    <div class="ex">
+      <label class="ex-r"><input type="checkbox" id="exVar" checked>
+        <span>Brønnanalyse, historikk og COP-timer <span class="ex-n">Logic-variabler</span></span></label>
+      <label class="ex-r"><input type="checkbox" id="exIns" checked>
+        <span>Innsikt: kompressorfrekvens, GP2, effekt, BT10, BT11, BT50, ute <span class="ex-n">krever «Vis innsikt» på API-nøkkelen</span></span></label>
+      <div class="ex-r">Periode
+        <select id="exRes">
+          <option value="last24Hours">siste døgn</option>
+          <option value="last7Days|lastWeek" selected>siste 7 døgn</option>
+          <option value="last31Days|lastMonth">siste 31 døgn</option>
+        </select></div>
+      <button class="cfc" type="button" id="exHent" onclick="eksportHent()">Hent data</button>
+      <div id="exSt" class="ex-st"></div>
+      <div class="ex-b">
+        <button class="sr-b" type="button" id="exKop" onclick="eksportKopier()" disabled>Kopier</button>
+        <button class="sr-b" type="button" id="exLast" onclick="eksportLastNed()" disabled>Last ned</button>
+      </div>
+    </div>
+  </div>
+
   <div class="cfg">
     <button class="cft" id="cft"
       onclick="tCfg()" ontouchend="event.preventDefault();tCfg()">
@@ -580,7 +619,7 @@ body{font-family:var(--f);color:var(--t1);
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 23;
+const APP_VERSION = 24;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2236,7 +2275,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{p
 
 // ═══════════════════════════════════════════
 // ENERGIBRØNN – T_vegg fra «nibe_brine_history»
-// Dataene samles av Homey-scriptet hvert 5. minutt, uavhengig av om
+// Dataene samles av Homey-scriptet hvert minutt, uavhengig av om
 // appen er åpen. Her leses og tegnes de bare. Krever at API-nøkkelen
 // har tilgangen «Vis variabler» (homey.logic.readonly).
 // ═══════════════════════════════════════════
@@ -3019,6 +3058,137 @@ function buildWellPanel(){
     `<div class="wp-ft">Samme fysikk som en termisk responstest (linjekilde, superposisjon), anvendt på vanlig drift. ` +
     `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) — uten det ble λ opptil 50 % for lav. ` +
     `Fjellets varmekapasitet antatt 2,3 MJ/m³K. Borehull 140 mm, vannfylt lengde 232 m. Uttaket er korrigert for varme tilkoblingsrørene tar fra omgivelsene.</div>`;
+}
+
+
+// ═══ Eksport for analyse (midlertidig) ══════════════════════════════
+// Henter ferske data rett fra Homey og samler dem i én JSON-fil som kan
+// lastes opp i chatten. Innsikt krever tilgangen «Vis innsikt»
+// (homey.insights.readonly) på API-nøkkelen.
+// «Hent data» og «Kopier» er to trykk med vilje: iOS blokkerer kopiering
+// som skjer etter en ventetid, men godtar den når teksten alt er klar.
+let eksportTekst = null;
+const EX_SERIER = [
+  ['hz',     'measure_frequency_NIBE.i1046_compressor'],
+  ['gp2',    'measure_percentage_NIBE.i1104_source_pump'],
+  ['effekt', 'measure_power_NIBE.i2166_energy_usage'],
+  ['bt10',   'measure_temperature_NIBE.i10_source_in'],
+  ['bt11',   'measure_temperature_NIBE.i11_source_out'],
+  ['ute',    'measure_temperature_NIBE.i1_outside'],
+];
+function exTilkobling(){
+  const hid = document.getElementById('hid').value.trim(), key = document.getElementById('hkey').value.trim();
+  if (!hid || !key) throw new Error('Fyll inn Homey-ID og API-nøkkel under Tilkobling først');
+  return { base: hid.includes('.') ? `https://${hid}` : `https://${hid}.connect.athom.com`,
+           h: { 'Authorization': 'Bearer ' + key } };
+}
+async function exJSON(url, h){
+  const r = await fetch(url, { headers: h });
+  if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+async function exVariabler(t){
+  const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
+  const ut = {};
+  for (const navn of ['nibe_trt_history', 'nibe_brine_history', 'nibe_cop_history']) {
+    const v = vars.find(x => x.name === navn);
+    if (!v) { ut[navn] = null; continue; }
+    try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
+  }
+  return ut;
+}
+async function exInnsikt(t, resValg){
+  const nd = Object.values(await exJSON(t.base + '/api/manager/devices/device', t.h))
+    .find(d => d.name === NIBE_DEV);
+  if (!nd) throw new Error('Fant ikke «' + NIBE_DEV + '»');
+  const serier = EX_SERIER.slice();
+  const k26 = Object.keys(nd.capabilitiesObj || {})
+    .find(k => k.startsWith('measure_temperature') && /\.i26(_|$)/.test(k));
+  if (k26) serier.push(['bt50', k26]);
+  const uri = 'homey:device:' + nd.id;
+  let res = resValg.split('|');                 // periodenavn i prioritert rekkefølge
+  const ut = { format: 'punkter = [minutter siden 1970 UTC, verdi]', oppløsning: null, serier: {}, feil: [] };
+  for (const [navn, cap] of serier) {
+    let data = null, feil = null;
+    // Homey Pro 2023 bruker «homey:device:<id>:<capability>» som logg-id, eldre bare capability.
+    // Avvises periodenavnet (400), prøves neste; det som virker, brukes videre.
+    ytre: for (const id of [uri + ':' + cap, cap]) {
+      for (let i = 0; i < res.length; i++) {
+        try {
+          data = await exJSON(`${t.base}/api/manager/insights/log/${uri}/${id}/entry?resolution=${res[i]}`, t.h);
+          res = res.slice(i); ut.oppløsning = res[0]; break ytre;
+        } catch (e) {
+          feil = e;
+          if (e.status === 401 || e.status === 403) break ytre;
+          if (e.status !== 400) break;           // 404: prøv neste logg-id
+        }
+      }
+    }
+    if (!data) {
+      if (feil && (feil.status === 401 || feil.status === 403))
+        throw new Error('API-nøkkelen mangler tilgangen «Vis innsikt». Lag en ny nøkkel med den i tillegg, og lim den inn under Tilkobling.');
+      ut.feil.push(navn + ': ' + (feil ? feil.message : 'ukjent feil'));
+      continue;
+    }
+    const vals = Array.isArray(data.values) ? data.values : null;
+    ut.serier[navn] = vals && vals.every(p => p && 't' in p && 'v' in p)
+      ? { cap, step: data.step ?? null,
+          punkter: vals.map(p => [Math.round(Date.parse(p.t) / 60000), p.v]).filter(p => Number.isFinite(p[0])) }
+      : { cap, raw: data };                      // ukjent format: tas med rått og tolkes i etterkant
+  }
+  return ut;
+}
+async function eksportHent(){
+  const st = document.getElementById('exSt'), btn = document.getElementById('exHent');
+  const kop = document.getElementById('exKop'), last = document.getElementById('exLast');
+  kop.disabled = last.disabled = btn.disabled = true; eksportTekst = null;
+  st.textContent = 'Henter …';
+  try {
+    const t = exTilkobling();
+    const medVar = document.getElementById('exVar').checked, medIns = document.getElementById('exIns').checked;
+    if (!medVar && !medIns) throw new Error('Velg minst én del');
+    const pakke = { eksportert: new Date().toISOString(), app: APP_VERSION };
+    if (medVar) pakke.variabler = await exVariabler(t);
+    if (medIns) pakke.innsikt = await exInnsikt(t, document.getElementById('exRes').value);
+    eksportTekst = JSON.stringify(pakke);
+    const l = ['Klar: ' + Math.max(1, Math.round(eksportTekst.length / 1024)) + ' kB'];
+    if (pakke.variabler) for (const [k, v] of Object.entries(pakke.variabler))
+      l.push('  ' + k + ': ' + (v === null ? 'mangler' : 'ok'));
+    if (pakke.innsikt) {
+      for (const [k, v] of Object.entries(pakke.innsikt.serier))
+        l.push('  ' + k + ': ' + (v.punkter ? v.punkter.length + ' punkt' : 'ukjent format, tatt med rått'));
+      for (const f of pakke.innsikt.feil) l.push('  ⚠️ ' + f);
+      if (pakke.innsikt.oppløsning) l.push('  periode: ' + pakke.innsikt.oppløsning);
+    }
+    st.textContent = l.join('\n');
+    kop.disabled = last.disabled = false;
+  } catch (e) { st.textContent = '⚠️ ' + e.message; }
+  btn.disabled = false;
+}
+function exKopierGammel(){
+  const ta = document.createElement('textarea');
+  ta.value = eksportTekst; ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, eksportTekst.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+  ta.remove(); return ok;
+}
+function eksportKopier(){
+  if (!eksportTekst) return;
+  const st = document.getElementById('exSt');
+  const ferdig = ok => { st.textContent += ok ? '\n✅ Kopiert – lim inn i chatten'
+                                               : '\n⚠️ Kopiering ble blokkert – bruk «Last ned»'; };
+  if (navigator.clipboard && window.isSecureContext)
+    navigator.clipboard.writeText(eksportTekst).then(() => ferdig(true), () => ferdig(exKopierGammel()));
+  else ferdig(exKopierGammel());
+}
+function eksportLastNed(){
+  if (!eksportTekst) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([eksportTekst], { type: 'application/json' }));
+  a.download = 'nibe-eksport-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
 }
 
 // ── Startup ──
