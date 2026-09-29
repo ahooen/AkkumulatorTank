@@ -619,7 +619,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 24;
+const APP_VERSION = 25;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2484,10 +2484,15 @@ const WELL = {
   Cb: 61600,              // J/(m·K), borehullets egen kapasitet: grunnvann i hullet
                           // (51,1) + kuldebærer i rørene (9,2) + PE-vegger (1,3)
   opStart: Date.UTC(2026, 4, 17),   // idriftsetting 17. mai
-  minDays: 7,             // minste datagrunnlag før resultat vises
-  minBins: 60,            // minste antall gyldige timer i regresjonen
+  minDays: 1.5,           // resultat vises fra 1,5 døgn – merket foreløpig
+  fullDays: 7,            // … fram til 7 døgn
+  minBins: 8,             // minste antall gyldige timer i regresjonen
   runFrac: 0.8,           // timen må ha gått minst 80 % for å brukes
-  skipHours: 48,          // de første døgnene domineres av ulogget historikk
+  skipHours: 48,          // de første døgnene domineres av ulogget historikk …
+  skipFrac: 0.25,         // … men tidlig hoppes bare 25 % av perioden over.
+                          // Testet på tre bergarter: fra 1,5–3 døgn er feilen
+                          // opptil ~20 %, men innenfor ~1σ av oppgitt usikkerhet.
+                          // Uten hopp ble λ opptil 10 % skjev etter 10–14 døgn.
   maxGapFill: 6,          // timer – kortere hull interpoleres
 };
 
@@ -2582,10 +2587,11 @@ function wellFit(d, forrige){
   //    λ og R2 søkes i to dimensjoner (rutenett + Nelder–Mead).
   const qA = new Float64Array(N);
   for (let i = 0; i < N; i++) qA[i] = q[start + i];
+  const skipB = Math.min(W.skipHours, W.skipFrac * days * 24) * 3600 / HOUR;
   const vi = [];
   for (let j = 0; j < N; j++) {
     const b = row[start + j];
-    if (b && Number.isFinite(b[3]) && b[4] >= W.runFrac && j >= W.skipHours * 3600 / HOUR) vi.push(j);
+    if (b && Number.isFinite(b[3]) && b[4] >= W.runFrac && j >= skipB) vi.push(j);
   }
   if (vi.length < W.minBins * 3600 / HOUR)
     return { ok: false, why: 'for få gyldige timer', n: vi.length, need: W.minBins * 3600 / HOUR, days: days };
@@ -2719,7 +2725,7 @@ function wellFit(d, forrige){
   let qs = 0; for (let i = 0; i < N; i++) qs += q[start + i];
 
   return {
-    ok: true,
+    ok: true, prelim: days < W.fullDays,
     coolNow: coolNow, qMean: qs / N,
     lambda: lam, sLambda: lamSE,
     Rb: beta[2] + R2fit, R1: beta[2], R2: R2fit,
@@ -3044,7 +3050,7 @@ function buildWellPanel(){
   const f = trtFit || trtFitPrev;
   let status;
   if (!trtData) status = trtErr ? '⚠️ ' + trtErr : 'Venter på data fra «Brønnens egenskaper» i Homey';
-  else if (f && f.ok) status = `${f.days.toFixed(1)} døgn · ${f.n} målepunkt · R² ${f.r2.toFixed(3)} · avvik ${(f.rms * 1000).toFixed(0)} mK`;
+  else if (f && f.ok) status = (f.prelim ? 'Foreløpig · ' : '') + `${f.days.toFixed(1)} døgn · ${f.n} målepunkt · R² ${f.r2.toFixed(3)} · avvik ${(f.rms * 1000).toFixed(0)} mK`;
   else if (f && f.why && !/samler|for få/.test(f.why)) status = '⚠️ ' + f.why;
   else {
     const dg = (trtData.q || []).length / 96, np = (trtData.pts || []).length;
@@ -3054,12 +3060,104 @@ function buildWellPanel(){
       : `Samler målepunkt: ${np} av ${trengs} · ${dg.toFixed(1)} døgn`;
   }
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(f, live) + '</div>' +
-    `<div class="wp-st">${status}</div>` + wellScales(f, live) +
+    `<div class="wp-st">${status}</div><div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(f, live) +
     `<div class="wp-ft">Samme fysikk som en termisk responstest (linjekilde, superposisjon), anvendt på vanlig drift. ` +
     `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) — uten det ble λ opptil 50 % for lav. ` +
     `Fjellets varmekapasitet antatt 2,3 MJ/m³K. Borehull 140 mm, vannfylt lengde 232 m. Uttaket er korrigert for varme tilkoblingsrørene tar fra omgivelsene.</div>`;
+  visUtv(); wellUtvikling();
 }
 
+
+
+// ═══ Utvikling: tilpasningen for hvert døgn med data ═══════════════
+// Viser hvordan λ, Rb og T₀ finner roen etter hvert som dataene vokser –
+// og er samtidig stabilitetskontrollen: et resultat som ikke setter seg,
+// er et varsel. Hvert hele døgn tilpasses på dataene fram til da, i
+// bakgrunnen, ett døgn per runde med varmstart, og lagres per datagrunnlag.
+const UTV_MODELL = 'kap-2';                  // byttes når tilpasningen endres
+let utvCache = null, utvBusy = false;
+try { const c = localStorage.getItem('trtUtv'); if (c) utvCache = JSON.parse(c); } catch (_) {}
+function wellUtvikling(){
+  if (!trtData || !Array.isArray(trtData.q) || utvBusy) return;
+  const nDays = Math.floor(trtData.q.length / 96);
+  if (!utvCache || utvCache.base !== trtData.base || utvCache.m !== UTV_MODELL)
+    utvCache = { base: trtData.base, m: UTV_MODELL, e: {} };
+  const mangler = [];
+  for (let d = 2; d <= nDays; d++) if (!(d in utvCache.e)) mangler.push(d);
+  if (!mangler.length) return;
+  utvBusy = true;
+  let forrige = null;
+  const neste = () => {
+    const d = mangler.shift();
+    if (d === undefined) {
+      utvBusy = false;
+      try { localStorage.setItem('trtUtv', JSON.stringify(utvCache)); } catch (_) {}
+      visUtv(); return;
+    }
+    try {
+      const k = d * 96;
+      const r = wellFit(trtToBins({ ...trtData, q: trtData.q.slice(0, k),
+                                   pts: trtData.pts.filter(p => p[0] < k) }), forrige);
+      if (r && r.ok) {
+        forrige = r;
+        utvCache.e[d] = [r.lambda, r.sLambda, r.Rb, r.sRb, r.T0, r.sT0].map(v => Math.round(v * 1000) / 1000);
+      } else utvCache.e[d] = null;
+    } catch (_) { utvCache.e[d] = null; }
+    visUtv();
+    setTimeout(neste, 20);
+  };
+  setTimeout(neste, 60);
+}
+function visUtv(){
+  const el = document.getElementById('wellUtv');
+  if (el) el.innerHTML = wellUtvSVG();
+}
+function wellUtvSVG(){
+  const pts = [];
+  if (utvCache && utvCache.e) for (const [d, e] of Object.entries(utvCache.e)) if (e) pts.push({ d: +d, v: e });
+  const f = (typeof trtFit !== 'undefined' && trtFit && trtFit.ok) ? trtFit : null;
+  if (f && !pts.some(p => Math.abs(p.d - f.days) < 0.05))
+    pts.push({ d: f.days, v: [f.lambda, f.sLambda, f.Rb, f.sRb, f.T0, f.sT0] });
+  pts.sort((a, b) => a.d - b.d);
+  if (pts.length < 2) return '';
+  const X = WELLX, W = 340, L = 76, R = 8, rh = 38, gap = 7, top = 17;
+  const d0 = pts[0].d, d1 = pts[pts.length - 1].d;
+  const xs = d => L + (W - L - R) * (d1 > d0 ? (d - d0) / (d1 - d0) : 0.5);
+  const mono = 'font-family="DM Mono,monospace"';
+  const rader = [
+    { navn: 'λ',  enh: 'W/mK',  i: 0, sys: v => X.sysLam * v, dec: 2, col: '#7dd3fc' },
+    { navn: 'Rb', enh: 'K·m/W', i: 2, sys: () => X.sysRb,     dec: 3, col: '#fdba74' },
+    { navn: 'T₀', enh: '°C',    i: 4, sys: () => X.sysT0,     dec: 1, col: '#86efac' },
+  ];
+  const yBunn = top + rader.length * (rh + gap) - gap, H = yBunn + 14;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">`;
+  s += `<text x="0" y="9" font-size="8" fill="rgba(255,255,255,.35)" ${mono} letter-spacing=".06em">UTVIKLING · PER DØGN MED DATA · BÅND ±1σ</text>`;
+  if (d0 < WELL.fullDays) {
+    const xe = xs(Math.min(WELL.fullDays, d1));
+    s += `<rect x="${L}" y="${top}" width="${Math.max(0, xe - L).toFixed(1)}" height="${yBunn - top}" fill="rgba(255,255,255,.04)"/>`;
+    if (xe - L > 40) s += `<text x="${(xe - 3).toFixed(1)}" y="${top + 8}" text-anchor="end" font-size="7" fill="rgba(255,255,255,.3)" ${mono}>foreløpig</text>`;
+  }
+  rader.forEach((r, k) => {
+    const y0 = top + k * (rh + gap), v = pts.map(p => p.v[r.i]);
+    const sg = pts.map(p => Math.hypot(p.v[r.i + 1] || 0, r.sys(p.v[r.i])));
+    let lo = Math.min(...v.map((x, j) => x - sg[j])), hi = Math.max(...v.map((x, j) => x + sg[j]));
+    if (!(hi > lo)) hi = lo + 1;
+    const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+    const ys = x => y0 + rh - (x - lo) / (hi - lo) * rh;
+    const opp = pts.map((p, j) => `${xs(p.d).toFixed(1)},${ys(v[j] + sg[j]).toFixed(1)}`);
+    const ned = pts.map((p, j) => `${xs(p.d).toFixed(1)},${ys(v[j] - sg[j]).toFixed(1)}`).reverse();
+    s += `<polygon points="${opp.concat(ned).join(' ')}" fill="${r.col}" fill-opacity=".14"/>`;
+    s += `<polyline points="${pts.map((p, j) => `${xs(p.d).toFixed(1)},${ys(v[j]).toFixed(1)}`).join(' ')}" fill="none" stroke="${r.col}" stroke-width="1.6" stroke-linejoin="round"/>`;
+    const n = pts.length - 1;
+    s += `<circle cx="${xs(pts[n].d).toFixed(1)}" cy="${ys(v[n]).toFixed(1)}" r="2.4" fill="${r.col}"/>`;
+    s += `<text x="0" y="${y0 + 14}" font-size="10" fill="${r.col}" ${mono}>${r.navn} ${v[n].toFixed(r.dec)}</text>`;
+    s += `<text x="0" y="${y0 + 26}" font-size="7.5" fill="rgba(255,255,255,.4)" ${mono}>±${sg[n].toFixed(r.dec)} ${r.enh}</text>`;
+  });
+  const steg = d1 - d0 > 14 ? 7 : d1 - d0 > 6 ? 2 : 1;
+  for (let d = Math.ceil(d0); d <= d1 + 1e-9; d += steg)
+    s += `<text x="${xs(d).toFixed(1)}" y="${H - 2}" text-anchor="middle" font-size="7.5" fill="rgba(255,255,255,.35)" ${mono}>${d} d</text>`;
+  return s + '</svg>';
+}
 
 // ═══ Eksport for analyse (midlertidig) ══════════════════════════════
 // Henter ferske data rett fra Homey og samler dem i én JSON-fil som kan
