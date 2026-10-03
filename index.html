@@ -603,7 +603,7 @@ label.ex-r>span{flex:1;min-width:0}
       <div class="cfh">Finn på
         <a href="https://my.homey.app" target="_blank" rel="noopener"
            style="color:#60a5fa;text-decoration:none">my.homey.app</a>
-        → Innstillinger → API Keys → Opprett ny (kun <em>Devices: Read</em>).
+        → Innstillinger → API Keys → Opprett ny med <em>Vis enheter</em>, <em>Vis variabler</em> og <em>Vis innsikt</em> (den siste trengs bare til eksport).
       </div>
       <button class="cfc" id="cfc" type="button" onclick="doFetch()">Koble til</button>
       <div class="cfh" id="cfver" style="text-align:center;margin-top:.6rem;opacity:.7">Versjon –</div>
@@ -619,7 +619,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 27;
+const APP_VERSION = 28;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2481,7 +2481,9 @@ const WELL = {
   L: 232,                 // m, vannfylt aktiv lengde (250 m − 17 m tørr sone)
   rb: 0.070,              // m, borehullsradius (140 mm)
   C: 2.3e6,               // J/(m³·K), antatt volumetrisk varmekapasitet i fjellet
-  Cb: 61600,              // J/(m·K), borehullets egen kapasitet: grunnvann i hullet
+  Cb: 61600,
+  dTauto: 4.1,            // K – ΔT som GP2 Auto holder (målt 3,8–4,4) – for punkt uten målt ṁcp
+  pipeW: 100,             // W – typisk rørvarme inn i kuldebæreren – samme formål              // J/(m·K), borehullets egen kapasitet: grunnvann i hullet
                           // (51,1) + kuldebærer i rørene (9,2) + PE-vegger (1,3)
   opStart: Date.UTC(2026, 4, 17),   // idriftsetting 17. mai
   minDays: 1.5,           // resultat vises fra 1,5 døgn – merket foreløpig
@@ -2642,10 +2644,13 @@ function wellFit(d, forrige){
     for (const j of vi) {
       const b = row[start + j], tj = (j + 0.5) * HOUR;
       const P = prior > 0 ? wellE1(xk / (prior + tj)) - wellE1(xk / tj) : 0;
-      y.push(b[3] - D[j]);                        // Tf − fyllets respons = T₀ + forhistorie − R1·q
-      X.push([1, -P / fl, -b[2]]);
+      // Varmeutveksling mellom rørbeina (Hellström): q·(L/ṁcp)²/(3·Ra).
+      // Lineær i 1/Ra. ṁcp er målt der den finnes, ellers anslått fra Auto.
+      const mcp = b[5] > 0 ? b[5] : (b[2] * W.L + W.pipeW) / W.dTauto;
+      y.push(b[3] - D[j]);                        // Tf − fyllets respons = T₀ + forhistorie − R1·q − q(L/ṁcp)²/3Ra
+      X.push([1, -P / fl, -b[2], -b[2] * Math.pow(W.L / mcp, 2) / 3]);
     }
-    const p = 3, XtX = Array.from({ length: p }, () => Array(p).fill(0)), Xty = Array(p).fill(0);
+    const p = 4, XtX = Array.from({ length: p }, () => Array(p).fill(0)), Xty = Array(p).fill(0);
     X.forEach((r, n) => { for (let a = 0; a < p; a++) { Xty[a] += r[a] * y[n];
       for (let c = 0; c < p; c++) XtX[a][c] += r[a] * r[c]; } });
     const beta = wellSolve(XtX, Xty);
@@ -2693,9 +2698,13 @@ function wellFit(d, forrige){
 
   // 3) Usikkerhet fra residualene
   const { beta, X, y, idx, XtX } = res;
+  const mcps = idx.map(j => { const b = row[start + j]; return b[5] > 0 ? b[5] : (b[2] * W.L + W.pipeW) / W.dTauto; })
+                  .sort((a, b) => a - b);
+  const mcpLow = mcps[Math.floor(mcps.length * 0.2)];
+  const nMcp = idx.filter(j => row[start + j][5] > 0).length;
   const fit = X.map(r => r.reduce((s, v, a) => s + v * beta[a], 0));
   const rss = y.reduce((s, v, n) => s + (v - fit[n]) ** 2, 0);
-  const n = y.length, p = beta.length + 2;              // + λ og R2
+  const n = y.length, p = beta.length + 2;              // + λ og R2 (β: T₀, q_før, R1, 1/Ra)
   const s2 = rss / Math.max(1, n - p);
   const inv = wellInverse(XtX);
   const se = inv ? inv.map((r, i) => Math.sqrt(Math.max(0, s2 * r[i]))) : beta.map(() => NaN);
@@ -2729,6 +2738,10 @@ function wellFit(d, forrige){
     coolNow: coolNow, qMean: qs / N,
     lambda: lam, sLambda: lamSE,
     Rb: beta[2] + R2fit, R1: beta[2], R2: R2fit,
+    invRa: beta[3], sInvRa: se[3], Ra: beta[3] > 0 ? 1 / beta[3] : null,
+    mcpLow: mcpLow, nMcp: nMcp,
+    RbLow: beta[2] + R2fit + Math.pow(W.L / mcpLow, 2) * beta[3] / 3,
+    sRbLow: Math.hypot(se[2], Math.pow(W.L / mcpLow, 2) * se[3] / 3),
     sRb: Math.sqrt(se[2] * se[2] + (Number.isFinite(R2SE) ? R2SE * R2SE : 0)),
     T0: beta[0], sT0: se[0],
     qPrior: qPrior,
@@ -2747,7 +2760,7 @@ function trtToBins(t){
   for (let i = 0; i < t.q.length; i++) {
     if (t.q[i] === null || !Number.isFinite(t.q[i])) continue;
     const p = pm.get(i);
-    bins.push([i, t.q[i] / 10, p ? p[1] / 10 : 0, p ? p[2] / 100 : null, p ? 1 : 0, 0]);
+    bins.push([i, t.q[i] / 10, p ? p[1] / 10 : 0, p ? p[2] / 100 : null, p ? 1 : 0, p && p.length > 3 ? p[3] : 0]);
   }
   return { base: t.base, binSec: t.binSec || 900, bins: bins };
 }
@@ -3023,6 +3036,7 @@ function wellScale(c){
 
 function wellScales(fit, live){
   const ok = fit && fit.ok, W = WELLX;
+  const okLow = ok && Number.isFinite(fit.RbLow) && Number.isFinite(fit.Rb);   // tåler eldre resultat uten feltene
   const lam = ok ? fit.lambda : null;
   const eLam = ok ? Math.hypot(fit.sLambda, W.sysLam * fit.lambda) : null;
   const ratio = ok ? lam / W.lamPrior : null;
@@ -3048,6 +3062,14 @@ function wellScales(fit, live){
       note: ok ? (fit.Rb > 0.11 ? 'Høyere enn databladet — passer med at strømningen ofte er laminær i 45 mm-røret.'
                                 : 'På nivå med databladet — god varmeovergang fra væske til fjell.')
                : 'Lavere er bedre. Laminær strømning øker motstanden merkbart.' }),
+    wellScale({ label: 'Effektiv R<sub>b</sub> ved lav last', unit: 'K·m/W', dec: 2, min: 0.05, max: 0.8,
+      zones: [{ to: 0.15, col: '#15803d', name: 'lite tap' }, { to: 0.30, col: '#0e7490', name: 'merkbart' },
+              { to: 0.8, col: '#b45309', name: 'vurder fast delta' }],
+      val: okLow ? fit.RbLow : null, err: okLow ? Math.hypot(fit.sRbLow || 0, W.sysRb) : null, wait: wait,
+      note: okLow ? `Varmeutveksling mellom rørbeina: Ra ${fit.Ra ? fit.Ra.toFixed(2) : '∞'} K·m/W. Ved lav last ` +
+                 `(ṁcp ${Math.round(fit.mcpLow || 0)} W/K) kjøler nedløpet oppløpet, og motstanden stiger fra ${fit.Rb.toFixed(3)} til ${fit.RbLow.toFixed(2)}. ` +
+                 `Over 0,30: test fast delta 3,0 K i meny 7.1.2.7. Flow målt i ${fit.nMcp ?? 0} av ${fit.n} punkt.`
+               : 'Ved lav flow kjøler nedløpet oppløpet. Over 0,30 kan fast delta 3,0 K i meny 7.1.2.7 lønne seg.' }),
     wellScale({ label: 'Upåvirket temperatur <span class="ws-sym">T₀</span>', unit: '°C', dec: 1, min: 7, max: 13,
       zones: [{ to: 9, col: '#1e40af', name: 'kaldt' }, { to: 11.5, col: '#0e7490', name: 'typisk Bergen' }, { to: 13, col: '#b45309', name: 'varmt' }],
       ref: [9.4, 11.4, 'forventet, med geotermisk gradient'],
@@ -3110,7 +3132,8 @@ function buildWellPanel(){
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(fv, live) + '</div>' +
     `<div class="wp-st">${status}</div><div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) +
     `<div class="wp-ft">Samme fysikk som en termisk responstest (linjekilde, superposisjon), anvendt på vanlig drift. ` +
-    `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) — uten det ble λ opptil 50 % for lav. ` +
+    `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) og varmeutvekslingen mellom rørbeina ved lav flow — ` +
+    `uten dem ble λ opptil 50 % for lav og T₀ 2–4 K for lav. ` +
     `Fjellets varmekapasitet antatt 2,3 MJ/m³K. Borehull 140 mm, vannfylt lengde 232 m. Uttaket er korrigert for varme tilkoblingsrørene tar fra omgivelsene.</div>`;
   visUtv(); wellUtvikling();
 }
@@ -3122,7 +3145,7 @@ function buildWellPanel(){
 // og er samtidig stabilitetskontrollen: et resultat som ikke setter seg,
 // er et varsel. Hvert hele døgn tilpasses på dataene fram til da, i
 // bakgrunnen, ett døgn per runde med varmstart, og lagres per datagrunnlag.
-const UTV_MODELL = 'kap-2';                  // byttes når tilpasningen endres
+const UTV_MODELL = 'kap-3';                  // v28: kortslutning mellom rørbeina                  // byttes når tilpasningen endres
 let utvCache = null, utvBusy = false;
 try { const c = localStorage.getItem('trtUtv'); if (c) utvCache = JSON.parse(c); } catch (_) {}
 function wellUtvikling(){
