@@ -619,7 +619,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2289,7 +2289,7 @@ const BRINE_LOOPS = 1.15;           // pumpede sløyfer før referansen godtas
 function brineRb(){
   const f = (typeof trtFit !== 'undefined' && trtFit && trtFit.ok) ? trtFit
           : (typeof trtFitPrev !== 'undefined' && trtFitPrev && trtFitPrev.ok) ? trtFitPrev : null;
-  return f ? { rb: f.Rb, malt: true } : { rb: BRINE_RB, malt: false };
+  return f && wellKvalitet(f).ok ? { rb: f.Rb, malt: true } : { rb: BRINE_RB, malt: false };
 }
 const BRINE_EVERY = 5*60000;        // hent maks hvert 5. minutt
 let brineData = null, brineErr = null, brineLast = 0;
@@ -2838,6 +2838,26 @@ function wellRe(flowLps, Tbrine){
 // mot (0,0050 l/s per %). Mindre sikkert enn energibalansen – derfor markert
 // med "anslag" i panelet, ikke "målt".
 const K_GP2_EST = 0.0050;
+
+// Plausibilitetskontroll av brønnanalysen. En tilpasning kan se pen ut og
+// likevel være fysisk umulig. Feiler ett av kriteriene, vises ingen verdier:
+//  – λ i søkegrensen: tilpasningen fant ikke noe minimum
+//  – Rb under 0,05: væskefilmen i et laminært rør gir alene ≈ 0,085
+//  – T₀ under væsketemperaturen: fjellet må være varmere enn væsken som
+//    henter varme fra det
+// Kjent årsak (okt. 2026): varmeutveksling mellom rørbeina. Når GP2 Auto
+// holder ΔT konstant, følger flowen lasten, og kortslutningen gir et ekstra
+// temperaturfall som går som 1/q – en form modellen mangler. I syntetiske
+// data ga det T₀ 2–4 K for lav og Rb rundt null, som i de ekte dataene.
+function wellKvalitet(fit){
+  if (!fit || !fit.ok) return { ok: false, grunner: [] };
+  const g = [];
+  if (fit.lambda >= 7.5 || fit.lambda <= 0.6) g.push('λ stanget i søkegrensen');
+  if (fit.Rb < 0.05) g.push('Rb under det fysisk mulige');
+  const tf = Array.isArray(fit.series) ? fit.series.map(p => p[1]).filter(Number.isFinite) : [];
+  if (tf.length && fit.T0 < Math.max(...tf) + 0.3) g.push('T₀ lavere enn væsken fra brønnen');
+  return { ok: g.length === 0, grunner: g };
+}
 function wellFlowEst(n){
   if (!(n.srcPct > 0)) return null;
   return K_GP2_EST * n.srcPct;
@@ -3074,8 +3094,10 @@ function buildWellPanel(){
                  flow: flowMalt ?? flowEst, flowKilde: flowMalt != null ? 'malt' : (flowEst != null ? 'anslag' : null),
                  trom: n.trom, tromSrc: n.tromSrc };
   const f = trtFit || trtFitPrev;
+  const kv = wellKvalitet(f), fv = kv.ok ? f : null;   // bare pålitelige resultater vises
   let status;
   if (!trtData) status = trtErr ? '⚠️ ' + trtErr : 'Venter på data fra «Brønnens egenskaper» i Homey';
+  else if (f && f.ok && !kv.ok) status = `⚠️ Tilpasningen er ikke pålitelig (${kv.grunner.join(', ')}) — verdiene vises ikke · ${f.days.toFixed(1)} døgn · R² ${f.r2.toFixed(2)}`;
   else if (f && f.ok) status = (f.prelim ? 'Foreløpig · ' : '') + `${f.days.toFixed(1)} døgn · ${f.n} målepunkt · R² ${f.r2.toFixed(3)} · avvik ${(f.rms * 1000).toFixed(0)} mK`;
   else if (f && f.why && !/samler|for få/.test(f.why)) status = '⚠️ ' + f.why;
   else {
@@ -3085,8 +3107,8 @@ function buildWellPanel(){
       ? `Samler data: ${dg.toFixed(1)} av ${WELL.minDays} døgn · ${np} målepunkt`
       : `Samler målepunkt: ${np} av ${trengs} · ${dg.toFixed(1)} døgn`;
   }
-  el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(f, live) + '</div>' +
-    `<div class="wp-st">${status}</div><div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(f, live) +
+  el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(fv, live) + '</div>' +
+    `<div class="wp-st">${status}</div><div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) +
     `<div class="wp-ft">Samme fysikk som en termisk responstest (linjekilde, superposisjon), anvendt på vanlig drift. ` +
     `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) — uten det ble λ opptil 50 % for lav. ` +
     `Fjellets varmekapasitet antatt 2,3 MJ/m³K. Borehull 140 mm, vannfylt lengde 232 m. Uttaket er korrigert for varme tilkoblingsrørene tar fra omgivelsene.</div>`;
@@ -3157,7 +3179,8 @@ function wellUtvSVG(){
   ];
   const yBunn = top + rader.length * (rh + gap) - gap, H = yBunn + 14;
   let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">`;
-  s += `<text x="0" y="9" font-size="8" fill="rgba(255,255,255,.35)" ${mono} letter-spacing=".06em">UTVIKLING · PER DØGN MED DATA · BÅND ±1σ</text>`;
+  const upal = f && !wellKvalitet(f).ok;
+  s += `<text x="0" y="9" font-size="8" fill="${upal ? '#fca5a5' : 'rgba(255,255,255,.35)'}" ${mono} letter-spacing=".06em">${upal ? 'UTVIKLING · IKKE PÅLITELIG – SE STATUS' : 'UTVIKLING · PER DØGN MED DATA · BÅND ±1σ'}</text>`;
   if (d0 < WELL.fullDays) {
     const xe = xs(Math.min(WELL.fullDays, d1));
     s += `<rect x="${L}" y="${top}" width="${Math.max(0, xe - L).toFixed(1)}" height="${yBunn - top}" fill="rgba(255,255,255,.04)"/>`;
@@ -3249,8 +3272,11 @@ async function exInnsikt(t, resValg){
       }
     }
     if (!data) {
-      if (feil && (feil.status === 401 || feil.status === 403))
-        throw new Error('API-nøkkelen mangler tilgangen «Vis innsikt». Lag en ny nøkkel med den i tillegg, og lim den inn under Tilkobling.');
+      if (feil && (feil.status === 401 || feil.status === 403)) {
+        // Uten innsiktstilgang hoppes innsikten over – variablene eksporteres likevel
+        ut.feil.push('innsikt hoppet over: API-nøkkelen mangler tilgangen «Vis innsikt»');
+        return ut;
+      }
       ut.feil.push(navn + ': ' + (feil ? feil.message : 'ukjent feil'));
       continue;
     }
