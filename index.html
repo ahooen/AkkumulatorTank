@@ -619,7 +619,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 25;
+const APP_VERSION = 26;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2832,6 +2832,16 @@ function wellRe(flowLps, Tbrine){
   if (!(flowLps > 0)) return null;
   return 4 * flowLps / 1000 / (Math.PI * WELLX.ID * brineNu(Tbrine));
 }
+// Når kompressoren står, kan energibalansen ikke gi flow (ingen varme å måle
+// mot). GP2 går likevel ofte under en stillstandsmåling, så flowen anslås fra
+// turtallet med samme konstant som nibe_trt.js og nibe_brine.js er kalibrert
+// mot (0,0050 l/s per %). Mindre sikkert enn energibalansen – derfor markert
+// med "anslag" i panelet, ikke "målt".
+const K_GP2_EST = 0.0050;
+function wellFlowEst(n){
+  if (!(n.srcPct > 0)) return null;
+  return K_GP2_EST * n.srcPct;
+}
 function wellGround05(ts){
   const d = new Date(ts);
   const doy = (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86400000;
@@ -2893,13 +2903,25 @@ function wellSVG(fit, live){
   s += `<text x="129" y="${top - 12}" font-size="7" fill="rgba(255,255,255,.45)" ${mono}>1 m luft</text>`;
   s += `<text x="${(126 + X - 14) / 2}" y="${pY + 16}" text-anchor="middle" font-size="7" fill="rgba(255,255,255,.45)" ${mono}>10 m i grunnen · 0,5 m overdekke</text>`;
 
-  // Kuldebærer ved brønnhodet, korrigert for rørenes varmeopptak
-  if (live && live.bt10 != null && live.bt11 != null && live.flow > 0) {
-    const WK = live.flow * BRINE.cpv;
-    const ut = live.bt10 - wellLegGain(live.bt10, live.out, live.trom) / WK;
-    const inn = live.bt11 + wellLegGain(live.bt11, live.out, live.trom) / WK;
-    s += `<text x="${X - 10}" y="${top - 24}" text-anchor="end" font-size="8.5" fill="#fdba74" ${mono}>↑ ut ${f1(ut)} °C</text>`;
-    s += `<text x="${X - 10}" y="${top - 13}" text-anchor="end" font-size="8.5" fill="#93c5fd" ${mono}>↓ inn ${f1(inn)} °C</text>`;
+  // Kuldebærer ved brønnhodet. Med kjent flow (målt fra energibalansen, eller
+  // anslått fra GP2 når kompressoren står) korrigeres for rørenes
+  // varmeopptak. Uten flow i det hele tatt – reint stillstand – vises BT10
+  // og BT11 rått: det er nettopp det en gjenopprettingsmåling leser av.
+  if (live && live.bt10 != null && live.bt11 != null) {
+    if (live.flow > 0) {
+      const WK = live.flow * BRINE.cpv;
+      const ut = live.bt10 - wellLegGain(live.bt10, live.out, live.trom) / WK;
+      const inn = live.bt11 + wellLegGain(live.bt11, live.out, live.trom) / WK;
+      const anslag = live.flowKilde === 'anslag';
+      const dash = anslag ? ' stroke-dasharray="1.5,1.5"' : '';
+      s += `<text x="${X - 10}" y="${top - 24}" text-anchor="end" font-size="8.5" fill="#fdba74" ${mono}${dash}>↑ ut ${anslag ? '≈ ' : ''}${f1(ut)} °C</text>`;
+      s += `<text x="${X - 10}" y="${top - 13}" text-anchor="end" font-size="8.5" fill="#93c5fd" ${mono}${dash}>↓ inn ${anslag ? '≈ ' : ''}${f1(inn)} °C</text>`;
+      if (anslag) s += `<text x="${X - 10}" y="${top - 2}" text-anchor="end" font-size="6.5" fill="rgba(253,186,116,.55)" ${mono}>flow anslått fra GP2 ${live.gp2} %</text>`;
+    } else {
+      s += `<text x="${X - 10}" y="${top - 24}" text-anchor="end" font-size="8.5" fill="#fdba74" ${mono}>BT10 ${f1(live.bt10)} °C</text>`;
+      s += `<text x="${X - 10}" y="${top - 13}" text-anchor="end" font-size="8.5" fill="#93c5fd" ${mono}>BT11 ${f1(live.bt11)} °C</text>`;
+      s += `<text x="${X - 10}" y="${top - 2}" text-anchor="end" font-size="6.5" fill="rgba(255,255,255,.4)" ${mono}>stillstand · ingen korreksjon</text>`;
+    }
   }
 
   // Borehull: foring, tørr sone, vann
@@ -2987,6 +3009,7 @@ function wellScales(fit, live){
   const Tb = live && live.bt10 != null && live.bt11 != null ? (live.bt10 + live.bt11) / 2 : null;
   const re = wellRe(live && live.flow, Tb);
   const wait = '–';                     // fremdriften står én gang, under illustrasjonen
+  const flowAnslag = live && live.flowKilde === 'anslag';
   const lamNote = !ok ? 'Bergartene i Lindåsdekket er kvartsfattige og leder varme dårlig. Målt verdi over båndet peker mot grunnvann.'
     : lam > W.lamRock[1] + 0.2 ? 'Over det bergarten alene kan gi — grunnvann bidrar trolig til varmetilførselen.'
     : lam < W.lamRock[0] - 0.2 ? 'Under forventet for bergarten. Sjekk borehullsdiameter og antatt varmekapasitet.'
@@ -3021,10 +3044,11 @@ function wellScales(fit, live){
       note: ok ? `Tilsvarer ${(fit.qMean * 8.76).toFixed(0)} kWh/m·år ved dagens rate. Norsk praksis tåler 80–150.` : 'Midlere uttak per meter over måleperioden.' }),
     wellScale({ label: 'Strømning i kollektoren', unit: 'Re', dec: 0, min: 400, max: 3200,
       zones: [{ to: 1800, col: '#b45309', name: 'laminær' }, { to: 3200, col: '#15803d', name: 'turbulent' }],
-      val: re, wait: 'kompressor står',
-      note: re ? `Målt flow ${(live.flow * 60).toFixed(1)} l/min ved GP2 ${live.gp2} %, fra energibalansen over fordamperen. ` +
+      val: re, wait: 'ingen flow',
+      note: re ? `${flowAnslag ? 'Anslått' : 'Målt'} flow ${(live.flow * 60).toFixed(1)} l/min ved GP2 ${live.gp2} %` +
+                 `${flowAnslag ? ', fra GP2-turtallet mens kompressoren står' : ', fra energibalansen over fordamperen'}. ` +
                  `HXi-35 ved ${Tb.toFixed(1)} °C har viskositet ${(brineNu(Tb) * 1e6).toFixed(1)}·10⁻⁶ m²/s – kaldere væske gir lavere Re. TurboCollector blir turbulent ved Re 1800.`
-               : 'Vises når kompressoren går. Flowen regnes fra energibalansen, ikke pumpekurven.' }),
+               : 'Vises når kompressoren eller GP2 går. Flowen regnes fra energibalansen når kompressoren går, ellers anslått fra GP2-turtallet.' }),
   ].join('');
 }
 
@@ -3045,7 +3069,9 @@ function buildWellPanel(){
   }
   const n = (typeof nibe_last !== 'undefined' && nibe_last) || {};
   // Dashbordets navn: brineIn = BT10, brineOt = BT11, srcPct = GP2, outAvg = BT1
-  const live = { bt10: n.brineIn, bt11: n.brineOt, gp2: n.srcPct, out: n.outAvg, flow: wellFlowLps(n),
+  const flowMalt = wellFlowLps(n), flowEst = flowMalt == null ? wellFlowEst(n) : null;
+  const live = { bt10: n.brineIn, bt11: n.brineOt, gp2: n.srcPct, out: n.outAvg,
+                 flow: flowMalt ?? flowEst, flowKilde: flowMalt != null ? 'malt' : (flowEst != null ? 'anslag' : null),
                  trom: n.trom, tromSrc: n.tromSrc };
   const f = trtFit || trtFitPrev;
   let status;
