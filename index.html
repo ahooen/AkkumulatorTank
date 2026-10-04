@@ -37,8 +37,8 @@ body{font-family:var(--f);color:var(--t1);
   overflow-x:hidden;overscroll-behavior-y:contain}
 
 /* No text selection on interactive elements */
-.sr,.mc,.scop-c,.bp,.panel,.scene,#svg,#svg *,
-.sr *,.mc *,.scop-c *,.bp *{
+.sr,.mc,.scop-c,.panel,.scene,#svg,#svg *,
+.sr *,.mc *,.scop-c *{
   -webkit-user-select:none;user-select:none;
   -webkit-touch-callout:none}
 .cfi{-webkit-user-select:auto;user-select:auto}
@@ -127,7 +127,6 @@ body{font-family:var(--f);color:var(--t1);
   border:1px solid rgba(0,0,0,.3);opacity:.8;
   text-shadow:0 1px 2px rgba(0,0,0,.7)}
 .vpi-badge-warm{background:rgba(200,50,50,.65)}
-.vpi-badge-cool{background:rgba(40,90,200,.65)}
 .vpi-badge-hot{background:rgba(210,90,20,.65)}
 .vpi-badge-brine{background:rgba(40,70,170,.65)}
 .vpi-badge-brine2{background:rgba(6,140,170,.65)}
@@ -154,8 +153,6 @@ body{font-family:var(--f);color:var(--t1);
     radial-gradient(ellipse at 88% 50%,rgba(0,201,167,.05) 0,transparent 50%)}
 #svg{width:100%;height:auto;display:block;
   -webkit-user-select:none;user-select:none}
-.grid{display:grid;gap:.7rem;
-  grid-template-columns:1fr}
 .panel{background:var(--s1);border:1px solid var(--b1);
   border-radius:14px;padding:.85rem .95rem}
 .ph{display:flex;align-items:center;gap:6px;margin-bottom:.7rem}
@@ -243,34 +240,11 @@ body{font-family:var(--f);color:var(--t1);
 .sr-b.on{color:#c084fc;background:rgba(168,85,247,.13);
   border-color:rgba(168,85,247,.34)}
 .cap-s{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.14)}
-.scop-i{width:38px;height:38px;border-radius:8px;flex-shrink:0;
-  background:rgba(0,201,167,.1);border:1px solid rgba(0,201,167,.16);
-  display:flex;align-items:center;justify-content:center;font-size:17px}
 .scop-l{font:700 8px/1 var(--f);color:var(--teal);
   letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}
 .scop-v{font:500 26px/1 var(--m);color:var(--teal)}
-.scop-m{font:400 11px/1 var(--f);color:var(--t2);margin-top:4px}
-
-/* ── BRINE PILLS ── */
-.br{display:flex;gap:6px}
-.bp{flex:1;background:var(--s2);border:1px solid var(--b1);
-  border-radius:10px;padding:8px 10px;
-  cursor:pointer;touch-action:manipulation;transition:border-color .12s}
-.bp:active{border-color:var(--b2)}
-.bl{font:700 8px/1 var(--f);color:var(--t3);
-  letter-spacing:.09em;text-transform:uppercase;margin-bottom:3px}
-.bv{font:500 15px/1 var(--m);color:var(--teal)}
-.bu{font:400 9px/1 var(--m);color:var(--t3)}
 
 /* ── EXTRA METRICS ROW ── */
-.emg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
-.emc{background:var(--s2);border:1px solid var(--b1);
-  border-radius:10px;padding:8px 10px;
-  cursor:pointer;touch-action:manipulation}
-.emc:active{border-color:var(--b2)}
-.eml{font:700 7.5px/1 var(--f);color:var(--t3);
-  letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
-.emv{font:500 13px/1 var(--m);color:var(--t1)}
 .emu{font:400 8px/1 var(--m);color:var(--t3)}
 
 /* ── TOOLTIP ── */
@@ -336,7 +310,7 @@ label.ex-r>span{flex:1;min-width:0}
 
 @media(max-width:390px){
   .wrap{padding:.6rem .75rem calc(1.5rem + var(--safe-bot))}
-  .mv{font-size:16px}.scop-v{font-size:21px}.bv{font-size:14px}
+  .mv{font-size:16px}.scop-v{font-size:21px}
   .panel,.cfg{border-radius:12px}
 }
 </style>
@@ -619,7 +593,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 28;
+const APP_VERSION = 32;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -926,7 +900,6 @@ function buildSvg(temps, nibe) {
   const pL = String(prio).toLowerCase();
   const isHeat = pwr > 0.2 && pL.includes('heat') && !pL.includes('water');
   const isDHW  = pwr > 0.2 && (pL.includes('water') || pL.includes('hot'));
-  const isOff  = pwr <= 0.2;
 
   // Tank fill
   const vpHeat = isHeat && turVP != null && turVP > (returT + 3);
@@ -1436,8 +1409,6 @@ function renderPanels(temps, nibe) {
     isHeat?'Varmeproduksjon':isDHW?'Tappevannsproduksjon':pwr>0.2?'Drift':'Avslått';
 
   // Brine
-  const fmtB=(v,id)=>{document.getElementById(id).innerHTML=v!=null
-    ?`${v.toFixed(1)}<span class="bu">\u202F°C</span>`:'–';};
   const fmtT=(v,id)=>{document.getElementById(id).innerHTML=v!=null
     ?`${v.toFixed(1)}<span class="mu">°C</span>`:'–';};
   fmtT(nibe.brineIn,'vBrineIn');
@@ -1879,7 +1850,6 @@ function buildDHW(nibe) {
 // ═══════════════════════════════════════════
 function buildVPInternal(nibe) {
   const fmt = v => v != null ? v.toFixed(1) : '–';
-  const fmti = v => v != null ? Math.round(v) : '–';
   const el = id => document.getElementById(id);
   const hz = nibe.hz ?? 0;
   const pwr = nibe.pwr ?? 0;
@@ -2289,11 +2259,39 @@ const BRINE_LOOPS = 1.15;           // pumpede sløyfer før referansen godtas
 function brineRb(){
   const f = (typeof trtFit !== 'undefined' && trtFit && trtFit.ok) ? trtFit
           : (typeof trtFitPrev !== 'undefined' && trtFitPrev && trtFitPrev.ok) ? trtFitPrev : null;
-  return f && wellKvalitet(f).ok ? { rb: f.Rb, malt: true } : { rb: BRINE_RB, malt: false };
+  return f && wellKvalitet(f).ok ? { rb: f.Rb, malt: true, invRa: f.invRa > 0 ? f.invRa : 0 }
+                                 : { rb: BRINE_RB, malt: false, invRa: 0 };
+}
+// Fra væskens middeltemperatur til veggen ved sjekkpunktet: q·Rb pluss
+// varmeutvekslingen mellom rørbeina, q·(L/ṁcp)²/(3·Ra). Historikkscriptets
+// uttak er fordamperens (med rørvarmen), så ṁcp = q·L/ΔT eksakt, og
+// rørvarmen trekkes fra før motstandsleddene. Uten ΔT (uker før v1.6)
+// brukes at Auto holder ΔT ≈ 4,1 K.
+function brineVeggKorr(q, dT){
+  const RB = brineRb(), L = WELL.L, qbh = q - WELL.pipeW / L;
+  const mcp = q * L / (dT >= 1 ? dT : WELL.dTauto);
+  return qbh * (RB.rb + (RB.invRa && mcp > 0 ? Math.pow(L / mcp, 2) * RB.invRa / 3 : 0));
 }
 const BRINE_EVERY = 5*60000;        // hent maks hvert 5. minutt
 let brineData = null, brineErr = null, brineLast = 0;
 try { const c = localStorage.getItem('brineCache'); if (c) brineData = JSON.parse(c); } catch(_) {}
+
+// Felles henting av Logic-variablene. Lista har alle verdiene, også de
+// store brønnvariablene, så den hentes én gang per runde og deles av
+// brønnhistorikken og brønnanalysen (før: to fulle nedlastinger).
+let varListe = null, varListeT = 0, varListeP = null, varListeN = '';
+async function hentVarListe(base, key){
+  const nk = base + '|' + key;
+  if (varListe && varListeN === nk && Date.now() - varListeT < 4 * 60000) return varListe;
+  if (varListeP && varListeN === nk) return varListeP;
+  varListeN = nk;
+  varListeP = (async () => {
+    const r = await fetch(`${base}/api/manager/logic/variable`, {headers:{'Authorization':'Bearer '+key}});
+    if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+    const j = await r.json(); varListe = j; varListeT = Date.now(); return j;
+  })();
+  try { return await varListeP; } finally { varListeP = null; }
+}
 
 // Frittstående: feil her skal aldri velte resten av dashbordet
 async function fetchBrine(base, key){
@@ -2301,26 +2299,19 @@ async function fetchBrine(base, key){
   if (Date.now() - brineLast < wait) return;
   brineLast = Date.now();
   try {
-    const r = await fetch(`${base}/api/manager/logic/variable`,
-      {headers:{'Authorization':'Bearer '+key}});
-    if (r.status === 401 || r.status === 403) {
-      brineErr = 'API-nøkkelen mangler tilgangen «Vis variabler»';
-    } else if (!r.ok) {
-      brineErr = 'Kunne ikke hente brønndata (HTTP ' + r.status + ')';
+    const v = Object.values(await hentVarListe(base, key)).find(x => x && x.name === BRINE_VAR);
+    if (!v || !v.value) {
+      brineErr = 'Venter på første kjøring av brønnscriptet i Homey';
     } else {
-      const v = Object.values(await r.json()).find(x => x && x.name === BRINE_VAR);
-      if (!v || !v.value) {
-        brineErr = 'Venter på første kjøring av brønnscriptet i Homey';
-      } else {
-        const p = JSON.parse(v.value);
-        if (p && (p.v === 1 || p.v === 2) && Array.isArray(p.weeks) && Array.isArray(p.runs)) {
-          brineData = p; brineErr = null;
-          try { localStorage.setItem('brineCache', v.value); } catch(_) {}
-        } else brineErr = 'Uventet format i ' + BRINE_VAR;
-      }
+      const p = JSON.parse(v.value);
+      if (p && (p.v === 1 || p.v === 2) && Array.isArray(p.weeks) && Array.isArray(p.runs)) {
+        brineData = p; brineErr = null; brineHentet = Date.now();
+        try { localStorage.setItem('brineCache', v.value); } catch(_) {}
+      } else brineErr = 'Uventet format i ' + BRINE_VAR;
     }
   } catch (e) {
-    brineErr = 'Kunne ikke lese brønndata';
+    brineErr = (e.status === 401 || e.status === 403) ? 'API-nøkkelen mangler tilgangen «Vis variabler»'
+             : e.status ? 'Kunne ikke hente brønndata (HTTP ' + e.status + ')' : 'Kunne ikke lese brønndata';
   }
   buildBrineChart();
 }
@@ -2337,7 +2328,7 @@ function brineSVG(d, err){
   const note = t => `<p style="font-size:10px;color:rgba(255,255,255,.34);font-family:'DM Mono',monospace;text-align:center;padding:14px 10px 6px;line-height:1.55">${t}</p>`;
   const DAY = 86400000;
   const RB = brineRb();
-  const wallOf = c => (c[0] + c[1]) / 2 + c[2] * RB.rb;
+  const wallOf = c => (c[0] + c[1]) / 2 + brineVeggKorr(c[2], c[0] - c[1]);
   // Uker fra v1.4 har median uttak (w[6]) og kan korrigeres til målt Rb.
   // Eldre uker (90-min-referanse, uten w[6]) utelates – de ville gitt et sprang.
   const weeks = (d && Array.isArray(d.weeks)) ? d.weeks.filter(w => Array.isArray(w) && isFinite(w[2]) && isFinite(w[6])) : [];
@@ -2351,7 +2342,7 @@ function brineSVG(d, err){
 
   const W = 380, H = 196, PL = 30, PR = 8, PT = 26, PB = 34;
   const pW = W - PL - PR, pH = H - PT - PB;
-  const dRb = w => w[6] * (RB.rb - BRINE_RB);        // fra databladets Rb til brukt Rb
+  const dRb = w => brineVeggKorr(w[6], w.length > 7 ? w[7] : NaN) - w[6] * BRINE_RB;   // fra scriptets q·0,09 til full korreksjon
   const wk = weeks.map(w => ({ ws: w[0], t: w[0] + 3.5 * DAY, n: w[1],
                                med: w[2] + dRb(w), p25: w[3] + dRb(w), p75: w[4] + dRb(w), raw: w[5] }));
 
@@ -2390,7 +2381,7 @@ function brineSVG(d, err){
 
   // Tittel + siste verdi
   const last = wk[wk.length - 1];
-  s += `<text x="${PL}" y="12" font-size="8.5" fill="rgba(255,255,255,.35)" ${mono} letter-spacing=".06em">T_VEGG · ${BRINE_REF} MIN · Rb ${RB.rb.toFixed(3)} ${RB.malt ? 'MÅLT' : 'DATABLAD'}</text>`;
+  s += `<text x="${PL}" y="12" font-size="8.5" fill="rgba(255,255,255,.35)" ${mono} letter-spacing=".06em">T_VEGG · ${BRINE_REF} MIN · Rb ${RB.rb.toFixed(3)}${RB.invRa ? ' + BEINA' : ''} ${RB.malt ? 'MÅLT' : 'DATABLAD'}</text>`;
   if (last) s += `<text x="${W - PR}" y="12" text-anchor="end" font-size="10" fill="#7dd3fc" ${mono}>${last.med.toFixed(2)} °C · uke ${isoWeek(last.ws)}</text>`;
 
   // Rutenett + y-etiketter
@@ -2453,9 +2444,23 @@ function brineSVG(d, err){
   return s;
 }
 
+// Varsel når et Homey-script ikke har kjørt på en stund. Vises bare når
+// dataene er hentet fra Homey i denne økta – mellomlagrede data fra forrige
+// besøk ville ellers gitt et falskt varsel før første henting.
+function scriptAlder(lastTick, hentet, navn){
+  if (!hentet || !Number.isFinite(lastTick)) return '';
+  const min = (Date.now() - lastTick) / 60000;
+  if (min < 30) return '';
+  const t = min < 120 ? Math.round(min) + ' min' : min < 2880 ? (min / 60).toFixed(1) + ' t' : (min / 1440).toFixed(1) + ' døgn';
+  return `⚠️ ${navn} har ikke kjørt på ${t} — sjekk at flowen i Homey er på`;
+}
+let brineHentet = 0, trtHentet = 0;
 function buildBrineChart(){
   const el = document.getElementById('brineChart');
-  if (el) el.innerHTML = brineSVG(brineData, brineErr);
+  if (!el) return;
+  const varsel = scriptAlder(brineData && brineData.lastTick, brineHentet, 'Historikkscriptet');
+  el.innerHTML = (varsel ? `<p style="font-size:10px;color:#fca5a5;font-family:'DM Mono',monospace;margin:4px 0 6px">${varsel}</p>` : '') +
+                 brineSVG(brineData, brineErr);
 }
 
 // ═══════════════════════════════════════════
@@ -2496,6 +2501,8 @@ const WELL = {
                           // opptil ~20 %, men innenfor ~1σ av oppgitt usikkerhet.
                           // Uten hopp ble λ opptil 10 % skjev etter 10–14 døgn.
   maxGapFill: 6,          // timer – kortere hull interpoleres
+  maxGapDays: 7,          // døgn – hull opp til dette fylles med snittlasten rundt
+  gapSkipHours: 24,       // timer uten målepunkt etter et langt hull (ukjent last i hullet)
 };
 
 // Eksponentialintegralet E1. Rekke for x<1, rasjonal tilnærming
@@ -2544,39 +2551,115 @@ function wellInverse(A){
 }
 
 // d = { base: ms for time 0, bins: [[h, qAvg, qRun, Tf, runFrac, gp2], …] }
-function wellFit(d, forrige){
-  const W = WELL, HOUR = d.binSec || 3600;   // binstørrelse i sekunder
+function wellFit(d, forrige, valg){
+  const W = WELL, HOUR = (d && d.binSec) || 3600;   // binstørrelse i sekunder
   if (!d || !Array.isArray(d.bins) || !d.bins.length)
     return { ok: false, why: 'ingen data' };
 
-  // 1) Kontinuerlig timeserie for uttak. Korte hull interpoleres; etter
-  //    et langt hull starter vinduet på nytt, siden lasthistorikken
-  //    der er ukjent.
-  const bins = d.bins.filter(b => Array.isArray(b) && Number.isFinite(b[0]))
-                     .sort((a, b) => a[0] - b[0]);
-  const H = bins[bins.length - 1][0] + 1;
-  const q = new Array(H).fill(NaN), row = new Array(H).fill(null);
-  bins.forEach(b => { if (b[0] >= 0 && Number.isFinite(b[1])) { q[b[0]] = b[1]; row[b[0]] = b; } });
-
-  let start = 0;
-  for (let h = 0; h < H; ) {
-    if (Number.isFinite(q[h])) { h++; continue; }
-    let e = h; while (e < H && !Number.isFinite(q[e])) e++;
-    const gap = e - h;
-    if (gap > W.maxGapFill * 3600 / HOUR || h === 0 || e === H) { start = e; }
-    else {
-      const a = q[h - 1], z = q[e];
-      for (let k = h; k < e; k++) q[k] = a + (z - a) * (k - h + 1) / (gap + 1);
+  // 1) Én periode = kontinuerlig timeserie for uttak. Korte hull
+  //    interpoleres; etter et langt hull starter perioden på nytt, siden
+  //    lasthistorikken der er ukjent.
+  function forbered(binsInn, base, hist){
+    const bins = binsInn.filter(b => Array.isArray(b) && Number.isFinite(b[0])).sort((x, y) => x[0] - y[0]);
+    if (!bins.length) return null;
+    const H = bins[bins.length - 1][0] + 1;
+    const q = new Array(H).fill(NaN), row = new Array(H).fill(null), ekskl = new Uint8Array(H);
+    bins.forEach(b => { if (b[0] >= 0 && Number.isFinite(b[1])) { q[b[0]] = b[1]; row[b[0]] = b; } });
+    let start = 0;
+    const dB = Math.round(86400 / HOUR);
+    for (let h = 0; h < H; ) {
+      if (Number.isFinite(q[h])) { h++; continue; }
+      let e = h; while (e < H && !Number.isFinite(q[e])) e++;
+      const gap = e - h;
+      if (h === 0 || e === H || gap > W.maxGapDays * dB) { start = e; }
+      else if (gap <= W.maxGapFill * 3600 / HOUR) {           // kort hull: lineær interpolasjon
+        const a0 = q[h - 1], z = q[e];
+        for (let k = h; k < e; k++) q[k] = a0 + (z - a0) * (k - h + 1) / (gap + 1);
+      } else {
+        // Langt hull (strømbrudd, stoppet flow): snittlasten døgnet før og
+        // etter, og et døgn uten målepunkt etterpå. Før ble alt før hullet
+        // forkastet i opptil 60 døgn.
+        let sum = 0, n = 0;
+        for (let k = Math.max(0, h - dB); k < h; k++) if (Number.isFinite(q[k])) { sum += q[k]; n++; }
+        for (let k = e; k < Math.min(H, e + dB); k++) if (Number.isFinite(q[k])) { sum += q[k]; n++; }
+        const m = n ? sum / n : 0;
+        for (let k = h; k < e; k++) q[k] = m;
+        for (let k = e; k < Math.min(H, e + Math.round(W.gapSkipHours * 3600 / HOUR)); k++) ekskl[k] = 1;
+      }
+      h = e;
     }
-    h = e;
+    const N = H - start, days = N / (86400 / HOUR);
+    const qA = new Float64Array(N);
+    for (let i = 0; i < N; i++) qA[i] = q[start + i];
+    const skipB = Math.min(W.skipHours, W.skipFrac * days * 24) * 3600 / HOUR;
+    const vi = [];
+    for (let j = 0; j < N; j++) {
+      const r = row[start + j];
+      if (r && Number.isFinite(r[3]) && r[4] >= W.runFrac && j >= skipB && !ekskl[start + j]) vi.push(j);
+    }
+    const wStart = base + start * HOUR * 1000, hb = histBlokker(hist, wStart);
+    // Ulogget drift fra idriftsettingen til første kjente døgn: jevnt uttak
+    // q_før (fri parameter), fra a0 til b0 sekunder før periodestart
+    return { q, row, start, N, days, qA, vi, hb: hb.blk,
+             a0: Math.min(0, (W.opStart - wStart) / 1000), b0: hb.b0,
+             prior: Math.max(0, (wStart - W.opStart) / 1000) };
   }
-  const N = H - start;
-  const perDay = 86400 / HOUR, days = N / perDay;
-  if (days < W.minDays)
-    return { ok: false, why: 'samler data', days: days, need: W.minDays };
-
-  const wStart = d.base + start * HOUR * 1000;           // ms
-  const prior = Math.max(0, (wStart - W.opStart) / 1000); // s ulogget drift
+  // Kjent døgnhistorikk før perioden (scriptets st.hist, W/m·10 per døgn),
+  // slått sammen i blokker som blir lengre jo eldre de er (maks alder/8):
+  // kjernen varierer langsomt ved lange forsinkelser, så feilen er liten.
+  function histBlokker(hist, S){
+    if (!hist || !Array.isArray(hist.q) || !Number.isFinite(hist.base)) return { blk: [], b0: 0 };
+    const DAG = 86400000, dager = [];
+    for (let k = 0; k < hist.q.length; k++) {
+      const t0 = hist.base + k * DAG;
+      if (t0 + DAG > S) break;                       // bare døgn helt før perioden
+      dager.push([t0, hist.q[k]]);
+    }
+    if (!dager.length) return { blk: [], b0: 0 };
+    const gyld = dager.map(x => x[1]).filter(v => v !== null && Number.isFinite(v));
+    const snitt = gyld.length ? gyld.reduce((a, v) => a + v, 0) / gyld.length : 0;
+    const blk = [];
+    for (let i = dager.length - 1; i >= 0; ) {
+      const alder = (S - (dager[i][0] + DAG)) / DAG, len = Math.max(1, Math.floor(alder / 8));
+      let sum = 0, n = 0, j = i;
+      for (; j >= 0 && j > i - len; j--) { const v = dager[j][1]; sum += (v !== null && Number.isFinite(v)) ? v : snitt; n++; }
+      blk.push([(dager[j + 1][0] - S) / 1000, (dager[i][0] + DAG - S) / 1000, sum / n / 10]);
+      i = j;
+    }
+    return { blk, b0: (dager[0][0] - S) / 1000 };
+  }
+  // Respons fra kjent historikk: Σ q·[E1(xk/(t−a)) − E1(xk/(t−b))], på et
+  // rutenett hver 6. time og interpolert (glatt, og første døgn hoppes over)
+  function histRespons(sg, xk){
+    if (!sg.hb.length) return null;
+    const st = 6 * 3600, M = Math.ceil(sg.N * HOUR / st) + 2, Hg = new Float64Array(M);
+    for (let m = 0; m < M; m++) {
+      const t = m * st + 0.5 * HOUR; let s = 0;
+      for (const b of sg.hb) s += b[2] * (wellE1(xk / (t - b[0])) - wellE1(xk / (t - b[1])));
+      Hg[m] = s;
+    }
+    return t => { const x = (t - 0.5 * HOUR) / st, m = Math.min(M - 2, Math.max(0, Math.floor(x)));
+                  return Hg[m] + (Hg[m + 1] - Hg[m]) * (x - m); };
+  }
+  const hist = (valg && valg.hist) || d.hist || null;
+  const hoved = forbered(d.bins, d.base, hist);
+  if (!hoved || hoved.days < W.minDays)
+    return { ok: false, why: 'samler data', days: hoved ? hoved.days : 0, need: W.minDays };
+  if (hoved.vi.length < W.minBins * 3600 / HOUR)
+    return { ok: false, why: 'for få gyldige timer', n: hoved.vi.length, need: W.minBins * 3600 / HOUR, days: hoved.days };
+  // Arkivperioder (eldre perioder med stillstandsmålinger). De deler T₀,
+  // λ, fyllets R2 og kortslutningen med dagens vindu; forhistorien og R1
+  // er egne per periode, siden viskositet og strømning endrer seg med
+  // sesongen. Slik bærer arkivet T₀ videre uten manuell låsing.
+  const segs = [hoved];
+  for (const s of ((valg && Array.isArray(valg.seg)) ? valg.seg : [])) {
+    if (!s || !Array.isArray(s.bins) || (s.binSec || 3600) !== HOUR) continue;
+    const p = forbered(s.bins, s.base, hist);
+    if (p && p.days >= 1 && p.vi.length >= 4) segs.push(p);
+  }
+  const K = segs.length, P = 4 + 2 * (K - 1);
+  const kQ = s => s === 0 ? 1 : 4 + 2 * (s - 1), kR = s => s === 0 ? 2 : 5 + 2 * (s - 1);
+  const { N, qA, row, start, prior, days, q } = hoved, vi = hoved.vi;
 
   // 2) Koblet modell med borehullskapasitet. Vannet i hullet er et
   //    varmelager mellom fjellveggen og væsken:
@@ -2585,21 +2668,11 @@ function wellFit(d, forrige){
   //    uttak – fyllet leverer fra eget lager de første timene etter hvert
   //    lastskifte. Systemet simuleres derfor koblet, tidssteg for tidssteg.
   //    Uten kapasitet ble λ 19–52 % for lav i test, med R² 0,97–0,997.
-  //    T₀, forhistorien og R1 er lineære og løses eksakt for hver (λ, R2);
+  //    De lineære parameterne løses eksakt for hver (λ, R2);
   //    λ og R2 søkes i to dimensjoner (rutenett + Nelder–Mead).
-  const qA = new Float64Array(N);
-  for (let i = 0; i < N; i++) qA[i] = q[start + i];
-  const skipB = Math.min(W.skipHours, W.skipFrac * days * 24) * 3600 / HOUR;
-  const vi = [];
-  for (let j = 0; j < N; j++) {
-    const b = row[start + j];
-    if (b && Number.isFinite(b[3]) && b[4] >= W.runFrac && j >= skipB) vi.push(j);
-  }
-  if (vi.length < W.minBins * 3600 / HOUR)
-    return { ok: false, why: 'for få gyldige timer', n: vi.length, need: W.minBins * 3600 / HOUR, days: days };
-
   // Simuler fyllets temperatur med T₀ = 0 og uten forhistorie
-  function simuler(lam, R2){
+  function simuler(sg, lam, R2){
+    const N = sg.N, qA = sg.qA;
     const xk = W.rb * W.rb / (4 * lam / W.C), fl = 4 * Math.PI * lam;
     const g = new Float64Array(N + 1);
     for (let k = 0; k <= N; k++) g[k] = wellE1(xk / ((k + 0.5) * HOUR));
@@ -2639,24 +2712,38 @@ function wellFit(d, forrige){
   }
   function prosjekter(lam, R2){
     if (!(lam > 0.5 && lam < 8 && R2 > 0.001 && R2 < 0.4)) return null;
-    const { D, g, xk } = simuler(lam, R2), fl = 4 * Math.PI * lam;
-    const X = [], y = [];
-    for (const j of vi) {
-      const b = row[start + j], tj = (j + 0.5) * HOUR;
-      const P = prior > 0 ? wellE1(xk / (prior + tj)) - wellE1(xk / tj) : 0;
-      // Varmeutveksling mellom rørbeina (Hellström): q·(L/ṁcp)²/(3·Ra).
-      // Lineær i 1/Ra. ṁcp er målt der den finnes, ellers anslått fra Auto.
-      const mcp = b[5] > 0 ? b[5] : (b[2] * W.L + W.pipeW) / W.dTauto;
-      y.push(b[3] - D[j]);                        // Tf − fyllets respons = T₀ + forhistorie − R1·q − q(L/ṁcp)²/3Ra
-      X.push([1, -P / fl, -b[2], -b[2] * Math.pow(W.L / mcp, 2) / 3]);
-    }
-    const p = 4, XtX = Array.from({ length: p }, () => Array(p).fill(0)), Xty = Array(p).fill(0);
-    X.forEach((r, n) => { for (let a = 0; a < p; a++) { Xty[a] += r[a] * y[n];
-      for (let c = 0; c < p; c++) XtX[a][c] += r[a] * r[c]; } });
+    const fl = 4 * Math.PI * lam;
+    const X = [], y = [], meta = [], Ds = [];
+    let g0 = null, xk0 = null, Hf0 = null;
+    segs.forEach((sg, s) => {
+      const { D, g, xk } = simuler(sg, lam, R2);
+      const Hf = histRespons(sg, xk);
+      Ds.push(D); if (s === 0) { g0 = g; xk0 = xk; Hf0 = Hf; }
+      for (const j of sg.vi) {
+        const b = sg.row[sg.start + j], tj = (j + 0.5) * HOUR;
+        const Pr = sg.b0 > sg.a0 ? wellE1(xk / (tj - sg.a0)) - wellE1(xk / (tj - sg.b0)) : 0;
+        const Hk = Hf ? Hf(tj) / fl : 0;            // kjent historikk før perioden
+        // Varmeutveksling mellom rørbeina (Hellström): q·(L/ṁcp)²/(3·Ra).
+        // Lineær i 1/Ra. ṁcp er målt der den finnes, ellers anslått fra Auto.
+        const mcp = b[5] > 0 ? b[5] : (b[2] * W.L + W.pipeW) / W.dTauto;
+        // Stillstand med sirkulasjon (b[6]): uttaket er nesten null, så
+        // kortslutningen faller ut og punktet måler fjellets temperatur
+        const sc = b[6] ? 0 : -b[2] * Math.pow(W.L / mcp, 2) / 3;
+        const x = new Array(P).fill(0);
+        x[0] = 1; x[kQ(s)] = -Pr / fl; x[kR(s)] = -b[2]; x[3] = sc;
+        y.push(b[3] - D[j] + Hk);                 // Tf − fyllets respons + kjent historikk = T₀ + ulogget forhistorie − R1·q − q(L/ṁcp)²/3Ra
+        X.push(x); meta.push([s, j]);
+      }
+    });
+    const XtX = Array.from({ length: P }, () => Array(P).fill(0)), Xty = Array(P).fill(0);
+    X.forEach((r, n) => { for (let a = 0; a < P; a++) { if (!r[a]) continue; Xty[a] += r[a] * y[n];
+      for (let c = 0; c < P; c++) XtX[a][c] += r[a] * r[c]; } });
+    if (!X.some(r => r[3] !== 0)) XtX[3][3] += 1e-9;   // bare stillstand: intet kortslutningsledd
+    for (let a = 4; a < P; a++) XtX[a][a] += 1e-9;      // arkivperioder med lite drift
     const beta = wellSolve(XtX, Xty);
     if (!beta) return null;
     let rss = 0; X.forEach((r, n) => { rss += (y[n] - r.reduce((s, v, a) => s + v * beta[a], 0)) ** 2; });
-    return { lam, R2, beta, rss, X, y, XtX, g, xk, D };
+    return { lam, R2, beta, rss, X, y, XtX, g: g0, xk: xk0, H: Hf0, D: Ds[0], Ds, meta };
   }
 
   // Varmstart fra forrige løsning; ellers grovt rutenett. Så Nelder–Mead.
@@ -2691,20 +2778,25 @@ function wellFit(d, forrige){
   simplex.sort((a, b) => a.f - b.f);
   best = simplex[0].r;
   const lam = best.lam, R2fit = best.R2;
-  const res = { beta: best.beta, X: best.X, y: best.y, idx: vi, XtX: best.XtX };
   const gLast = best.g, xkLast = best.xk;
   const dqLast = new Float64Array(N);
   { let pv = 0; for (let i = 0; i < N; i++) { dqLast[i] = qA[i] - pv; pv = qA[i]; } }
 
   // 3) Usikkerhet fra residualene
-  const { beta, X, y, idx, XtX } = res;
-  const mcps = idx.map(j => { const b = row[start + j]; return b[5] > 0 ? b[5] : (b[2] * W.L + W.pipeW) / W.dTauto; })
-                  .sort((a, b) => a - b);
-  const mcpLow = mcps[Math.floor(mcps.length * 0.2)];
-  const nMcp = idx.filter(j => row[start + j][5] > 0).length;
+  const { beta, X, y, XtX, meta, Ds } = best;
+  const rad = k => segs[meta[k][0]].row[segs[meta[k][0]].start + meta[k][1]];
+  const hk = meta.map((m, k) => k).filter(k => meta[k][0] === 0);       // dagens vindu
+  // Lav last: 20-persentilen av ṁcp blant DRIFTSpunktene i dagens vindu
+  const mcps = hk.filter(k => rad(k)[6] !== 1)
+                 .map(k => { const b = rad(k); return b[5] > 0 ? b[5] : (b[2] * W.L + W.pipeW) / W.dTauto; })
+                 .sort((a, b) => a - b);
+  const mcpLow = mcps.length ? mcps[Math.floor(mcps.length * 0.2)] : (7 * W.L + W.pipeW) / W.dTauto;
+  const nMcp = hk.filter(k => rad(k)[5] > 0).length;
+  const nStill = meta.filter((m, k) => rad(k)[6] === 1).length;
+  const nArkiv = meta.filter(m => m[0] > 0).length;
   const fit = X.map(r => r.reduce((s, v, a) => s + v * beta[a], 0));
   const rss = y.reduce((s, v, n) => s + (v - fit[n]) ** 2, 0);
-  const n = y.length, p = beta.length + 2;              // + λ og R2 (β: T₀, q_før, R1, 1/Ra)
+  const n = y.length, p = beta.length + 2;              // + λ og R2
   const s2 = rss / Math.max(1, n - p);
   const inv = wellInverse(XtX);
   const se = inv ? inv.map((r, i) => Math.sqrt(Math.max(0, s2 * r[i]))) : beta.map(() => NaN);
@@ -2719,7 +2811,11 @@ function wellFit(d, forrige){
   const lamSE = det > 0 ? Math.sqrt(2 * s2 * Hrr / det) : NaN;
   const R2SE  = det > 0 ? Math.sqrt(2 * s2 * Hll / det) : NaN;
   // R² på selve Tf (y er Tf minus fyllets respons)
-  const Tf = idx.map((j, k) => y[k] + best.D[j]);
+  const Hpt = meta.map(m => m[0] === 0 ? (best.H ? best.H((m[1] + 0.5) * HOUR) / (4 * Math.PI * lam) : 0) : NaN);
+  // For arkivperioder regnes historikkleddet på nytt (lagres ikke per periode)
+  for (let s = 1; s < K; s++) { const sg = segs[s], xk = W.rb * W.rb / (4 * lam / W.C), hf = histRespons(sg, xk);
+    meta.forEach((m, k) => { if (m[0] === s) Hpt[k] = hf ? hf((m[1] + 0.5) * HOUR) / (4 * Math.PI * lam) : 0; }); }
+  const Tf = meta.map((m, k) => y[k] + Ds[m[0]][m[1]] - Hpt[k]);
   const ym = Tf.reduce((s, v) => s + v, 0) / n;
   const tss = Tf.reduce((s, v) => s + (v - ym) ** 2, 0);
 
@@ -2729,8 +2825,8 @@ function wellFit(d, forrige){
   for (let i = 0; i < N; i++) Slast += dqLast[i] * gLast[N - 1 - i];
   const tl = (N - 0.5) * HOUR;
   const qPrior = beta[1];
-  const Plast = prior > 0 ? wellE1(xkLast / (prior + tl)) - wellE1(xkLast / tl) : 0;
-  const coolNow = (Slast + qPrior * Plast) / (4 * Math.PI * lam);
+  const Plast = hoved.b0 > hoved.a0 ? wellE1(xkLast / (tl - hoved.a0)) - wellE1(xkLast / (tl - hoved.b0)) : 0;
+  const coolNow = (Slast + qPrior * Plast) / (4 * Math.PI * lam) + (best.H ? best.H(tl) / (4 * Math.PI * lam) : 0);
   let qs = 0; for (let i = 0; i < N; i++) qs += q[start + i];
 
   return {
@@ -2744,9 +2840,11 @@ function wellFit(d, forrige){
     sRbLow: Math.hypot(se[2], Math.pow(W.L / mcpLow, 2) * se[3] / 3),
     sRb: Math.sqrt(se[2] * se[2] + (Number.isFinite(R2SE) ? R2SE * R2SE : 0)),
     T0: beta[0], sT0: se[0],
+    nStill: nStill, nArkiv: nArkiv, nSeg: K,
     qPrior: qPrior,
-    n: n, days: days, rms: Math.sqrt(rss / n), r2: tss > 0 ? 1 - rss / tss : 0,
-    series: idx.map((j, k) => [start + j, Tf[k], fit[k] + best.D[j]]),
+    n: n, nHoved: hk.length, days: days, rms: Math.sqrt(rss / n), r2: tss > 0 ? 1 - rss / tss : 0,
+    // [i, Tf, modell, stillstand, periode] – periode 0 er dagens vindu
+    series: meta.map((m, k) => [segs[m[0]].start + m[1], Tf[k], fit[k] + Ds[m[0]][m[1]] - Hpt[k], rad(k)[6] ? 1 : 0, m[0]]),
     tau: W.Cb * R2fit / 3600,
   };
 }
@@ -2756,13 +2854,16 @@ function wellFit(d, forrige){
 function trtToBins(t){
   if (!t || !Array.isArray(t.q) || !Array.isArray(t.pts)) return null;
   const pm = new Map(t.pts.filter(p => Array.isArray(p)).map(p => [p[0], p]));
+  const sm = new Map((Array.isArray(t.still) ? t.still : []).filter(p => Array.isArray(p)).map(p => [p[0], p[1]]));
   const bins = [];
   for (let i = 0; i < t.q.length; i++) {
     if (t.q[i] === null || !Number.isFinite(t.q[i])) continue;
     const p = pm.get(i);
-    bins.push([i, t.q[i] / 10, p ? p[1] / 10 : 0, p ? p[2] / 100 : null, p ? 1 : 0, p && p.length > 3 ? p[3] : 0]);
+    if (p) bins.push([i, t.q[i] / 10, p[1] / 10, p[2] / 100, 1, p.length > 3 ? p[3] : 0, 0]);
+    else if (sm.has(i)) bins.push([i, t.q[i] / 10, t.q[i] / 10, sm.get(i) / 100, 1, 0, 1]);   // stillstand
+    else bins.push([i, t.q[i] / 10, 0, null, 0, 0, 0]);
   }
-  return { base: t.base, binSec: t.binSec || 900, bins: bins };
+  return { base: t.base, binSec: t.binSec || 900, bins: bins, hist: t.hist || null };
 }
 
 // ═══════════════════════════════════════════
@@ -2788,28 +2889,49 @@ const WELLX = {
   pipe: { inne: 4, ute: 1, jord: 10, Rluft: 2.48, Rjord: 2.41, Trom: 24 },   // Trom brukes bare uten romgiver
 };
 let trtData = null, trtErr = null, trtLast = 0, trtFit = null, trtFitPrev = null, wellBusy = false;
+let trtArkiv = null;                       // perioder med stillstandsmålinger, fra «nibe_trt_arkiv»
+const ARKIV_VAR = 'nibe_trt_arkiv';
 try { const c = localStorage.getItem('trtCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 2) trtData = p; } } catch(_) {}
+try { const c = localStorage.getItem('trtArkiv'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) trtArkiv = p; } } catch(_) {}
+// Arkivblokkene som egne perioder i tilpasningen
+// Siste pålitelige resultat, lagret i nettleseren (uten serien)
+function wellLagreSiste(fit){
+  try { localStorage.setItem('trtSiste', JSON.stringify({ ...fit, series: [], dato: Date.now() })); } catch (_) {}
+}
+function wellSiste(){
+  try { const v = JSON.parse(localStorage.getItem('trtSiste') || 'null');
+        return v && v.ok && Number.isFinite(v.T0) ? { ...v, gammel: true } : null; } catch (_) { return null; }
+}
+function arkivSeg(){
+  return (trtArkiv && Array.isArray(trtArkiv.blokker) ? trtArkiv.blokker : [])
+    .map(b => trtToBins({ v: 2, ...b })).filter(Boolean);
+}
 
 async function fetchTrt(base, key){
   const wait = trtErr ? 60000 : TRT_EVERY;
   if (Date.now() - trtLast < wait) return;
   trtLast = Date.now();
   try {
-    const r = await fetch(`${base}/api/manager/logic/variable`, {headers:{'Authorization':'Bearer '+key}});
-    if (r.status === 401 || r.status === 403) trtErr = 'API-nøkkelen mangler tilgangen «Vis variabler»';
-    else if (!r.ok) trtErr = 'Kunne ikke hente brønndata (HTTP ' + r.status + ')';
+    const liste = Object.values(await hentVarListe(base, key));
+    const v = liste.find(x => x && x.name === TRT_VAR);
+    if (!v || !v.value) trtErr = 'Venter på første kjøring av «Brønnens egenskaper» i Homey';
     else {
-      const v = Object.values(await r.json()).find(x => x && x.name === TRT_VAR);
-      if (!v || !v.value) trtErr = 'Venter på første kjøring av «Brønnens egenskaper» i Homey';
-      else {
-        const p = JSON.parse(v.value);
-        if (p && p.v === 2 && Array.isArray(p.q)) {
-          trtData = p; trtErr = null; trtFit = null;           // ny data → ny tilpasning
-          try { localStorage.setItem('trtCache', v.value); } catch(_) {}
-        } else trtErr = 'Uventet format i ' + TRT_VAR;
-      }
+      const p = JSON.parse(v.value);
+      if (p && p.v === 2 && Array.isArray(p.q)) {
+        trtData = p; trtErr = null; trtFit = null; trtHentet = Date.now();   // ny data → ny tilpasning
+        try { localStorage.setItem('trtCache', v.value); } catch(_) {}
+      } else trtErr = 'Uventet format i ' + TRT_VAR;
     }
-  } catch (e) { trtErr = 'Kunne ikke lese brønndata'; }
+    const a = liste.find(x => x && x.name === ARKIV_VAR);
+    if (a && a.value) {
+      try { const p = JSON.parse(a.value);
+            if (p && p.v === 1 && Array.isArray(p.blokker)) { trtArkiv = p; localStorage.setItem('trtArkiv', a.value); } }
+      catch (_) {}
+    }
+  } catch (e) {
+    trtErr = (e.status === 401 || e.status === 403) ? 'API-nøkkelen mangler tilgangen «Vis variabler»'
+           : e.status ? 'Kunne ikke hente brønndata (HTTP ' + e.status + ')' : 'Kunne ikke lese brønndata';
+  }
   buildWellPanel();
 }
 
@@ -2867,8 +2989,12 @@ function wellKvalitet(fit){
   const g = [];
   if (fit.lambda >= 7.5 || fit.lambda <= 0.6) g.push('λ stanget i søkegrensen');
   if (fit.Rb < 0.05) g.push('Rb under det fysisk mulige');
-  const tf = Array.isArray(fit.series) ? fit.series.map(p => p[1]).filter(Number.isFinite) : [];
-  if (tf.length && fit.T0 < Math.max(...tf) + 0.3) g.push('T₀ lavere enn væsken fra brønnen');
+  const ser = Array.isArray(fit.series) ? fit.series : [];
+  const drift = ser.filter(p => p[3] !== 1).map(p => p[1]).filter(Number.isFinite);
+  const still = ser.filter(p => p[3] === 1).map(p => p[1]).filter(Number.isFinite);
+  if (drift.length && fit.T0 < Math.max(...drift) + 0.3) g.push('T₀ lavere enn væsken fra brønnen');
+  // Under gjenoppretting er veggen kaldere enn uberørt fjell – aldri varmere
+  if (still.length && fit.T0 < Math.max(...still) - 0.3) g.push('T₀ lavere enn stillstandsmålingene');
   return { ok: g.length === 0, grunner: g };
 }
 function wellFlowEst(n){
@@ -3102,8 +3228,9 @@ function buildWellPanel(){
     wellBusy = true;
     setTimeout(() => {
       try { const b = trtToBins(trtData);
-            trtFit = b ? wellFit(b, trtFitPrev) : { ok: false, why: 'ugyldige data' };
-            if (trtFit && trtFit.ok) trtFitPrev = trtFit; }
+            trtFit = b ? wellFit(b, trtFitPrev, { seg: arkivSeg() }) : { ok: false, why: 'ugyldige data' };
+            if (trtFit && trtFit.ok) trtFitPrev = trtFit;
+            if (trtFit && trtFit.ok && wellKvalitet(trtFit).ok) wellLagreSiste(trtFit); }
       catch (e) { trtFit = { ok: false, why: 'beregningsfeil' }; }
       wellBusy = false; buildWellPanel();
       if (typeof buildBrineChart === 'function') buildBrineChart();   // bruk målt Rb
@@ -3116,9 +3243,17 @@ function buildWellPanel(){
                  flow: flowMalt ?? flowEst, flowKilde: flowMalt != null ? 'malt' : (flowEst != null ? 'anslag' : null),
                  trom: n.trom, tromSrc: n.tromSrc };
   const f = trtFit || trtFitPrev;
-  const kv = wellKvalitet(f), fv = kv.ok ? f : null;   // bare pålitelige resultater vises
+  const kv = wellKvalitet(f);
+  let fv = kv.ok ? f : null;                          // bare pålitelige resultater vises
+  // For få målepunkt i vinduet (typisk om sommeren, når bare tappevann gir
+  // korte kjøringer): vis siste pålitelige resultat i stedet for «samler data»
+  let gammel = null;
+  if (!fv && trtData && f && !f.ok && /samler|for få/.test(f.why || '') && (trtData.q || []).length / 96 >= WELL.minDays) {
+    gammel = wellSiste(); if (gammel) fv = gammel;
+  }
   let status;
   if (!trtData) status = trtErr ? '⚠️ ' + trtErr : 'Venter på data fra «Brønnens egenskaper» i Homey';
+  else if (gammel) status = `For få målepunkt i vinduet — viser siste pålitelige resultat fra ${new Date(gammel.dato).toLocaleDateString('nb-NO')}`;
   else if (f && f.ok && !kv.ok) status = `⚠️ Tilpasningen er ikke pålitelig (${kv.grunner.join(', ')}) — verdiene vises ikke · ${f.days.toFixed(1)} døgn · R² ${f.r2.toFixed(2)}`;
   else if (f && f.ok) status = (f.prelim ? 'Foreløpig · ' : '') + `${f.days.toFixed(1)} døgn · ${f.n} målepunkt · R² ${f.r2.toFixed(3)} · avvik ${(f.rms * 1000).toFixed(0)} mK`;
   else if (f && f.why && !/samler|for få/.test(f.why)) status = '⚠️ ' + f.why;
@@ -3129,8 +3264,16 @@ function buildWellPanel(){
       ? `Samler data: ${dg.toFixed(1)} av ${WELL.minDays} døgn · ${np} målepunkt`
       : `Samler målepunkt: ${np} av ${trengs} · ${dg.toFixed(1)} døgn`;
   }
+  const varsel = scriptAlder(trtData && trtData.lastTick, trtHentet, 'Brønnscriptet');
+  if (varsel) status = varsel + ' · ' + status;
+  if (fv && fv.nStill && !gammel) status += ` · ${fv.nStill} stillstandspunkt`;
+  if (fv && fv.nSeg > 1) {
+    const ad = (trtArkiv.blokker || []).reduce((s, x) => s + x.q.length / 96, 0);
+    status += ` · arkiv ${ad.toFixed(0)} døgn`;
+  }
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(fv, live) + '</div>' +
-    `<div class="wp-st">${status}</div><div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) +
+    `<div class="wp-st">${status}</div>` +
+    `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) +
     `<div class="wp-ft">Samme fysikk som en termisk responstest (linjekilde, superposisjon), anvendt på vanlig drift. ` +
     `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) og varmeutvekslingen mellom rørbeina ved lav flow — ` +
     `uten dem ble λ opptil 50 % for lav og T₀ 2–4 K for lav. ` +
@@ -3145,16 +3288,22 @@ function buildWellPanel(){
 // og er samtidig stabilitetskontrollen: et resultat som ikke setter seg,
 // er et varsel. Hvert hele døgn tilpasses på dataene fram til da, i
 // bakgrunnen, ett døgn per runde med varmstart, og lagres per datagrunnlag.
-const UTV_MODELL = 'kap-3';                  // v28: kortslutning mellom rørbeina                  // byttes når tilpasningen endres
+const UTV_MODELL = 'kap-6';                  // v31: døgnhistorikk og lange opphold
+const UTV_DAGER  = 30;                       // utviklingsgrafen viser siste 30 døgn                  // byttes når tilpasningen endres
 let utvCache = null, utvBusy = false;
 try { const c = localStorage.getItem('trtUtv'); if (c) utvCache = JSON.parse(c); } catch (_) {}
 function wellUtvikling(){
   if (!trtData || !Array.isArray(trtData.q) || utvBusy) return;
   const nDays = Math.floor(trtData.q.length / 96);
-  if (!utvCache || utvCache.base !== trtData.base || utvCache.m !== UTV_MODELL)
-    utvCache = { base: trtData.base, m: UTV_MODELL, e: {} };
+  // Nøkkel = døgn siden loggingen startet (origo), ikke siden vinduets start:
+  // vinduet flytter seg ett døgn om gangen når det er fullt, og et ferdig
+  // regnet punkt viser estimatet slik det var den dagen – det regnes aldri om.
+  if (!utvCache || utvCache.m !== UTV_MODELL || !Number.isFinite(utvCache.origo) || trtData.base < utvCache.origo)
+    utvCache = { origo: trtData.base, m: UTV_MODELL, e: {} };
+  const off = Math.round((trtData.base - utvCache.origo) / 86400000);
+  for (const k of Object.keys(utvCache.e)) if (+k < off + nDays - UTV_DAGER - 2) delete utvCache.e[k];
   const mangler = [];
-  for (let d = 2; d <= nDays; d++) if (!(d in utvCache.e)) mangler.push(d);
+  for (let d = Math.max(2, nDays - UTV_DAGER); d <= nDays; d++) if (!((d + off) in utvCache.e)) mangler.push(d);
   if (!mangler.length) return;
   utvBusy = true;
   let forrige = null;
@@ -3168,12 +3317,13 @@ function wellUtvikling(){
     try {
       const k = d * 96;
       const r = wellFit(trtToBins({ ...trtData, q: trtData.q.slice(0, k),
-                                   pts: trtData.pts.filter(p => p[0] < k) }), forrige);
+                                   pts: trtData.pts.filter(p => p[0] < k),
+                                   still: (trtData.still || []).filter(p => p[0] < k) }), forrige, { seg: arkivSeg() });
       if (r && r.ok) {
         forrige = r;
-        utvCache.e[d] = [r.lambda, r.sLambda, r.Rb, r.sRb, r.T0, r.sT0].map(v => Math.round(v * 1000) / 1000);
-      } else utvCache.e[d] = null;
-    } catch (_) { utvCache.e[d] = null; }
+        utvCache.e[d + off] = [r.lambda, r.sLambda, r.Rb, r.sRb, r.T0, r.sT0].map(v => Math.round(v * 1000) / 1000);
+      } else utvCache.e[d + off] = null;
+    } catch (_) { utvCache.e[d + off] = null; }
     visUtv();
     setTimeout(neste, 20);
   };
@@ -3187,8 +3337,9 @@ function wellUtvSVG(){
   const pts = [];
   if (utvCache && utvCache.e) for (const [d, e] of Object.entries(utvCache.e)) if (e) pts.push({ d: +d, v: e });
   const f = (typeof trtFit !== 'undefined' && trtFit && trtFit.ok) ? trtFit : null;
-  if (f && !pts.some(p => Math.abs(p.d - f.days) < 0.05))
-    pts.push({ d: f.days, v: [f.lambda, f.sLambda, f.Rb, f.sRb, f.T0, f.sT0] });
+  const off = (utvCache && Number.isFinite(utvCache.origo) && trtData) ? Math.round((trtData.base - utvCache.origo) / 86400000) : 0;
+  if (f && !pts.some(p => Math.abs(p.d - (f.days + off)) < 0.05))
+    pts.push({ d: f.days + off, v: [f.lambda, f.sLambda, f.Rb, f.sRb, f.T0, f.sT0] });
   pts.sort((a, b) => a.d - b.d);
   if (pts.length < 2) return '';
   const X = WELLX, W = 340, L = 76, R = 8, rh = 38, gap = 7, top = 17;
@@ -3260,7 +3411,7 @@ async function exJSON(url, h){
 async function exVariabler(t){
   const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
   const ut = {};
-  for (const navn of ['nibe_trt_history', 'nibe_brine_history', 'nibe_cop_history']) {
+  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_brine_history', 'nibe_cop_history']) {
     const v = vars.find(x => x.name === navn);
     if (!v) { ut[navn] = null; continue; }
     try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
