@@ -593,7 +593,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 32;
+const APP_VERSION = 33;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2280,6 +2280,28 @@ try { const c = localStorage.getItem('brineCache'); if (c) brineData = JSON.pars
 // store brønnvariablene, så den hentes én gang per runde og deles av
 // brønnhistorikken og brønnanalysen (før: to fulle nedlastinger).
 let varListe = null, varListeT = 0, varListeP = null, varListeN = '';
+// Etter første fulle liste hentes bare variablene panelene trenger, én og én
+// (GET …/variable/{id}). Lista har også minuttloggen fra brønnscriptet (opptil
+// 150 kB), som dashbordet ikke bruker. Feiler henting per id (ny id, eller et
+// endepunkt som mangler), brukes hele lista igjen.
+let varIder = null;
+async function hentVarer(base, key, navn){
+  if (varIder && navn.every(n => varIder[n])) {
+    try {
+      return await Promise.all(navn.map(async n => {
+        const r = await fetch(`${base}/api/manager/logic/variable/${varIder[n]}`, {headers:{'Authorization':'Bearer '+key}});
+        if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
+        return await r.json();
+      }));
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) throw e;
+      varIder = null; varListe = null;
+    }
+  }
+  const liste = Object.values(await hentVarListe(base, key));
+  varIder = Object.fromEntries(liste.filter(v => v && v.name && v.id).map(v => [v.name, v.id]));
+  return navn.map(n => liste.find(v => v && v.name === n)).filter(Boolean);
+}
 async function hentVarListe(base, key){
   const nk = base + '|' + key;
   if (varListe && varListeN === nk && Date.now() - varListeT < 4 * 60000) return varListe;
@@ -2299,7 +2321,7 @@ async function fetchBrine(base, key){
   if (Date.now() - brineLast < wait) return;
   brineLast = Date.now();
   try {
-    const v = Object.values(await hentVarListe(base, key)).find(x => x && x.name === BRINE_VAR);
+    const v = (await hentVarer(base, key, [BRINE_VAR])).find(x => x && x.name === BRINE_VAR);
     if (!v || !v.value) {
       brineErr = 'Venter på første kjøring av brønnscriptet i Homey';
     } else {
@@ -2912,7 +2934,7 @@ async function fetchTrt(base, key){
   if (Date.now() - trtLast < wait) return;
   trtLast = Date.now();
   try {
-    const liste = Object.values(await hentVarListe(base, key));
+    const liste = await hentVarer(base, key, [TRT_VAR, ARKIV_VAR]);
     const v = liste.find(x => x && x.name === TRT_VAR);
     if (!v || !v.value) trtErr = 'Venter på første kjøring av «Brønnens egenskaper» i Homey';
     else {
@@ -3411,7 +3433,7 @@ async function exJSON(url, h){
 async function exVariabler(t){
   const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
   const ut = {};
-  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_brine_history', 'nibe_cop_history']) {
+  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_brine_history', 'nibe_cop_history']) {
     const v = vars.find(x => x.name === navn);
     if (!v) { ut[navn] = null; continue; }
     try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
