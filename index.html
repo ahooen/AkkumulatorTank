@@ -593,7 +593,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 34;
+const APP_VERSION = 35;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2284,11 +2284,14 @@ let varListe = null, varListeT = 0, varListeP = null, varListeN = '';
 // (GET …/variable/{id}). Lista har også minuttloggen fra brønnscriptet (opptil
 // 150 kB), som dashbordet ikke bruker. Feiler henting per id (ny id, eller et
 // endepunkt som mangler), brukes hele lista igjen.
-let varIder = null;
+let varIder = null, varIderT = 0;
 async function hentVarer(base, key, navn){
-  if (varIder && navn.every(n => varIder[n])) {
+  // En variabel som ikke finnes ennå, gir ny full liste høyst hvert 30. min –
+  // ellers ville minuttloggen blitt lastet ned hver runde til den dukket opp
+  const ukjente = varIder ? navn.filter(n => !varIder[n]) : navn;
+  if (varIder && (!ukjente.length || Date.now() - varIderT < 30 * 60000)) {
     try {
-      return await Promise.all(navn.map(async n => {
+      return await Promise.all(navn.filter(n => varIder[n]).map(async n => {
         const r = await fetch(`${base}/api/manager/logic/variable/${varIder[n]}`, {headers:{'Authorization':'Bearer '+key}});
         if (!r.ok) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
         return await r.json();
@@ -2299,7 +2302,7 @@ async function hentVarer(base, key, navn){
     }
   }
   const liste = Object.values(await hentVarListe(base, key));
-  varIder = Object.fromEntries(liste.filter(v => v && v.name && v.id).map(v => [v.name, v.id]));
+  varIder = Object.fromEntries(liste.filter(v => v && v.name && v.id).map(v => [v.name, v.id])); varIderT = Date.now();
   return navn.map(n => liste.find(v => v && v.name === n)).filter(Boolean);
 }
 async function hentVarListe(base, key){
@@ -2915,6 +2918,9 @@ const WELLX = {
 let trtData = null, trtErr = null, trtLast = 0, trtFit = null, trtFitPrev = null, wellBusy = false;
 let trtArkiv = null;                       // perioder med stillstandsmålinger, fra «nibe_trt_arkiv»
 const ARKIV_VAR = 'nibe_trt_arkiv';
+let trtKap = null;                         // stabile perioder fra brønnscriptet v2.9, «nibe_trt_kapasitet»
+const KAP_VAR = 'nibe_trt_kapasitet';
+try { const c = localStorage.getItem('trtKap'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) trtKap = p; } } catch(_) {}
 try { const c = localStorage.getItem('trtCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 2) trtData = p; } } catch(_) {}
 try { const c = localStorage.getItem('trtArkiv'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) trtArkiv = p; } } catch(_) {}
 // Arkivblokkene som egne perioder i tilpasningen
@@ -2926,6 +2932,95 @@ function wellSiste(){
   try { const v = JSON.parse(localStorage.getItem('trtSiste') || 'null');
         return v && v.ok && Number.isFinite(v.T0) ? { ...v, gammel: true } : null; } catch (_) { return null; }
 }
+// ── Kapasitet: stabilt nivå mot uttak (v35) ──
+// Poster fra brønnscriptet v2.9: [min, q·10, Tf·100, endring mK/t, ṁcp, GP2,
+// timer·10, ute·10]. Det kjente fallet gjennom borehullet (Rb + varme-
+// utvekslingen mellom rørbeina ved målt flow) trekkes fra. Det som gjenstår,
+// y = Tf + q·Rb_eff, skal ligge på en rett linje mot uttaket:
+//     y = T_w0 − q·R_ut,   R_ut ≈ L_f / (2·ṁ·c)  for grunnvann gjennom hullet
+// T_w0 er brønnvannet uten uttak – sammenlign med stillstandsmålingene.
+// R_ut inneholder også varmeledning i fjellet over timer, så strømmen er en
+// nedre grense. L_f = 180 m forutsetter at vannet går ut nær bunnen.
+const KAP = { Lf: 180, minTimer: 4, maksFall: 80, nivaa: 2, minNivaa: 3, minSpenn: 3, rhoC: 4186,
+              mcpMin: 400 };          // W/K – GP2 går aldri under ≈ 20 % (0,0051 l/s per % · 4061)
+function kapasitetAnalyse(poster, fit){
+  const W = WELL, ok = fit && fit.ok && wellKvalitet(fit).ok;
+  const alle = (poster || []).filter(Array.isArray).map(r => ({ t: r[0] * 60000, q: r[1] / 10, tf: r[2] / 100,
+    fall: r[3], mcp: r[4], gp2: r[5], h: r[6] / 10, ute: r[7] != null ? r[7] / 10 : null }));
+  const stabil = alle.filter(r => r.h >= KAP.minTimer && r.fall >= -KAP.maksFall);
+  const nNivaa = new Set(stabil.map(r => Math.floor(r.q / KAP.nivaa))).size;
+  const qs = stabil.map(r => r.q), spenn = qs.length ? Math.max(...qs) - Math.min(...qs) : 0;
+  const res = { alle, stabil, nNivaa, spenn, ok: false };
+  if (!ok) { res.grunn = 'Venter på en pålitelig tilpasning av borehullsmotstanden.'; return res; }
+  const rbEff = r => { const m = r.mcp > 0 ? r.mcp : Math.max(KAP.mcpMin, (r.q * W.L + W.pipeW) / W.dTauto);
+                       return fit.Rb + Math.pow(W.L / m, 2) * Math.max(0, fit.invRa) / 3; };
+  res.rbEff = rbEff;
+  if (stabil.length < 4 || nNivaa < KAP.minNivaa || spenn < KAP.minSpenn) {
+    res.grunn = `Samler data: ${stabil.length} stabile perioder på ${nNivaa} lastnivå. Trenger minst ${KAP.minNivaa} nivå ` +
+                `over ${(KAP.minSpenn * W.L / 1000).toFixed(1)} kW spenn.`;
+    return res;
+  }
+  const x = stabil.map(r => r.q), y = stabil.map(r => r.tf + r.q * rbEff(r)), n = x.length;
+  const xm = x.reduce((a, v) => a + v, 0) / n, ym = y.reduce((a, v) => a + v, 0) / n;
+  const sxx = x.reduce((a, v) => a + (v - xm) ** 2, 0);
+  const b = x.reduce((a, v, k) => a + (v - xm) * (y[k] - ym), 0) / sxx, a0 = ym - b * xm;
+  const s2 = y.reduce((a, v, k) => a + (v - a0 - b * x[k]) ** 2, 0) / Math.max(1, n - 2);
+  Object.assign(res, { Tw0: a0, sTw0: Math.sqrt(s2 * (1 / n + xm * xm / sxx)), R: -b, sR: Math.sqrt(s2 / sxx) });
+  if (!(res.R > 0)) { res.grunn = 'Stabilt nivå faller ikke med uttaket ennå – for lite spredning i lastnivåene.'; return res; }
+  const Q = R => KAP.Lf / (2 * R * KAP.rhoC);                 // l/s
+  res.Q = Q(res.R); res.Qmin = Q(res.R + 2 * res.sR); res.Qmaks = res.R - 2 * res.sR > 0 ? Q(res.R - 2 * res.sR) : null;   // ±2σ
+  res.ok = true;
+  return res;
+}
+// Stabilt nivå for et gitt uttak (W/m), med flow fra at Auto holder ΔT ≈ 4,1 K
+function kapasitetNivaa(a, q){
+  return a.Tw0 - q * (a.rbEff({ q: q, mcp: 0 }) + a.R);
+}
+function kapasitetSeksjon(fit){
+  const hode = '<div class="ws"><div class="ws-h"><span class="ws-lab">Kapasitet · stabilt nivå mot uttak</span>';
+  if (!trtKap || !Array.isArray(trtKap.p) || !trtKap.p.length)
+    return hode + '</div><div class="ws-n">Venter på brønnscriptet v2.9, som registrerer stabile perioder og går gjennom vinduet som allerede finnes.</div></div>';
+  const a = kapasitetAnalyse(trtKap.p, fit), kw = q => q * WELL.L / 1000;
+  const still = (trtData && trtData.still || []).map(p => p[1] / 100).sort((u, v) => u - v);
+  const platå = still.length ? still[Math.floor(still.length * 0.9)] : null;
+  let val = '', tekst;
+  if (a.ok) {
+    val = `<span class="ws-val">${a.Q.toFixed(2)} <small>l/s</small></span>`;
+    const ved5 = kapasitetNivaa(a, 5000 / WELL.L);
+    tekst = `Grunnvann gjennom hullet ≥ ${a.Q.toFixed(2)} l/s (${Math.round(a.Q * 3600)} l/t), ` +
+            `95 %-intervall ${a.Qmin.toFixed(2)}–${a.Qmaks ? a.Qmaks.toFixed(2) : '∞'} l/s. ` +
+            `Brønnvann uten uttak ${a.Tw0.toFixed(2)} ± ${(2 * a.sTw0).toFixed(2)} °C` +
+            (platå != null ? ` (stillstandsmålingene: ${platå.toFixed(2)} °C)` : '') + '. ' +
+            `Ved 5 kW uttak ventes stabilt nivå ≈ ${ved5.toFixed(1)} °C. ` +
+            `${a.stabil.length} stabile perioder på ${a.nNivaa} lastnivå. Nedre grense: noe av varmen kommer fra fjellet ` +
+            `ved varmeledning. Forutsetter utløp nær bunnen (180 m med strømning).`;
+  } else tekst = a.grunn + ' Høyere last kommer når det blir kaldt, eller med en trinntest.';
+  return hode + val + '</div>' + kapasitetSVG(a, kw) + `<div class="ws-n">${tekst} Stabil = minst 4 t inn i kjøringen med jevnt uttak.</div></div>`;
+}
+function kapasitetSVG(a, kw){
+  const Wd = 380, Hd = 160, PL = 34, PR = 8, PT = 8, PB = 24, mono = 'font-family="DM Mono,monospace"';
+  if (!a.alle.length) return '';
+  const xs = a.alle.map(r => kw(r.q)), ys = a.alle.map(r => r.tf);
+  const xmax = Math.max(4, Math.ceil(Math.max(...xs) + 0.5));
+  const ytop = Math.max(...ys, a.ok ? a.Tw0 : -99) + 0.3, ybot = Math.min(...ys, a.ok ? kapasitetNivaa(a, xmax * 1000 / WELL.L) : 99) - 0.3;
+  const X = v => PL + v / xmax * (Wd - PL - PR), Y = v => PT + (ytop - v) / (ytop - ybot) * (Hd - PT - PB);
+  let s = `<svg viewBox="0 0 ${Wd} ${Hd}" style="width:100%;height:auto;display:block;margin:4px 0">`;
+  for (let k = 0; k <= xmax; k++) s += `<line x1="${X(k)}" y1="${PT}" x2="${X(k)}" y2="${Hd - PB}" stroke="rgba(255,255,255,.06)"/>` +
+    `<text x="${X(k)}" y="${Hd - PB + 12}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>${k}</text>`;
+  s += `<text x="${Wd - PR}" y="${Hd - 2}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>uttak fra brønnen, kW</text>`;
+  for (let v = Math.ceil(ybot * 2) / 2; v <= ytop; v += 0.5) s += `<line x1="${PL}" y1="${Y(v)}" x2="${Wd - PR}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/>` +
+    `<text x="${PL - 4}" y="${Y(v) + 3}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>${v.toFixed(1)}</text>`;
+  if (a.ok) {
+    s += `<line x1="${PL}" y1="${Y(a.Tw0)}" x2="${Wd - PR}" y2="${Y(a.Tw0)}" stroke="#7dd3fc" stroke-dasharray="3,3" stroke-opacity=".5"/>` +
+         `<text x="${Wd - PR}" y="${Y(a.Tw0) - 3}" text-anchor="end" font-size="8" fill="#7dd3fc" ${mono}>brønnvann uten uttak</text>`;
+    let d = ''; for (let k = 0; k <= 40; k++) { const p = 1 + k / 40 * (xmax - 1), q = p * 1000 / WELL.L; d += (k ? 'L' : 'M') + X(p).toFixed(1) + ' ' + Y(kapasitetNivaa(a, q)).toFixed(1); }
+    s += `<path d="${d}" fill="none" stroke="#fdba74" stroke-width="1.5" stroke-opacity=".8"/>`;
+  }
+  for (const r of a.alle) { const st = a.stabil.includes(r);
+    s += `<circle cx="${X(kw(r.q))}" cy="${Y(r.tf)}" r="3.2" fill="${st ? '#7dd3fc' : 'none'}" stroke="#7dd3fc" stroke-opacity="${st ? 1 : .45}"/>`; }
+  return s + `<text x="${PL}" y="${PT + 8}" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>væske, °C</text></svg>`;
+}
+
 function arkivSeg(){
   return (trtArkiv && Array.isArray(trtArkiv.blokker) ? trtArkiv.blokker : [])
     .map(b => trtToBins({ v: 2, ...b })).filter(Boolean);
@@ -2936,7 +3031,7 @@ async function fetchTrt(base, key){
   if (Date.now() - trtLast < wait) return;
   trtLast = Date.now();
   try {
-    const liste = await hentVarer(base, key, [TRT_VAR, ARKIV_VAR]);
+    const liste = await hentVarer(base, key, [TRT_VAR, ARKIV_VAR, KAP_VAR]);
     const v = liste.find(x => x && x.name === TRT_VAR);
     if (!v || !v.value) trtErr = 'Venter på første kjøring av «Brønnens egenskaper» i Homey';
     else {
@@ -2945,6 +3040,12 @@ async function fetchTrt(base, key){
         trtData = p; trtErr = null; trtFit = null; trtHentet = Date.now();   // ny data → ny tilpasning
         try { localStorage.setItem('trtCache', v.value); } catch(_) {}
       } else trtErr = 'Uventet format i ' + TRT_VAR;
+    }
+    const kv = liste.find(x => x && x.name === KAP_VAR);
+    if (kv && kv.value) {
+      try { const p = JSON.parse(kv.value);
+            if (p && p.v === 1 && Array.isArray(p.p)) { trtKap = p; localStorage.setItem('trtKap', kv.value); } }
+      catch (_) {}
     }
     const a = liste.find(x => x && x.name === ARKIV_VAR);
     if (a && a.value) {
@@ -3306,7 +3407,7 @@ function buildWellPanel(){
   }
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(fv, live) + '</div>' +
     `<div class="wp-st">${status}</div>` +
-    `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) +
+    `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) + kapasitetSeksjon(fv) +
     `<div class="wp-ft">Samme fysikk som en termisk responstest (linjekilde, superposisjon), anvendt på vanlig drift. ` +
     `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) og varmeutvekslingen mellom rørbeina ved lav flow — ` +
     `uten dem ble λ opptil 50 % for lav og T₀ 2–4 K for lav. ` +
@@ -3444,7 +3545,7 @@ async function exJSON(url, h){
 async function exVariabler(t){
   const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
   const ut = {};
-  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_brine_history', 'nibe_cop_history']) {
+  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history']) {
     const v = vars.find(x => x.name === navn);
     if (!v) { ut[navn] = null; continue; }
     try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
