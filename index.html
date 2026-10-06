@@ -593,7 +593,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 33;
+const APP_VERSION = 34;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2895,9 +2895,11 @@ function trtToBins(t){
 const TRT_VAR   = 'nibe_trt_history';
 const TRT_EVERY = 5 * 60000;
 const WELLX = {
-  qGeo: 0.045,          // W/m², dagens (ukorrigerte) varmestrøm – anslag Lindåsdekket.
-                        // Fyllingsdalen: 72 korrigert, men ~49 ukorrigert og på
-                        // radioaktiv granitt. Anortositt/noritt ligger lavere.
+  gradMålt: 0.002,      // K/m – temperaturprofil i hullet 28.09 (første sløyfe, GP2 100 %):
+                        // 8,3 °C på ≈ 56 m → 8,7 °C ved bunnen, ≈ 0,2 K/100 m. Grov
+                        // (enkeltavlesninger, 0,1 K-steg), men langt under 1,8 K/100 m
+                        // som q_geo/λ ga. Trolig grunnvann og konveksjon i vannsøylen,
+                        // og i Norge senker ettervirkningen av istiden gradienten øverst.
   lamRock: [2.2, 2.8],  // Lindåsdekket, bergartens egen ledningsevne (anslag)
   lamPrior: 2.5,
   Tsurf: 8.0,           // °C ved overflaten, Bergen (passer med målte oppstartsverdier)
@@ -3033,13 +3035,12 @@ function wellLegGain(Tb, out, trom){
   return ((trom ?? P.Trom) - Tb) * P.inne / P.Rluft + ((out ?? Tj) - Tb) * P.ute / P.Rluft + (Tj - Tb) * P.jord / P.Rjord;
 }
 
-// Temperatur i fjellet på tre dyp. Upåvirket fra geotermisk gradient
-// G = q_geo/λ, forankret i T₀ (middel over vannfylt sone). «Ved hullet nå»
-// trekker fra dagens nedkjøling fra tilpasningen (jevn med dybden).
+// Temperatur i fjellet på tre dyp: målt gradient i hullet, forankret i T₀
+// (middel over vannfylt sone). «Ved hullet nå» trekker fra dagens nedkjøling
+// fra tilpasningen (jevn med dybden).
 function wellProfile(fit){
   const ok = fit && fit.ok;
-  const lam = ok ? fit.lambda : WELLX.lamPrior;
-  const G = WELLX.qGeo / lam;
+  const G = WELLX.gradMålt;
   const T0 = ok ? fit.T0 : WELLX.Tsurf + G * WELLX.zMid;
   const ug = z => T0 + G * (z - WELLX.zMid);
   return { G: G, T0: T0, ok: ok,
@@ -3146,30 +3147,35 @@ function wellSVG(fit, live){
       s += `<text x="174" y="${cy + 45}" text-anchor="end" font-size="12" fill="#e2e8f0" ${mono}>${f1(p.now)} °C</text>`;
     }
   });
-  s += `<text x="6" y="${H - 7}" font-size="7.5" fill="rgba(255,255,255,.4)" ${mono}>gradient ${(pr.G * 100).toFixed(1)} K/100 m · ${pr.ok ? 'fra målt λ' : 'antatt, før måling'}</text>`;
+  s += `<text x="6" y="${H - 7}" font-size="7.5" fill="rgba(255,255,255,.4)" ${mono}>gradient ${(pr.G * 100).toFixed(1)} K/100 m · målt i hullet 28.09 (grov)</text>`;
   return s + '</svg>';
 }
 
 // ── Referanseskala ───────────────────────────────────────────
+// Alle skalaer går fra dårligere til venstre til bedre til høyre. Der lave
+// tall er best (motstand, belastning), snus aksen med rev: true – tallene
+// avtar da mot høyre.
 function wellScale(c){
-  const pct = v => Math.max(0, Math.min(100, (v - c.min) / (c.max - c.min) * 100));
+  const lin = v => Math.max(0, Math.min(100, (v - c.min) / (c.max - c.min) * 100));
+  const pct = v => c.rev ? 100 - lin(v) : lin(v);
+  const span = (a, b) => { const x = pct(a), y = pct(b); return [Math.min(x, y), Math.abs(y - x)]; };
   let z = '', from = c.min;
   c.zones.forEach(zn => {
-    const a = pct(from), b = pct(Math.min(zn.to, c.max));
-    z += `<div class="ws-z" style="left:${a}%;width:${b - a}%;background:${zn.col}"></div>`;
+    const [a, w] = span(from, Math.min(zn.to, c.max));
+    z += `<div class="ws-z" style="left:${a}%;width:${w}%;background:${zn.col}"></div>`;
     from = zn.to;
   });
   let lbl = ''; from = c.min;
   c.zones.forEach(zn => {
-    const a = pct(from), b = pct(Math.min(zn.to, c.max));
-    lbl += `<span style="left:${(a + b) / 2}%">${zn.name}</span>`;
+    const [a, w] = span(from, Math.min(zn.to, c.max));
+    lbl += `<span style="left:${a + w / 2}%">${zn.name}</span>`;
     from = zn.to;
   });
-  const ref = c.ref ? `<div class="ws-r" style="left:${pct(c.ref[0])}%;width:${pct(c.ref[1]) - pct(c.ref[0])}%" title="${c.ref[2]}"></div>` : '';
+  const ref = c.ref ? (([a, w]) => `<div class="ws-r" style="left:${a}%;width:${w}%" title="${c.ref[2]}"></div>`)(span(c.ref[0], c.ref[1])) : '';
   let mk = '', val;
   if (c.val != null && isFinite(c.val)) {
     const p = pct(c.val);
-    if (c.err) mk += `<div class="ws-e" style="left:${pct(c.val - c.err)}%;width:${pct(c.val + c.err) - pct(c.val - c.err)}%"></div>`;
+    if (c.err) { const [a, w] = span(c.val - c.err, c.val + c.err); mk += `<div class="ws-e" style="left:${a}%;width:${w}%"></div>`; }
     mk += `<div class="ws-m" style="left:${p}%"></div>`;
     val = `${c.val.toFixed(c.dec)}${c.err ? ' ± ' + c.err.toFixed(c.dec) : ''} <small>${c.unit}</small>`;
   } else val = `<span class="ws-wait">${c.wait || 'samler data'}</span>`;
@@ -3197,20 +3203,22 @@ function wellScales(fit, live){
     : lam < W.lamRock[0] - 0.2 ? 'Under forventet for bergarten. Sjekk borehullsdiameter og antatt varmekapasitet.'
     : 'Innenfor det bergarten selv kan gi — i hovedsak ren varmeledning.';
   return [
+    `<div style="display:flex;justify-content:space-between;font:400 9px/1 'DM Mono',monospace;color:rgba(255,255,255,.35);margin:10px 0 2px">` +
+      `<span>← dårligere</span><span>alle skalaer</span><span>bedre →</span></div>`,
     wellScale({ label: 'Varmeledningsevne <span class="ws-sym">λ</span>', unit: 'W/mK', dec: 2, min: 1.5, max: 4.5,
       zones: [{ to: 2.5, col: '#b45309', name: 'lav' }, { to: 3.0, col: '#0e7490', name: 'typisk' },
               { to: 3.5, col: '#15803d', name: 'god' }, { to: 4.5, col: '#1d4ed8', name: 'høy' }],
       ref: [W.lamRock[0], W.lamRock[1], 'Lindåsdekket, bergarten alene'],
       val: lam, err: eLam, wait: wait, note: lamNote }),
-    wellScale({ label: 'Borehullsmotstand <span class="ws-sym">R<sub>b</sub></span>', unit: 'K·m/W', dec: 3, min: 0.04, max: 0.22,
-      zones: [{ to: 0.08, col: '#15803d', name: 'svært god' }, { to: 0.10, col: '#0e7490', name: 'god' },
-              { to: 0.15, col: '#b45309', name: 'middels' }, { to: 0.22, col: '#b91c1c', name: 'dårlig' }],
+    wellScale({ label: 'Borehullsmotstand <span class="ws-sym">R<sub>b</sub></span>', unit: 'K·m/W', dec: 3, min: 0.04, max: 0.22, rev: true,
+      zones: [{ to: 0.08, col: '#1d4ed8', name: 'svært god' }, { to: 0.10, col: '#15803d', name: 'god' },
+              { to: 0.15, col: '#0e7490', name: 'middels' }, { to: 0.22, col: '#b45309', name: 'dårlig' }],
       ref: [0.088, 0.092, 'TurboCollector-datablad 0,09 (40 mm, turbulent)'],
       val: ok ? fit.Rb : null, err: ok ? Math.hypot(fit.sRb, W.sysRb) : null, wait: wait,
       note: ok ? (fit.Rb > 0.11 ? 'Høyere enn databladet — passer med at strømningen ofte er laminær i 45 mm-røret.'
                                 : 'På nivå med databladet — god varmeovergang fra væske til fjell.')
                : 'Lavere er bedre. Laminær strømning øker motstanden merkbart.' }),
-    wellScale({ label: 'Effektiv R<sub>b</sub> ved lav last', unit: 'K·m/W', dec: 2, min: 0.05, max: 0.8,
+    wellScale({ label: 'Effektiv R<sub>b</sub> ved lav last', unit: 'K·m/W', dec: 2, min: 0.05, max: 0.8, rev: true,
       zones: [{ to: 0.15, col: '#15803d', name: 'lite tap' }, { to: 0.30, col: '#0e7490', name: 'merkbart' },
               { to: 0.8, col: '#b45309', name: 'vurder fast delta' }],
       val: okLow ? fit.RbLow : null, err: okLow ? Math.hypot(fit.sRbLow || 0, W.sysRb) : null, wait: wait,
@@ -3218,17 +3226,20 @@ function wellScales(fit, live){
                  `(ṁcp ${Math.round(fit.mcpLow || 0)} W/K) kjøler nedløpet oppløpet, og motstanden stiger fra ${fit.Rb.toFixed(3)} til ${fit.RbLow.toFixed(2)}. ` +
                  `Over 0,30: test fast delta 3,0 K i meny 7.1.2.7. Flow målt i ${fit.nMcp ?? 0} av ${fit.n} punkt.`
                : 'Ved lav flow kjøler nedløpet oppløpet. Over 0,30 kan fast delta 3,0 K i meny 7.1.2.7 lønne seg.' }),
-    wellScale({ label: 'Upåvirket temperatur <span class="ws-sym">T₀</span>', unit: '°C', dec: 1, min: 7, max: 13,
-      zones: [{ to: 9, col: '#1e40af', name: 'kaldt' }, { to: 11.5, col: '#0e7490', name: 'typisk Bergen' }, { to: 13, col: '#b45309', name: 'varmt' }],
-      ref: [9.4, 11.4, 'forventet, med geotermisk gradient'],
+    wellScale({ label: 'Upåvirket temperatur <span class="ws-sym">T₀</span>', unit: '°C', dec: 1, min: 3, max: 12,
+      zones: [{ to: 6, col: '#b45309', name: 'kaldt' }, { to: 8, col: '#0e7490', name: 'middels' },
+              { to: 10, col: '#15803d', name: 'godt' }, { to: 12, col: '#1d4ed8', name: 'svært godt' }],
+      ref: [W.Tsurf, W.Tsurf + W.gradMålt * W.zBot, 'forventet: årsmiddel 8 °C + målt gradient i hullet'],
       val: ok ? fit.T0 : null, err: ok ? Math.hypot(fit.sT0, W.sysT0) : null, wait: wait,
-      note: 'Middel over den vannfylte sonen, 17–250 m. Usikkerheten domineres av givernes absolutte nøyaktighet.' }),
+      note: 'Middel over den vannfylte sonen, 17–250 m. Følger årsmiddeltemperaturen: Bergen ≈ 8 °C, ' +
+            'Oslo ≈ 6, Trondheim ≈ 5, innlandet og Nord-Norge 1–4 – brønner der ligger ofte på 3–7 °C. ' +
+            'Varmere fjell gir varmere kuldebærer og bedre COP. Usikkerheten domineres av givernes absolutte nøyaktighet.' }),
     wellScale({ label: 'Grunnvannsbidrag <span class="ws-sym">λ / λ<sub>bergart</sub></span>', unit: '×', dec: 2, min: 0.8, max: 1.8,
       zones: [{ to: 1.05, col: '#475569', name: 'ledning' }, { to: 1.2, col: '#0e7490', name: 'lite' },
               { to: 1.5, col: '#0369a1', name: 'tydelig' }, { to: 1.8, col: '#1d4ed8', name: 'sterkt' }],
       val: ratio, wait: wait,
       note: 'Én aktiv sprekk gir typisk ~1,1. Brønnen har én kjent vannførende sprekk, på 70 m.' }),
-    wellScale({ label: 'Belastning, snitt', unit: 'W/m', dec: 1, min: 0, max: 25,
+    wellScale({ label: 'Belastning, snitt', unit: 'W/m', dec: 1, min: 0, max: 25, rev: true,
       zones: [{ to: 9, col: '#15803d', name: 'lett' }, { to: 17, col: '#0e7490', name: 'normal dim.' }, { to: 25, col: '#b45309', name: 'høy' }],
       val: ok ? fit.qMean : null, wait: wait,
       note: ok ? `Tilsvarer ${(fit.qMean * 8.76).toFixed(0)} kWh/m·år ved dagens rate. Norsk praksis tåler 80–150.` : 'Midlere uttak per meter over måleperioden.' }),
