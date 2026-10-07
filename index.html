@@ -209,7 +209,6 @@ body{font-family:var(--f);color:var(--t1);
 
 /* ── Energibrønn · egenskaper ── */
 .wp-st{font:400 9px/1.4 var(--m);color:var(--t2);text-align:center;margin:8px 0 2px}
-.wp-ft{font:400 8.5px/1.55 var(--m);color:var(--t3);margin-top:14px}
 .ws{margin-top:15px}
 .ws-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}
 .ws-lab{font:700 8.5px/1.2 var(--f);color:var(--t2);letter-spacing:.06em;text-transform:uppercase}
@@ -593,7 +592,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 35;
+const APP_VERSION = 40;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2268,6 +2267,7 @@ function brineRb(){
 // rørvarmen trekkes fra før motstandsleddene. Uten ΔT (uker før v1.6)
 // brukes at Auto holder ΔT ≈ 4,1 K.
 function brineVeggKorr(q, dT){
+  if (Number.isFinite(dT)) dT += giverO();               // givarkorreksjon (v39)
   const RB = brineRb(), L = WELL.L, qbh = q - WELL.pipeW / L;
   const mcp = q * L / (dT >= 1 ? dT : WELL.dTauto);
   return qbh * (RB.rb + (RB.invRa && mcp > 0 ? Math.pow(L / mcp, 2) * RB.invRa / 3 : 0));
@@ -2876,6 +2876,25 @@ function wellFit(d, forrige, valg){
 
 // Scriptets lagring { base, binSec, q:[q·10 …], pts:[[i, qS·10, Tf·100] …] }
 // → tilpasningens { base, binSec, bins:[[i, qAvg, qS, Tf, rf, gp2] …] }
+// ── Givarkorreksjon (v39) ──
+// Låst av brønnscriptet v2.11+ etter måleperioden: O = (BT11−BT10)målt − 0,005 K
+// i stillstand med GP2 ≥ 95 %. Det er ukjent om BT10, BT11 eller begge avviker,
+// så O fordeles likt: BT10 + O/2, BT11 − O/2. Snittet (Tf, T₀) endres ikke;
+// ΔT = BT10 − BT11 blir ΔT + O. Gjelder alle data – også eldre, for avviket
+// har vært der hele tiden. Rådataene i Homey er urørte.
+function giverO(){
+  const g = trtData && trtData.giverKorr;
+  return g && Number.isFinite(g.O) ? g.O / 1000 : 0;
+}
+// ṁcp er målt som fordamperens opptak / ΔT → ṁcp · ΔT / (ΔT + O).
+// ΔT hentes tilbake fra uttaket: (q·L + rørvarme) / ṁcp.
+function korrMcp(mcp, q){
+  const O = giverO();
+  if (!O || !(mcp > 0) || !Number.isFinite(q)) return mcp;
+  const dT = (q * WELL.L + WELL.pipeW) / mcp;
+  return dT + O > 0.5 ? mcp * dT / (dT + O) : mcp;
+}
+
 function trtToBins(t){
   if (!t || !Array.isArray(t.q) || !Array.isArray(t.pts)) return null;
   const pm = new Map(t.pts.filter(p => Array.isArray(p)).map(p => [p[0], p]));
@@ -2884,7 +2903,7 @@ function trtToBins(t){
   for (let i = 0; i < t.q.length; i++) {
     if (t.q[i] === null || !Number.isFinite(t.q[i])) continue;
     const p = pm.get(i);
-    if (p) bins.push([i, t.q[i] / 10, p[1] / 10, p[2] / 100, 1, p.length > 3 ? p[3] : 0, 0]);
+    if (p) bins.push([i, t.q[i] / 10, p[1] / 10, p[2] / 100, 1, p.length > 3 ? korrMcp(p[3], p[1] / 10) : 0, 0]);
     else if (sm.has(i)) bins.push([i, t.q[i] / 10, t.q[i] / 10, sm.get(i) / 100, 1, 0, 1]);   // stillstand
     else bins.push([i, t.q[i] / 10, 0, null, 0, 0, 0]);
   }
@@ -2919,6 +2938,7 @@ let trtData = null, trtErr = null, trtLast = 0, trtFit = null, trtFitPrev = null
 let trtArkiv = null;                       // perioder med stillstandsmålinger, fra «nibe_trt_arkiv»
 const ARKIV_VAR = 'nibe_trt_arkiv';
 let trtKap = null;                         // stabile perioder fra brønnscriptet v2.9, «nibe_trt_kapasitet»
+let trtKapSjekk = null;                    // { funnet, t } – for statusteksten når variabelen mangler
 const KAP_VAR = 'nibe_trt_kapasitet';
 try { const c = localStorage.getItem('trtKap'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) trtKap = p; } } catch(_) {}
 try { const c = localStorage.getItem('trtCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 2) trtData = p; } } catch(_) {}
@@ -2932,29 +2952,99 @@ function wellSiste(){
   try { const v = JSON.parse(localStorage.getItem('trtSiste') || 'null');
         return v && v.ok && Number.isFinite(v.T0) ? { ...v, gammel: true } : null; } catch (_) { return null; }
 }
-// ── Kapasitet: stabilt nivå mot uttak (v35) ──
+// ── Varmeledning fra stillstandene (v36) ──
+// Stillstandspunktene (GP2 sirkulerer, kompressoren står) måler borehulls-
+// veggen uten uttak. Linjekilde med superposisjon over hele uttakshistorikken
+// i vinduet gir λ og T₀ uten at borehullsmotstand eller kortslutning spiller
+// inn. Punkt under 1 t etter stopp utelates (vannet i hullet svinger seg inn).
+// Negativt uttak (v37) er varme fra rør og GP2 som går NED i brønnen når GP2
+// sirkulerer i stillstand (≈ 150 W ved 100 %) – den skal være med. Stillstand
+// = uttak ≤ 0. Kvarter uten data (null) regnes som 0.
+let leiingCache = null;
+function stillstandLeiing(d){
+  if (!d || !Array.isArray(d.q) || !Array.isArray(d.still)) return null;
+  const nokkel = d.lastTick + ':' + d.still.length + ':' + d.q.length;
+  if (leiingCache && leiingCache.nokkel === nokkel) return leiingCache.res;
+  const W = WELL, H = 900, q = d.q.map(v => Number.isFinite(v) ? v / 10 : 0), pkt = [];
+  for (const [i, v] of d.still) {
+    let s = i; while (s > 0 && q[s - 1] <= 0) s--;
+    if (s > 0 && (i - s + 0.5) / 4 >= 1) pkt.push({ i, tf: v / 100, s });
+  }
+  const nPer = new Set(pkt.map(p => p.s)).size;
+  let res = null;
+  if (pkt.length >= 30 && nPer >= 2) {
+    const dq = []; let prev = 0;
+    for (let k = 0; k < q.length; k++) { if (q[k] !== prev) dq.push([k, q[k] - prev]); prev = q[k]; }
+    const prov = lam => {
+      const c = W.rb * W.rb / (4 * (lam / W.C) * H);
+      const pred = pkt.map(p => { let s = 0; for (const [k, v] of dq) { if (k > p.i) break; s += v * wellE1(c / (p.i + 0.5 - k)); }
+                                  return -s / (4 * Math.PI * lam); });
+      const T0 = pkt.reduce((u, p, j) => u + p.tf - pred[j], 0) / pkt.length;
+      return { lam, T0, rms: Math.sqrt(pkt.reduce((u, p, j) => u + (p.tf - pred[j] - T0) ** 2, 0) / pkt.length) };
+    };
+    const alle = []; for (let l = 1.5; l <= 6.001; l += 0.1) alle.push(prov(l));
+    let best = alle.reduce((u, r) => r.rms < u.rms ? r : u);
+    for (let l = best.lam - 0.08; l <= best.lam + 0.081; l += 0.02) if (l > 1) alle.push(prov(l));
+    best = alle.reduce((u, r) => r.rms < u.rms ? r : u);
+    const inn = alle.filter(r => r.rms <= 1.1 * best.rms).map(r => r.lam);
+    res = { lam: best.lam, T0: best.T0, rms: best.rms, n: pkt.length, nPer, lo: Math.min(...inn), hi: Math.max(...inn),
+            kant: best.lam <= 1.55 || best.lam >= 5.95 };
+  }
+  leiingCache = { nokkel, res };
+  return res;
+}
+
+// ── Selvtest (v37) ──
+// Kjøres én gang ved oppstart. Fanger feil i matematikken ved senere endringer:
+// E1 mot tabellverdier (Abramowitz & Stegun), og en syntetisk gjenoppretting
+// med kjent λ og T₀ der varme går ned i brønnen i stillstand.
+function selvtest(){
+  const feil = [];
+  for (const [x, v] of [[0.001, 6.33154], [0.01, 4.03793], [0.1, 1.82292], [0.3, 0.90568], [1, 0.21938], [5, 0.0011483]])
+    if (Math.abs(wellE1(x) / v - 1) > 1e-4) feil.push(`E1(${x}) = ${wellE1(x).toPrecision(6)}, skal være ${v}`);
+  const W = WELL, lam = 2.8, T0 = 9.2, c = W.rb * W.rb / (4 * (lam / W.C) * 900), q = [];
+  for (let d = 0; d < 5; d++) { for (let k = 0; k < 16; k++) q.push(80); for (let k = 0; k < 24; k++) q.push(-6); }
+  const dq = []; let pr = 0; q.forEach((v, k) => { if (v !== pr) { dq.push([k, (v - pr) / 10]); pr = v; } });
+  const still = []; q.forEach((v, i) => { if (v > 0) return; let u = 0;
+    for (const [k, x] of dq) { if (k > i) break; u += x * wellE1(c / (i + 0.5 - k)); }
+    still.push([i, Math.round((T0 - u / (4 * Math.PI * lam)) * 100)]); });
+  const lagret = leiingCache; leiingCache = null;
+  const L = stillstandLeiing({ q, still, lastTick: -1 }); leiingCache = lagret;
+  if (!L || Math.abs(L.lam - lam) > 0.15 || Math.abs(L.T0 - T0) > 0.05)
+    feil.push(`gjenoppretting: λ ${L ? L.lam.toFixed(2) : '–'} (skal være ${lam}), T₀ ${L ? L.T0.toFixed(2) : '–'} (skal være ${T0})`);
+  if (feil.length) console.warn('Selvtest feilet:', feil);
+  return feil;
+}
+let selvtestFeil = null;
+
+// ── Kapasitet: stabilt nivå mot uttak (v35, rettet i v36) ──
 // Poster fra brønnscriptet v2.9: [min, q·10, Tf·100, endring mK/t, ṁcp, GP2,
 // timer·10, ute·10]. Det kjente fallet gjennom borehullet (Rb + varme-
 // utvekslingen mellom rørbeina ved målt flow) trekkes fra. Det som gjenstår,
-// y = Tf + q·Rb_eff, skal ligge på en rett linje mot uttaket:
-//     y = T_w0 − q·R_ut,   R_ut ≈ L_f / (2·ṁ·c)  for grunnvann gjennom hullet
-// T_w0 er brønnvannet uten uttak – sammenlign med stillstandsmålingene.
-// R_ut inneholder også varmeledning i fjellet over timer, så strømmen er en
-// nedre grense. L_f = 180 m forutsetter at vannet går ut nær bunnen.
+// y = Tf + q·Rb_eff, ligger på en rett linje mot uttaket: y = T_w0 − q·R_ut.
+// R_ut sammenlignes med fallet varmeledning alene gir etter samme tid
+// (λ fra stillstandene). Grunnvann gjennom hullet virker PARALLELT med
+// varmeledningen: 1/R_ut = 1/R_ledn + 1/R_vann, R_vann = L_f/(2·ṁ·c).
+// Grunnvann vises bare når R_ut er klart lavere (mer enn 2σ); ellers vises
+// hvor mye strøm dataene utelukker. NB: R_ut og Rb er begge lineære i
+// uttaket, så sammenligningen avhenger direkte av Rb.
 const KAP = { Lf: 180, minTimer: 4, maksFall: 80, nivaa: 2, minNivaa: 3, minSpenn: 3, rhoC: 4186,
-              mcpMin: 400 };          // W/K – GP2 går aldri under ≈ 20 % (0,0051 l/s per % · 4061)
-function kapasitetAnalyse(poster, fit){
-  const W = WELL, ok = fit && fit.ok && wellKvalitet(fit).ok;
+              mcpMin: 400,            // W/K – GP2 går aldri under ≈ 20 % (0,0051 l/s per % · 4061)
+              RbStd: 0.095, invRaStd: 2.1 };   // fra tilpasningene i oktober, brukes bare uten pålitelig tilpasning
+function kapasitetAnalyse(poster, fit, leiing, gjeldende){
+  const W = WELL;
   const alle = (poster || []).filter(Array.isArray).map(r => ({ t: r[0] * 60000, q: r[1] / 10, tf: r[2] / 100,
-    fall: r[3], mcp: r[4], gp2: r[5], h: r[6] / 10, ute: r[7] != null ? r[7] / 10 : null }));
+    fall: r[3], mcp: korrMcp(r[4], r[1] / 10), gp2: r[5], h: r[6] / 10, ute: r[7] != null ? r[7] / 10 : null }));
   const stabil = alle.filter(r => r.h >= KAP.minTimer && r.fall >= -KAP.maksFall);
   const nNivaa = new Set(stabil.map(r => Math.floor(r.q / KAP.nivaa))).size;
   const qs = stabil.map(r => r.q), spenn = qs.length ? Math.max(...qs) - Math.min(...qs) : 0;
-  const res = { alle, stabil, nNivaa, spenn, ok: false };
-  if (!ok) { res.grunn = 'Venter på en pålitelig tilpasning av borehullsmotstanden.'; return res; }
+  let rbK = null;
+  if (fit && fit.ok && wellKvalitet(fit).ok) rbK = { Rb: fit.Rb, invRa: fit.invRa, kilde: 'tilpasningen' };
+  else { const g = wellSiste(); if (g && Number.isFinite(g.Rb)) rbK = { Rb: g.Rb, invRa: g.invRa, kilde: 'siste pålitelige tilpasning' }; }
+  if (!rbK) rbK = { Rb: KAP.RbStd, invRa: KAP.invRaStd, kilde: 'standardverdi' };
   const rbEff = r => { const m = r.mcp > 0 ? r.mcp : Math.max(KAP.mcpMin, (r.q * W.L + W.pipeW) / W.dTauto);
-                       return fit.Rb + Math.pow(W.L / m, 2) * Math.max(0, fit.invRa) / 3; };
-  res.rbEff = rbEff;
+                       return rbK.Rb + Math.pow(W.L / m, 2) * Math.max(0, rbK.invRa) / 3; };
+  const res = { alle, stabil, nNivaa, spenn, ok: false, rbK, rbEff, leiing };
   if (stabil.length < 4 || nNivaa < KAP.minNivaa || spenn < KAP.minSpenn) {
     res.grunn = `Samler data: ${stabil.length} stabile perioder på ${nNivaa} lastnivå. Trenger minst ${KAP.minNivaa} nivå ` +
                 `over ${(KAP.minSpenn * W.L / 1000).toFixed(1)} kW spenn.`;
@@ -2967,42 +3057,136 @@ function kapasitetAnalyse(poster, fit){
   const s2 = y.reduce((a, v, k) => a + (v - a0 - b * x[k]) ** 2, 0) / Math.max(1, n - 2);
   Object.assign(res, { Tw0: a0, sTw0: Math.sqrt(s2 * (1 / n + xm * xm / sxx)), R: -b, sR: Math.sqrt(s2 / sxx) });
   if (!(res.R > 0)) { res.grunn = 'Stabilt nivå faller ikke med uttaket ennå – for lite spredning i lastnivåene.'; return res; }
-  const Q = R => KAP.Lf / (2 * R * KAP.rhoC);                 // l/s
-  res.Q = Q(res.R); res.Qmin = Q(res.R + 2 * res.sR); res.Qmaks = res.R - 2 * res.sR > 0 ? Q(res.R - 2 * res.sR) : null;   // ±2σ
+  const hs = stabil.map(r => r.h).sort((u, v) => u - v); res.hMed = hs[Math.floor(hs.length / 2)];
+  res.dom = 'ukjent';
+  if (leiing && !leiing.kant) {
+    res.Rcond = wellE1(W.rb * W.rb / (4 * (leiing.lam / W.C) * res.hMed * 3600)) / (4 * Math.PI * leiing.lam);
+    const Q = R => { if (!(R > 0) || R >= res.Rcond) return 0;
+                     return KAP.Lf / (2 * (1 / (1 / R - 1 / res.Rcond)) * KAP.rhoC); };   // l/s
+    const lav = res.R - 2 * res.sR;
+    res.Qmaks = lav > 0 ? Q(lav) : null;
+    if (res.R + 2 * res.sR < res.Rcond) { res.dom = 'ekstra'; res.Q = Q(res.R); res.Qmin = Q(res.R + 2 * res.sR); }
+    else res.dom = 'leiing';
+    // Følsomhet for Rb: høyere Rb gir like mye lavere R_ut. Vis hva gjeldende
+    // tilpasning (også en upålitelig) ville gitt når den avviker mye.
+    const g = gjeldende || fit;
+    if (g && Number.isFinite(g.Rb) && Math.abs(g.Rb - rbK.Rb) > 0.02) {
+      res.altRb = g.Rb; res.altR = res.R - (g.Rb - rbK.Rb); res.altQ = Q(res.altR);
+    }
+  }
   res.ok = true;
   return res;
 }
-// Stabilt nivå for et gitt uttak (W/m), med flow fra at Auto holder ΔT ≈ 4,1 K
-function kapasitetNivaa(a, q){
-  return a.Tw0 - q * (a.rbEff({ q: q, mcp: 0 }) + a.R);
+// Stabilt nivå etter ≈ hMed timer for et gitt uttak (W/m), med flow fra at Auto holder ΔT ≈ 4,1 K
+function kapasitetNivaa(a, q, R){
+  return a.Tw0 - q * (a.rbEff({ q: q, mcp: 0 }) + (R ?? a.R));
 }
 function kapasitetSeksjon(fit){
-  const hode = '<div class="ws"><div class="ws-h"><span class="ws-lab">Kapasitet · stabilt nivå mot uttak</span>';
+  if (selvtestFeil === null) selvtestFeil = selvtest();
+  const varsel = selvtestFeil.length ? `<div class="ws-n" style="color:#fca5a5">⚠ Selvtest feilet – beregningene kan være feil: ${selvtestFeil.join('; ')}</div>` : '';
+  const hode = varsel + '<div class="ws"><div class="ws-h"><span class="ws-lab">Kapasitet · stabilt nivå mot uttak</span>';
   if (!trtKap || !Array.isArray(trtKap.p) || !trtKap.p.length)
-    return hode + '</div><div class="ws-n">Venter på brønnscriptet v2.9, som registrerer stabile perioder og går gjennom vinduet som allerede finnes.</div></div>';
-  const a = kapasitetAnalyse(trtKap.p, fit), kw = q => q * WELL.L / 1000;
+    return hode + '</div><div class="ws-n">' + (trtKapSjekk && trtKapSjekk.t
+      ? (trtKapSjekk.funnet ? 'Variabelen «nibe_trt_kapasitet» finnes, men har ingen stabile perioder ennå.'
+                            : `Fant ikke variabelen «nibe_trt_kapasitet» i Homey ved siste fulle sjekk kl. ${new Date(trtKapSjekk.t).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}. ` +
+                              'Den opprettes av brønnscriptet fra v2.9. Appen ser etter den hvert 30. minutt.')
+      : 'Venter på første henting.') + '</div></div>';
+  const L = stillstandLeiing(trtData), a = kapasitetAnalyse(trtKap.p, fit, L, trtFit), kw = q => q * WELL.L / 1000;
   const still = (trtData && trtData.still || []).map(p => p[1] / 100).sort((u, v) => u - v);
   const platå = still.length ? still[Math.floor(still.length * 0.9)] : null;
-  let val = '', tekst;
+  const f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
+  let val = '', tekst = '';
   if (a.ok) {
-    val = `<span class="ws-val">${a.Q.toFixed(2)} <small>l/s</small></span>`;
-    const ved5 = kapasitetNivaa(a, 5000 / WELL.L);
-    tekst = `Grunnvann gjennom hullet ≥ ${a.Q.toFixed(2)} l/s (${Math.round(a.Q * 3600)} l/t), ` +
-            `95 %-intervall ${a.Qmin.toFixed(2)}–${a.Qmaks ? a.Qmaks.toFixed(2) : '∞'} l/s. ` +
-            `Brønnvann uten uttak ${a.Tw0.toFixed(2)} ± ${(2 * a.sTw0).toFixed(2)} °C` +
-            (platå != null ? ` (stillstandsmålingene: ${platå.toFixed(2)} °C)` : '') + '. ' +
-            `Ved 5 kW uttak ventes stabilt nivå ≈ ${ved5.toFixed(1)} °C. ` +
-            `${a.stabil.length} stabile perioder på ${a.nNivaa} lastnivå. Nedre grense: noe av varmen kommer fra fjellet ` +
-            `ved varmeledning. Forutsetter utløp nær bunnen (180 m med strømning).`;
+    const fall = `Fallet utover borehullet er ${f3(a.R)} ± ${f3(2 * a.sR)} K·m/W`;
+    const ledn = L && !L.kant ? `λ ${L.lam.toFixed(1)} fra stillstandene, ${L.lo.toFixed(1)}–${L.hi.toFixed(1)}` : '';
+    if (a.dom === 'ekstra') {
+      val = `<span class="ws-val">≈ ${f2(a.Q)} <small>l/s</small></span>`;
+      tekst = `${fall}, klart under varmeledning alene: ${f3(a.Rcond)} etter ${a.hMed.toFixed(1)} t med ${ledn}. ` +
+              `Den ekstra varmetilførselen tilsvarer grunnvann gjennom hullet på ≈ ${f2(a.Q)} l/s (${Math.round(a.Q * 3600)} l/t), ` +
+              `95 %-intervall ${f2(a.Qmin)}–${a.Qmaks != null ? f2(a.Qmaks) : '∞'} l/s. Forutsetter utløp nær bunnen. `;
+    } else if (a.dom === 'leiing') {
+      val = `<span class="ws-val" style="font-size:11px">som varmeledning</span>`;
+      tekst = `${fall}. Varmeledning alene gir ${f3(a.Rcond)} K·m/W etter ${a.hMed.toFixed(1)} t med ${ledn}. ` +
+              `Ingen tegn til grunnvann gjennom hullet` +
+              (a.Qmaks != null ? `: dataene utelukker mer enn ≈ ${f2(a.Qmaks)} l/s (${Math.round(a.Qmaks * 3600)} l/t). ` : '. ');
+    } else {
+      tekst = `${fall}. Varmeledningen fra stillstandene er ikke bestemt ennå (trenger minst 30 stillstandspunkt fra 2 stillstander), ` +
+              `så fallet kan ikke sammenlignes. `;
+    }
+    tekst += `Nivå uten uttak nå ${f2(a.Tw0)} ± ${f2(2 * a.sTw0)} °C` + (platå != null ? ` (stillstandsmålingene: ${f2(platå)} °C)` : '') +
+             (L && !L.kant ? `, ≈ ${(L.T0 - a.Tw0).toFixed(1)} K under T₀ ${f2(L.T0)} °C etter driften så langt` : '') + '. ' +
+             `Sammenligningen avhenger av Rb (${f3(a.rbK.Rb)}, ${a.rbK.kilde}): 0,01 høyere Rb gir like mye lavere fall. ` +
+             (a.altRb != null ? `Med Rb ${f3(a.altRb)} fra gjeldende tilpasning (ikke pålitelig) ville fallet vært ${f3(a.altR)}` +
+               (a.altQ > 0 ? `, som tilsvarer ≈ ${f2(a.altQ)} l/s grunnvann. ` : `, som også stemmer med varmeledning. `) : '') +
+             `${a.stabil.length} stabile perioder på ${a.nNivaa} lastnivå.`;
   } else tekst = a.grunn + ' Høyere last kommer når det blir kaldt, eller med en trinntest.';
   return hode + val + '</div>' + kapasitetSVG(a, kw) + `<div class="ws-n">${tekst} Stabil = minst 4 t inn i kjøringen med jevnt uttak.</div></div>`;
 }
+// ── Målekontroll (v38) ──
+// Fra brønnscriptet v2.10: stillstandspunkt [i, Tf·100, BT11−BT10 (mK),
+// effekt (W), GP2 %] og summer for effekten i stillstand. I stillstand er GP2
+// det eneste som tilfører varme mellom BT10 og BT11, så forventet BT11−BT10 =
+// P_GP2/ṁcp ≈ 75 W / (0,0044·100·4061 W/K) ≈ +0,04 K ved 100 % – eller 0 hvis
+// Kvarter under 1 t etter stopp utelates.
+// Forventet BT11−BT10: BT10 sitter ETTER GP2 (kjølemodulen, installasjonsmanualen
+// s. 12), så pumpevarmen er med i begge givarne. Mellom dem ligger bare fordamperen:
+// friksjon ≈ 6 W ved 100 % → 6 W / 1 790 W/K ≈ +0,005 K.
+const MK = { P_GP2: 75, venta: 0.005, minKvarter: 8, minMin: 30 };
+function maalekontroll(d){
+  if (!d || !Array.isArray(d.still)) return null;
+  const q = (d.q || []).map(v => Number.isFinite(v) ? v / 10 : 0);
+  const pk = d.still.filter(p => Array.isArray(p) && p.length >= 5 && p[4] >= 95 && Number.isFinite(p[2])).filter(p => {
+    let s = p[0]; while (s > 0 && q[s - 1] <= 0) s--; return s > 0 && (p[0] - s + 0.5) / 4 >= 1; });
+  const res = { n: pk.length, venta: MK.venta, korr: d.giverKorr || null, stat: d.giverStat || null };
+  if (pk.length) {
+    const v = pk.map(p => p[2] / 1000);
+    res.snitt = v.reduce((a, x) => a + x, 0) / v.length;
+    res.sd = Math.sqrt(v.reduce((a, x) => a + (x - res.snitt) ** 2, 0) / Math.max(1, v.length - 1));
+  }
+  const sb = d.standby;
+  if (sb && Array.isArray(sb.med) && Array.isArray(sb.uten)) {
+    res.med = sb.med[1] ? sb.med[0] / sb.med[1] : null; res.nMed = sb.med[1];
+    res.uten = sb.uten[1] ? sb.uten[0] / sb.uten[1] : null; res.nUten = sb.uten[1];
+  }
+  return res;
+}
+function maalekontrollSeksjon(){
+  const m = maalekontroll(trtData);
+  const hode = '<div class="ws"><div class="ws-h"><span class="ws-lab">Målekontroll</span></div>';
+  if (!m || (!m.n && m.med == null && m.uten == null && !m.korr && !m.stat))
+    return hode + '<div class="ws-n">Venter på brønnscriptet v2.10, som måler givaravvik og effekt i stillstand.</div></div>';
+  const f = (v, d = 2) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d);
+  let t = '';
+  if (m.n >= MK.minKvarter)
+    t += `BT11 − BT10 i stillstand med GP2 ≥ 95 %: ${f(m.snitt, 3)} K (${m.n} kvarter, spredning ${m.sd.toFixed(3)}). ` +
+         `Forventet ${f(m.venta, 3)} K (BT10 sitter etter GP2). Avvik: ${f(m.snitt - m.venta, 3)} K. ` +
+         'S1256 har ingen meny for å justere BT10/BT11 (bare BT12, meny 7.1.6.1). ';
+  else if (m.n) t += `Givaravvik: ${m.n} kvarter så langt, trenger minst ${MK.minKvarter}. `;
+  if (m.korr && Number.isFinite(m.korr.O)) {
+    const h = m.korr.O / 2000;
+    t += `Korreksjon låst ${new Date(m.korr.dato).toLocaleDateString('nb-NO')} (${m.korr.n} kvarter): ` +
+         `BT10 ${f(h, 3)} K, BT11 ${f(-h, 3)} K, likt fordelt fordi det er ukjent hvilken giver som avviker. ` +
+         'T₀ endres ikke; ΔT og flow fra ΔT rettes for alle data. ';
+  } else if (m.korr && m.korr.avvist)
+    t += `⚠ Givaravviket (${(m.korr.maalt / 1000).toFixed(2)} K) er urimelig stort og brukes ikke. `;
+  else if (m.stat && m.stat.n)
+    t += `Korreksjonen låses automatisk når måleperioden er over (minst 40 kvarter og 48 t uten nye; nå ${m.stat.n}). `;
+  if (m.med != null || m.uten != null) {
+    const w = (v, n) => v != null ? `${Math.round(v)} W (${n} min)` : '–';
+    t += `Effekt i stillstand (register 2166): GP2 ≥ 95 % ${w(m.med, m.nMed)}, GP2 av ${w(m.uten, m.nUten)}. `;
+    if (m.med != null && m.uten != null && m.nMed >= MK.minMin && m.nUten >= MK.minMin)
+      t += `GP2 bruker dermed ≈ ${Math.round(m.med - m.uten)} W ved 100 % – modellen antar ${MK.P_GP2} W. `;
+  }
+  return hode + `<div class="ws-n">${t}</div></div>`;
+}
+
 function kapasitetSVG(a, kw){
   const Wd = 380, Hd = 160, PL = 34, PR = 8, PT = 8, PB = 24, mono = 'font-family="DM Mono,monospace"';
   if (!a.alle.length) return '';
   const xs = a.alle.map(r => kw(r.q)), ys = a.alle.map(r => r.tf);
   const xmax = Math.max(4, Math.ceil(Math.max(...xs) + 0.5));
-  const ytop = Math.max(...ys, a.ok ? a.Tw0 : -99) + 0.3, ybot = Math.min(...ys, a.ok ? kapasitetNivaa(a, xmax * 1000 / WELL.L) : 99) - 0.3;
+  const ybot = Math.min(...ys, a.ok ? kapasitetNivaa(a, xmax * 1000 / WELL.L) : 99, a.ok && a.Rcond > 0 ? kapasitetNivaa(a, xmax * 1000 / WELL.L, a.Rcond) : 99) - 0.3;
+  const ytop = Math.max(...ys, a.ok ? a.Tw0 : -99) + 0.3;
   const X = v => PL + v / xmax * (Wd - PL - PR), Y = v => PT + (ytop - v) / (ytop - ybot) * (Hd - PT - PB);
   let s = `<svg viewBox="0 0 ${Wd} ${Hd}" style="width:100%;height:auto;display:block;margin:4px 0">`;
   for (let k = 0; k <= xmax; k++) s += `<line x1="${X(k)}" y1="${PT}" x2="${X(k)}" y2="${Hd - PB}" stroke="rgba(255,255,255,.06)"/>` +
@@ -3013,8 +3197,12 @@ function kapasitetSVG(a, kw){
   if (a.ok) {
     s += `<line x1="${PL}" y1="${Y(a.Tw0)}" x2="${Wd - PR}" y2="${Y(a.Tw0)}" stroke="#7dd3fc" stroke-dasharray="3,3" stroke-opacity=".5"/>` +
          `<text x="${Wd - PR}" y="${Y(a.Tw0) - 3}" text-anchor="end" font-size="8" fill="#7dd3fc" ${mono}>brønnvann uten uttak</text>`;
-    let d = ''; for (let k = 0; k <= 40; k++) { const p = 1 + k / 40 * (xmax - 1), q = p * 1000 / WELL.L; d += (k ? 'L' : 'M') + X(p).toFixed(1) + ' ' + Y(kapasitetNivaa(a, q)).toFixed(1); }
-    s += `<path d="${d}" fill="none" stroke="#fdba74" stroke-width="1.5" stroke-opacity=".8"/>`;
+    const kurve = R => { let d = ''; for (let k = 0; k <= 40; k++) { const p = 1 + k / 40 * (xmax - 1), q = p * 1000 / WELL.L;
+                           d += (k ? 'L' : 'M') + X(p).toFixed(1) + ' ' + Y(kapasitetNivaa(a, q, R)).toFixed(1); } return d; };
+    if (a.Rcond > 0) s += `<path d="${kurve(a.Rcond)}" fill="none" stroke="#e2e8f0" stroke-width="1.2" stroke-dasharray="4,3" stroke-opacity=".55"/>` +
+                         `<text x="${PL + 4}" y="${Hd - PB - 14}" font-size="8" fill="rgba(226,232,240,.6)" ${mono}>- - varmeledning alene</text>`;
+    s += `<path d="${kurve(a.R)}" fill="none" stroke="#fdba74" stroke-width="1.5" stroke-opacity=".8"/>` +
+         `<text x="${PL + 4}" y="${Hd - PB - 4}" font-size="8" fill="#fdba74" ${mono}>— målt</text>`;
   }
   for (const r of a.alle) { const st = a.stabil.includes(r);
     s += `<circle cx="${X(kw(r.q))}" cy="${Y(r.tf)}" r="3.2" fill="${st ? '#7dd3fc' : 'none'}" stroke="#7dd3fc" stroke-opacity="${st ? 1 : .45}"/>`; }
@@ -3042,6 +3230,7 @@ async function fetchTrt(base, key){
       } else trtErr = 'Uventet format i ' + TRT_VAR;
     }
     const kv = liste.find(x => x && x.name === KAP_VAR);
+    trtKapSjekk = kv ? { funnet: true, t: Date.now() } : { funnet: false, t: varIderT || Date.now() };
     if (kv && kv.value) {
       try { const p = JSON.parse(kv.value);
             if (p && p.v === 1 && Array.isArray(p.p)) { trtKap = p; localStorage.setItem('trtKap', kv.value); } }
@@ -3332,9 +3521,7 @@ function wellScales(fit, live){
               { to: 10, col: '#15803d', name: 'godt' }, { to: 12, col: '#1d4ed8', name: 'svært godt' }],
       ref: [W.Tsurf, W.Tsurf + W.gradMålt * W.zBot, 'forventet: årsmiddel 8 °C + målt gradient i hullet'],
       val: ok ? fit.T0 : null, err: ok ? Math.hypot(fit.sT0, W.sysT0) : null, wait: wait,
-      note: 'Middel over den vannfylte sonen, 17–250 m. Følger årsmiddeltemperaturen: Bergen ≈ 8 °C, ' +
-            'Oslo ≈ 6, Trondheim ≈ 5, innlandet og Nord-Norge 1–4 – brønner der ligger ofte på 3–7 °C. ' +
-            'Varmere fjell gir varmere kuldebærer og bedre COP. Usikkerheten domineres av givernes absolutte nøyaktighet.' }),
+      note: 'Middel over den vannfylte sonen, 17–250 m. Usikkerheten domineres av givernes absolutte nøyaktighet.' }),
     wellScale({ label: 'Grunnvannsbidrag <span class="ws-sym">λ / λ<sub>bergart</sub></span>', unit: '×', dec: 2, min: 0.8, max: 1.8,
       zones: [{ to: 1.05, col: '#475569', name: 'ledning' }, { to: 1.2, col: '#0e7490', name: 'lite' },
               { to: 1.5, col: '#0369a1', name: 'tydelig' }, { to: 1.8, col: '#1d4ed8', name: 'sterkt' }],
@@ -3407,11 +3594,13 @@ function buildWellPanel(){
   }
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(fv, live) + '</div>' +
     `<div class="wp-st">${status}</div>` +
-    `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) + kapasitetSeksjon(fv) +
-    `<div class="wp-ft">Samme fysikk som en termisk responstest (linjekilde, superposisjon), anvendt på vanlig drift. ` +
-    `Modellen tar med vannet i borehullet som eget varmelager (61,6 kJ/m·K) og varmeutvekslingen mellom rørbeina ved lav flow — ` +
-    `uten dem ble λ opptil 50 % for lav og T₀ 2–4 K for lav. ` +
-    `Fjellets varmekapasitet antatt 2,3 MJ/m³K. Borehull 140 mm, vannfylt lengde 232 m. Uttaket er korrigert for varme tilkoblingsrørene tar fra omgivelsene.</div>`;
+    `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) + kapasitetSeksjon(fv) + maalekontrollSeksjon();
+  // Om modellen (vises ikke i appen): samme fysikk som en termisk responstest
+  // (linjekilde, superposisjon), anvendt på vanlig drift. Vannet i borehullet
+  // er eget varmelager (61,6 kJ/m·K), og varmeutvekslingen mellom rørbeina ved
+  // lav flow er med – uten dem ble λ opptil 50 % for lav og T₀ 2–4 K for lav.
+  // Fjellets varmekapasitet antatt 2,3 MJ/m³K. Borehull 140 mm, vannfylt lengde
+  // 232 m. Uttaket er korrigert for varme tilkoblingsrørene tar fra omgivelsene.
   visUtv(); wellUtvikling();
 }
 
