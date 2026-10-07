@@ -223,7 +223,6 @@ body{font-family:var(--f);color:var(--t1);
 .ws-m{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;border-radius:2px;background:#fff;box-shadow:0 0 0 1.5px #0b1a30}
 .ws-lb{position:relative;height:12px;margin-top:4px}
 .ws-lb span{position:absolute;transform:translateX(-50%);font:400 7.5px/1 var(--m);color:var(--t3);white-space:nowrap}
-.ws-rn{font:400 7.5px/1.4 var(--m);color:rgba(255,255,255,.55);margin-top:2px}
 .ws-n{font:400 8.5px/1.5 var(--f);color:var(--t2);margin-top:4px}
 .ws-sym{text-transform:none;letter-spacing:0;font-family:var(--m);font-weight:500}
 .ws-sym sub{font-size:.75em}
@@ -524,12 +523,17 @@ label.ex-r>span{flex:1;min-width:0}
       <span>tall = målinger per uke</span>
     </div>
   </div>
-  <!-- Eksport for analyse (midlertidig) -->
-  <div class="panel" style="margin-top:.7rem">
-    <div class="ph">
-      <div class="phd" style="background:#a78bfa"></div>
-      <div class="pt">Eksport for analyse · midlertidig</div>
-    </div>
+  <!-- Eksport for analyse – skjult bak nedtrekksmeny som tilkoblingen (v41) -->
+  <div class="cfg" style="margin-top:.7rem">
+    <button class="cft" id="ext" type="button"
+      onclick="tEx()" ontouchend="event.preventDefault();tEx()">
+      <span>⇩ Eksport for analyse</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round">
+        <path d="M6 9l6 6 6-6"/>
+      </svg>
+    </button>
+    <div class="cfb" id="exb">
     <div class="ex">
       <label class="ex-r"><input type="checkbox" id="exVar" checked>
         <span>Brønnanalyse, historikk og COP-timer <span class="ex-n">Logic-variabler</span></span></label>
@@ -547,6 +551,7 @@ label.ex-r>span{flex:1;min-width:0}
         <button class="sr-b" type="button" id="exKop" onclick="eksportKopier()" disabled>Kopier</button>
         <button class="sr-b" type="button" id="exLast" onclick="eksportLastNed()" disabled>Last ned</button>
       </div>
+    </div>
     </div>
   </div>
 
@@ -592,7 +597,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 40;
+const APP_VERSION = 41;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -2223,6 +2228,10 @@ function tCfg(){
   const b=document.getElementById('cfb'),t=document.getElementById('cft');
   b.classList.toggle('open');t.classList.toggle('open');
 }
+function tEx(){
+  const b=document.getElementById('exb'),t=document.getElementById('ext');
+  b.classList.toggle('open');t.classList.toggle('open');
+}
 
 // ── Auto-refresh & Page Visibility ──
 let _refreshTimer=null, _wasHidden=false;
@@ -2250,6 +2259,9 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{p
 // ═══════════════════════════════════════════
 const BRINE_VAR   = 'nibe_brine_history';
 const BRINE_RB    = 0.09;           // K·m/W – databladets verdi, som scriptet bruker
+// Standard borehullsmotstand fra tilpasningene i oktober (Rb lokalt + 1/Ra for
+// kortslutningen mellom rørbeina). Brukes bare uten pålitelig tilpasning.
+const RB_STD      = { Rb: 0.095, invRa: 2.1 };
 const BRINE_REF   = 135;            // min – referansen i scriptet v1.4 (v1.3: 90)
 const BRINE_LOOPS = 1.15;           // pumpede sløyfer før referansen godtas
 // Rb til T_vegg: målt fra brønnanalysen når den finnes, ellers databladet.
@@ -2258,8 +2270,13 @@ const BRINE_LOOPS = 1.15;           // pumpede sløyfer før referansen godtas
 function brineRb(){
   const f = (typeof trtFit !== 'undefined' && trtFit && trtFit.ok) ? trtFit
           : (typeof trtFitPrev !== 'undefined' && trtFitPrev && trtFitPrev.ok) ? trtFitPrev : null;
-  return f && wellKvalitet(f).ok ? { rb: f.Rb, malt: true, invRa: f.invRa > 0 ? f.invRa : 0 }
-                                 : { rb: BRINE_RB, malt: false, invRa: 0 };
+  if (f && wellKvalitet(f).ok) return { rb: f.Rb, malt: true, invRa: f.invRa > 0 ? f.invRa : 0 };
+  // v41: som kapasitetsanalysen – siste pålitelige tilpasning, ellers standardverdiene.
+  // Før: databladets 0,09 UTEN kortslutning, som ga 1,4 K for lav veggtemperatur ved
+  // lav last (6,83 mot 8,26 °C i uke 41) – lavere enn BT10, altså fysisk umulig.
+  const g = wellSiste();
+  if (g && Number.isFinite(g.Rb)) return { rb: g.Rb, malt: true, invRa: g.invRa > 0 ? g.invRa : 0 };
+  return { rb: RB_STD.Rb, malt: false, invRa: RB_STD.invRa };
 }
 // Fra væskens middeltemperatur til veggen ved sjekkpunktet: q·Rb pluss
 // varmeutvekslingen mellom rørbeina, q·(L/ṁcp)²/(3·Ra). Historikkscriptets
@@ -2406,7 +2423,7 @@ function brineSVG(d, err){
 
   // Tittel + siste verdi
   const last = wk[wk.length - 1];
-  s += `<text x="${PL}" y="12" font-size="8.5" fill="rgba(255,255,255,.35)" ${mono} letter-spacing=".06em">T_VEGG · ${BRINE_REF} MIN · Rb ${RB.rb.toFixed(3)}${RB.invRa ? ' + BEINA' : ''} ${RB.malt ? 'MÅLT' : 'DATABLAD'}</text>`;
+  s += `<text x="${PL}" y="12" font-size="8.5" fill="rgba(255,255,255,.35)" ${mono} letter-spacing=".06em">T_VEGG · ${BRINE_REF} MIN · Rb ${RB.rb.toFixed(3)}${RB.invRa ? ' + BEINA' : ''} ${RB.malt ? 'MÅLT' : 'STANDARD'}</text>`;
   if (last) s += `<text x="${W - PR}" y="12" text-anchor="end" font-size="10" fill="#7dd3fc" ${mono}>${last.med.toFixed(2)} °C · uke ${isoWeek(last.ws)}</text>`;
 
   // Rutenett + y-etiketter
@@ -3030,7 +3047,7 @@ let selvtestFeil = null;
 // uttaket, så sammenligningen avhenger direkte av Rb.
 const KAP = { Lf: 180, minTimer: 4, maksFall: 80, nivaa: 2, minNivaa: 3, minSpenn: 3, rhoC: 4186,
               mcpMin: 400,            // W/K – GP2 går aldri under ≈ 20 % (0,0051 l/s per % · 4061)
-              RbStd: 0.095, invRaStd: 2.1 };   // fra tilpasningene i oktober, brukes bare uten pålitelig tilpasning
+              RbStd: RB_STD.Rb, invRaStd: RB_STD.invRa };   // brukes bare uten pålitelig tilpasning
 function kapasitetAnalyse(poster, fit, leiing, gjeldende){
   const W = WELL;
   const alle = (poster || []).filter(Array.isArray).map(r => ({ t: r[0] * 60000, q: r[1] / 10, tf: r[2] / 100,
@@ -3046,8 +3063,7 @@ function kapasitetAnalyse(poster, fit, leiing, gjeldende){
                        return rbK.Rb + Math.pow(W.L / m, 2) * Math.max(0, rbK.invRa) / 3; };
   const res = { alle, stabil, nNivaa, spenn, ok: false, rbK, rbEff, leiing };
   if (stabil.length < 4 || nNivaa < KAP.minNivaa || spenn < KAP.minSpenn) {
-    res.grunn = `Samler data: ${stabil.length} stabile perioder på ${nNivaa} lastnivå. Trenger minst ${KAP.minNivaa} nivå ` +
-                `over ${(KAP.minSpenn * W.L / 1000).toFixed(1)} kW spenn.`;
+    res.grunn = `Samler data: ${stabil.length} stabile perioder på ${nNivaa} lastnivå.`;   // trenger ${KAP.minNivaa} nivå over 0,7 kW
     return res;
   }
   const x = stabil.map(r => r.q), y = stabil.map(r => r.tf + r.q * rbEff(r)), n = x.length;
@@ -3092,8 +3108,15 @@ function kapasitetSeksjon(fit){
                               'Den opprettes av brønnscriptet fra v2.9. Appen ser etter den hvert 30. minutt.')
       : 'Venter på første henting.') + '</div></div>';
   const L = stillstandLeiing(trtData), a = kapasitetAnalyse(trtKap.p, fit, L, trtFit), kw = q => q * WELL.L / 1000;
-  const still = (trtData && trtData.still || []).map(p => p[1] / 100).sort((u, v) => u - v);
-  const platå = still.length ? still[Math.floor(still.length * 0.9)] : null;
+  // v41: ingen forklarende tekst i appen. Resultatene (R_ut ± 2σ, R_ledn etter hMed
+  // timer, utelukket strøm Qmaks, T_w0 mot stillstandsplatået, følsomhet for Rb via
+  // altRb/altR/altQ) ligger i kapasitetAnalyse() for senere analyse. Overskriften
+  // viser grunnvann bare når fallet er klart lavere enn varmeledning alene gir.
+  let val = '';
+  if (a.ok && a.dom === 'ekstra') val = `<span class="ws-val">≈ ${a.Q.toFixed(2)} <small>l/s</small></span>`;
+  return hode + val + '</div>' + kapasitetSVG(a, kw) + (a.ok ? '' : `<div class="ws-n">${a.grunn}</div>`) + '</div>';
+}
+function kapasitetTekstV40(a, L, platå){   // ubrukt fra v41 – beholdt som dokumentasjon av tolkningen
   const f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
   let val = '', tekst = '';
   if (a.ok) {
@@ -3119,8 +3142,8 @@ function kapasitetSeksjon(fit){
              (a.altRb != null ? `Med Rb ${f3(a.altRb)} fra gjeldende tilpasning (ikke pålitelig) ville fallet vært ${f3(a.altR)}` +
                (a.altQ > 0 ? `, som tilsvarer ≈ ${f2(a.altQ)} l/s grunnvann. ` : `, som også stemmer med varmeledning. `) : '') +
              `${a.stabil.length} stabile perioder på ${a.nNivaa} lastnivå.`;
-  } else tekst = a.grunn + ' Høyere last kommer når det blir kaldt, eller med en trinntest.';
-  return hode + val + '</div>' + kapasitetSVG(a, kw) + `<div class="ws-n">${tekst} Stabil = minst 4 t inn i kjøringen med jevnt uttak.</div></div>`;
+  } else tekst = a.grunn;
+  return tekst;   // stabil = minst 4 t inn i kjøringen med jevnt uttak
 }
 // ── Målekontroll (v38) ──
 // Fra brønnscriptet v2.10: stillstandspunkt [i, Tf·100, BT11−BT10 (mK),
@@ -3156,26 +3179,28 @@ function maalekontrollSeksjon(){
   if (!m || (!m.n && m.med == null && m.uten == null && !m.korr && !m.stat))
     return hode + '<div class="ws-n">Venter på brønnscriptet v2.10, som måler givaravvik og effekt i stillstand.</div></div>';
   const f = (v, d = 2) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d);
+  // v41: bare tall i appen. Forventet BT11−BT10 er +0,005 K fordi BT10 sitter etter
+  // GP2; S1256 har ingen meny for å justere BT10/BT11 (bare BT12, meny 7.1.6.1).
+  // Korreksjonen fordeles likt (ukjent hvilken giver som avviker): T₀ endres ikke,
+  // ΔT og flow fra ΔT rettes for alle data. Låses når måleperioden er over (minst
+  // 40 kvarter og 48 t uten nye). Effekten er register 2166, minst 10 min etter stopp;
+  // differansen GP2 100 % − GP2 av er GP2s faktiske effekt (modellen antar 75 W).
   let t = '';
   if (m.n >= MK.minKvarter)
-    t += `BT11 − BT10 i stillstand med GP2 ≥ 95 %: ${f(m.snitt, 3)} K (${m.n} kvarter, spredning ${m.sd.toFixed(3)}). ` +
-         `Forventet ${f(m.venta, 3)} K (BT10 sitter etter GP2). Avvik: ${f(m.snitt - m.venta, 3)} K. ` +
-         'S1256 har ingen meny for å justere BT10/BT11 (bare BT12, meny 7.1.6.1). ';
-  else if (m.n) t += `Givaravvik: ${m.n} kvarter så langt, trenger minst ${MK.minKvarter}. `;
+    t += `BT11 − BT10 i stillstand: ${f(m.snitt, 3)} K (${m.n} kvarter), avvik ${f(m.snitt - m.venta, 3)} K. `;
+  else if (m.n) t += `BT11 − BT10: ${m.n} kvarter så langt. `;
   if (m.korr && Number.isFinite(m.korr.O)) {
     const h = m.korr.O / 2000;
-    t += `Korreksjon låst ${new Date(m.korr.dato).toLocaleDateString('nb-NO')} (${m.korr.n} kvarter): ` +
-         `BT10 ${f(h, 3)} K, BT11 ${f(-h, 3)} K, likt fordelt fordi det er ukjent hvilken giver som avviker. ` +
-         'T₀ endres ikke; ΔT og flow fra ΔT rettes for alle data. ';
+    t += `Korreksjon fra ${new Date(m.korr.dato).toLocaleDateString('nb-NO')}: BT10 ${f(h, 3)} K, BT11 ${f(-h, 3)} K. `;
   } else if (m.korr && m.korr.avvist)
-    t += `⚠ Givaravviket (${(m.korr.maalt / 1000).toFixed(2)} K) er urimelig stort og brukes ikke. `;
+    t += `⚠ Givaravvik ${(m.korr.maalt / 1000).toFixed(2)} K er urimelig stort og brukes ikke. `;
   else if (m.stat && m.stat.n)
-    t += `Korreksjonen låses automatisk når måleperioden er over (minst 40 kvarter og 48 t uten nye; nå ${m.stat.n}). `;
+    t += `Korreksjonen låses etter testperioden (${m.stat.n} kvarter så langt). `;
   if (m.med != null || m.uten != null) {
-    const w = (v, n) => v != null ? `${Math.round(v)} W (${n} min)` : '–';
-    t += `Effekt i stillstand (register 2166): GP2 ≥ 95 % ${w(m.med, m.nMed)}, GP2 av ${w(m.uten, m.nUten)}. `;
-    if (m.med != null && m.uten != null && m.nMed >= MK.minMin && m.nUten >= MK.minMin)
-      t += `GP2 bruker dermed ≈ ${Math.round(m.med - m.uten)} W ved 100 % – modellen antar ${MK.P_GP2} W. `;
+    const w = v => v != null ? `${Math.round(v)} W` : '–';
+    t += `Effekt i stillstand: GP2 100 % ${w(m.med)}, GP2 av ${w(m.uten)}`;
+    t += (m.med != null && m.uten != null && m.nMed >= MK.minMin && m.nUten >= MK.minMin)
+         ? `, GP2 ≈ ${Math.round(m.med - m.uten)} W. ` : '. ';
   }
   return hode + `<div class="ws-n">${t}</div></div>`;
 }
@@ -3185,7 +3210,7 @@ function kapasitetSVG(a, kw){
   if (!a.alle.length) return '';
   const xs = a.alle.map(r => kw(r.q)), ys = a.alle.map(r => r.tf);
   const xmax = Math.max(4, Math.ceil(Math.max(...xs) + 0.5));
-  const ybot = Math.min(...ys, a.ok ? kapasitetNivaa(a, xmax * 1000 / WELL.L) : 99, a.ok && a.Rcond > 0 ? kapasitetNivaa(a, xmax * 1000 / WELL.L, a.Rcond) : 99) - 0.3;
+  const ybot = Math.min(...ys, a.ok ? kapasitetNivaa(a, xmax * 1000 / WELL.L) : 99) - 0.3;
   const ytop = Math.max(...ys, a.ok ? a.Tw0 : -99) + 0.3;
   const X = v => PL + v / xmax * (Wd - PL - PR), Y = v => PT + (ytop - v) / (ytop - ybot) * (Hd - PT - PB);
   let s = `<svg viewBox="0 0 ${Wd} ${Hd}" style="width:100%;height:auto;display:block;margin:4px 0">`;
@@ -3199,10 +3224,7 @@ function kapasitetSVG(a, kw){
          `<text x="${Wd - PR}" y="${Y(a.Tw0) - 3}" text-anchor="end" font-size="8" fill="#7dd3fc" ${mono}>brønnvann uten uttak</text>`;
     const kurve = R => { let d = ''; for (let k = 0; k <= 40; k++) { const p = 1 + k / 40 * (xmax - 1), q = p * 1000 / WELL.L;
                            d += (k ? 'L' : 'M') + X(p).toFixed(1) + ' ' + Y(kapasitetNivaa(a, q, R)).toFixed(1); } return d; };
-    if (a.Rcond > 0) s += `<path d="${kurve(a.Rcond)}" fill="none" stroke="#e2e8f0" stroke-width="1.2" stroke-dasharray="4,3" stroke-opacity=".55"/>` +
-                         `<text x="${PL + 4}" y="${Hd - PB - 14}" font-size="8" fill="rgba(226,232,240,.6)" ${mono}>- - varmeledning alene</text>`;
-    s += `<path d="${kurve(a.R)}" fill="none" stroke="#fdba74" stroke-width="1.5" stroke-opacity=".8"/>` +
-         `<text x="${PL + 4}" y="${Hd - PB - 4}" font-size="8" fill="#fdba74" ${mono}>— målt</text>`;
+    s += `<path d="${kurve(a.R)}" fill="none" stroke="#fdba74" stroke-width="1.5" stroke-opacity=".8"/>`;
   }
   for (const r of a.alle) { const st = a.stabil.includes(r);
     s += `<circle cx="${X(kw(r.q))}" cy="${Y(r.tf)}" r="3.2" fill="${st ? '#7dd3fc' : 'none'}" stroke="#7dd3fc" stroke-opacity="${st ? 1 : .45}"/>`; }
@@ -3473,9 +3495,9 @@ function wellScale(c){
     <div class="ws-h"><span class="ws-lab">${c.label}</span><span class="ws-val">${val}</span></div>
     <div class="ws-t"><div class="ws-zw">${z}</div>${ref}${mk}</div>
     <div class="ws-lb">${lbl}</div>
-    ${c.ref ? `<div class="ws-rn">▭ ${c.ref[2]}</div>` : ''}
-    ${c.note ? `<div class="ws-n">${c.note}</div>` : ''}
   </div>`;
+  // c.ref[2] (hva referansebåndet er) og c.note vises ikke i appen (v41) –
+  // de står i kallene i wellScales() som dokumentasjon.
 }
 
 function wellScales(fit, live){
@@ -3492,9 +3514,8 @@ function wellScales(fit, live){
     : lam > W.lamRock[1] + 0.2 ? 'Over det bergarten alene kan gi — grunnvann bidrar trolig til varmetilførselen.'
     : lam < W.lamRock[0] - 0.2 ? 'Under forventet for bergarten. Sjekk borehullsdiameter og antatt varmekapasitet.'
     : 'Innenfor det bergarten selv kan gi — i hovedsak ren varmeledning.';
+  // Alle skalaer har dårligere til venstre og bedre til høyre (v34).
   return [
-    `<div style="display:flex;justify-content:space-between;font:400 9px/1 'DM Mono',monospace;color:rgba(255,255,255,.35);margin:10px 0 2px">` +
-      `<span>← dårligere</span><span>alle skalaer</span><span>bedre →</span></div>`,
     wellScale({ label: 'Varmeledningsevne <span class="ws-sym">λ</span>', unit: 'W/mK', dec: 2, min: 1.5, max: 4.5,
       zones: [{ to: 2.5, col: '#b45309', name: 'lav' }, { to: 3.0, col: '#0e7490', name: 'typisk' },
               { to: 3.5, col: '#15803d', name: 'god' }, { to: 4.5, col: '#1d4ed8', name: 'høy' }],
@@ -3705,7 +3726,7 @@ function wellUtvSVG(){
   return s + '</svg>';
 }
 
-// ═══ Eksport for analyse (midlertidig) ══════════════════════════════
+// ═══ Eksport for analyse ═══════════════════════════════════════════
 // Henter ferske data rett fra Homey og samler dem i én JSON-fil som kan
 // lastes opp i chatten. Innsikt krever tilgangen «Vis innsikt»
 // (homey.insights.readonly) på API-nøkkelen.
