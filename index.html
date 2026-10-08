@@ -498,6 +498,11 @@ label.ex-r>span{flex:1;min-width:0}
       <span class="vpi-l vpi-vert" id="vpiElp" style="left:5%;top:48%">–</span>
       <!-- Brine ΔT -->
       <span class="vpi-l vpi-sm" id="vpiBrineDT" style="left:82%;top:68%">–</span>
+      <!-- Kjølekrets fra myUplink (v43): skjult til ferske verdier finnes -->
+      <span class="vpi-l vpi-sm" id="vpiBP8"  style="left:81.7%;top:73.7%;display:none"></span>
+      <span class="vpi-l vpi-sm" id="vpiBT84" style="left:90.6%;top:83%;display:none"></span>
+      <span class="vpi-l vpi-sm" id="vpiSH"   style="left:80%;top:87.5%;display:none"></span>
+      <span class="vpi-l vpi-sm" id="vpiBP9"  style="left:21.2%;top:73.7%;display:none"></span>
     </div>
   </div>
   <!-- Energibrønn: egenskaper fra responsanalyse av vanlig drift -->
@@ -597,7 +602,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 41;
+const APP_VERSION = 43;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -745,6 +750,7 @@ const H = {
   bt5:[], bt6:[], supply:[], ret:[], hpPct:[], srcPct:[],
   bt12:[], bt15:[], disch:[], bt17:[], brineDT:[],
   calcSupply:[],
+  bp8d:[], bt84:[], sh:[], bp9d:[],          // kjølekrets fra myUplink (v43)
 };
 
 const r1 = v => Math.round(v * 10) / 10;
@@ -1539,6 +1545,8 @@ function render(temps, nibe, isLive) {
     ph('disch',   nibe.disch);
     ph('bt17',    nibe.bt17);
     if(nibe.brineIn!=null&&nibe.brineOt!=null) ph('brineDT', r1(nibe.brineIn-nibe.brineOt));
+    { const kv = kjoleVerdier(nibe);           // kjølekrets fra myUplink (v43)
+      if (kv) { ph('bp8d', kv.bp8d); ph('bt84', kv.bt84); ph('sh', kv.sh); ph('bp9d', kv.bp9d); } }
     // Tappevann avledede verdier
     const dhwV=[nibe.bt7,nibe.bt6,nibe.bt5].filter(t=>t!=null);
     if(dhwV.length){
@@ -1880,16 +1888,25 @@ function buildVPInternal(nibe) {
 
 
 
-  // Brine ΔT (where BT84 would be)
+  // Plassering (installasjonsmanualen s. 12): BT84 sit rett etter fordamparen,
+  // BT17 lenger fram på suggassrøyret mot kompressoren. Homey-appen
+  // (net.sparud.nibe_s 2.2.0) les BT17 (register 16), men ikkje BT84 (2129),
+  // lågtrykket BP8 (2308, bar) eller BP8-duggpunktet (2127, R454B omrekna av
+  // NIBE). Dei kjem frå myUplink via nibe_myuplink.js v1.1 (sjå kjoleVerdier).
+  // BT17 kan derfor vere varmare enn BT10: gassen tek opp varme etter
+  // fordamparen. Ved 25 Hz er ṁ·cp for dampen berre ≈ 10 W/K (≈ 9 g/s R454B),
+  // så 15–40 W frå kabinett og kompressor gir 1,5–4 K. Som duggpunkt frå
+  // trykket ville 9,5 °C bety koking over BT10 – umogleg når brinen blir kjølt.
+  // Merket ved fordamparen er brine-ΔT (BT10 − BT11), ein skilnad i kelvin (v42).
   // Internal sensor values (no BT prefix)
   el('vpiBT6').textContent  = nibe.bt6 != null ? fmt(nibe.bt6) + ' °C' : '';
   el('vpiBT12').textContent = nibe.bt12 != null ? fmt(nibe.bt12) + ' °C' : '';
   el('vpiBT15').textContent = nibe.bt15 != null ? fmt(nibe.bt15) + ' °C' : '';
   el('vpiBT14').textContent = nibe.disch != null ? fmt(nibe.disch) + ' °C' : '';
-  el('vpiBT17').textContent = nibe.bt17 != null ? fmt(nibe.bt17) + ' °C' : '';
+  el('vpiBT17').textContent = nibe.bt17 != null ? 'BT17 ' + fmt(nibe.bt17) + ' °C' : '';   // namnet: sjå BT84 (v43)
 
   if (nibe.brineIn != null && nibe.brineOt != null) {
-    el('vpiBrineDT').textContent = r1(nibe.brineIn - nibe.brineOt) + ' °C';
+    el('vpiBrineDT').textContent = 'ΔT ' + fmt(nibe.brineIn - nibe.brineOt) + ' K';
   }
 
   // Compressor
@@ -1898,6 +1915,15 @@ function buildVPInternal(nibe) {
 
   // Elpatron (internal addition)
   el('vpiElp').textContent = '0,00 kW';
+
+  // Kjølekrets fra myUplink (v43): bare når kompressoren går og verdiene er ferske
+  const kv = kjoleVerdier(nibe);
+  const vis = (id, txt) => { const e = el(id); if (!e) return; e.textContent = txt || ''; e.style.display = txt ? '' : 'none'; };
+  vis('vpiBP8',  kv && kv.bp8d != null ? 'fordamping ' + fmt(kv.bp8d) + ' °C' : '');
+  vis('vpiBT84', kv && kv.bt84 != null ? 'BT84 ' + fmt(kv.bt84) + ' °C' : '');
+  vis('vpiSH',   kv && kv.sh   != null ? 'overheting ' + fmt(kv.sh) + ' K' : '');
+  vis('vpiBP9',  kv && kv.bp9d != null ? 'kondensering ' + fmt(kv.bp9d) + ' °C' : '');
+  const trykk = (p, ber) => (ber ? ' – beregnet fra trykket' : '') + (p != null ? ' · ' + p.toFixed(2) + ' bar' : '');
 
   // Trend-tooltips på kjølekretsverdiene
   btt(el('vpiBT2'),   'Turtemperatur BT2',         'supply', '°C');
@@ -1912,9 +1938,14 @@ function buildVPInternal(nibe) {
   btt(el('vpiBT12'),  'Turtemp. kondensator BT12', 'bt12',   '°C');
   btt(el('vpiBT15'),  'Væskeledning BT15',         'bt15',   '°C');
   btt(el('vpiBT14'),  'Varmgass BT14',             'disch',  '°C');
-  btt(el('vpiBT17'),  'Sugegass BT17',             'bt17',   '°C');
+  btt(el('vpiBT17'),  'Sugegass BT17 ved kompressoren' + (kv && kv.bt84 != null && nibe.bt17 != null
+        ? ' · ' + (nibe.bt17 - kv.bt84 >= 0 ? '+' : '') + fmt(nibe.bt17 - kv.bt84) + ' K etter fordamperen' : ''), 'bt17', '°C');
   btt(el('vpiHz'),    'Kompressor Hz',             'hz',     'Hz');
-  btt(el('vpiBrineDT'),'Brine ΔT',                 'brineDT','°C');
+  btt(el('vpiBrineDT'),'Brine ΔT (BT10 − BT11)',   'brineDT','K');
+  btt(el('vpiBP8'),  'Fordamping, duggpunkt BP8' + trykk(kv && kv.bp8p, kv && kv.ber8), 'bp8d', '°C');
+  btt(el('vpiBT84'), 'Suggass etter fordamperen BT84', 'bt84', '°C');
+  btt(el('vpiSH'),   'Overheting BT84 − BP8',          'sh',   'K');
+  btt(el('vpiBP9'),  'Kondensering, duggpunkt BP9' + trykk(kv && kv.bp9p, kv && kv.ber9), 'bp9d', '°C');
 }
 
 // HENTING – doFetch()
@@ -2201,6 +2232,7 @@ async function doFetch() {
     render(temps, nibe, true);
     fetchBrine(base, key).catch(()=>{});
     fetchTrt(base, key).catch(()=>{});
+    fetchKjole(base, key).catch(()=>{});
     _failCount=0;
     _savCounter=(_savCounter+1)%4;
     if(_savCounter===0) savH();
@@ -2333,6 +2365,53 @@ async function hentVarListe(base, key){
     const j = await r.json(); varListe = j; varListeT = Date.now(); return j;
   })();
   try { return await varListeP; } finally { varListeP = null; }
+}
+
+// ── Kjølekrets fra myUplink (v43) ──
+// nibe_myuplink.js v1.1 finner BT84, BP8 og BP9 i myUplink og skriver
+// «nibe_kjolekrets» hvert minutt: { v:1, t, komp:{on,fra}, kilde,
+// p: { bt84|bp8d|bp8p|bp9d|bp9p: [verdi, tid i myUplink, tid lest] } }.
+// Vises bare når
+//   – kompressoren går nå (Modbus) og ifølge scriptet,
+//   – scriptet har skrevet de siste 5 min og verdien er lest de siste 5 min,
+//   – verdien er høyst 15 min gammel i myUplink og fra denne kjøringen
+//     (en verdi fra før start viser stillstandstrykket, ikke drift).
+// Overheting = BT84 − BP8-duggpunkt, bare når −2 < SH < 30 K og fordampingen
+// ligger under brinen inn (BT10) – ellers kan ikke tallene stemme sammen.
+const KJOLE_VAR = 'nibe_kjolekrets', KJOLE_EVERY = 60000;
+const KJ = { skript: 5 * 60000, alder: 15 * 60000, start: 60000 };
+let kjoleData = null, kjoleLast = 0;
+try { const c = localStorage.getItem('kjoleCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) kjoleData = p; } } catch(_) {}
+function kjoleVerdier(nibe, nu){
+  const d = kjoleData, now = nu ?? Date.now();
+  if (!d || d.v !== 1 || !d.p || !(now - d.t <= KJ.skript)) return null;
+  if (!(nibe && nibe.hz >= 1) || !(d.komp && d.komp.on)) return null;
+  const fra = d.komp.fra || 0;
+  const v = k => {
+    const x = d.p[k];
+    if (!Array.isArray(x) || !Number.isFinite(x[0])) return null;
+    if (!(x[2] != null && now - x[2] <= KJ.skript)) return null;
+    if (x[1] != null && (now - x[1] > KJ.alder || x[1] < fra - KJ.start)) return null;
+    return x[0];
+  };
+  let bp8d = v('bp8d'); const bt84 = v('bt84');
+  if (bp8d != null && nibe.brineIn != null && bp8d > nibe.brineIn + 0.5) bp8d = null;
+  const sh = bp8d != null && bt84 != null && bt84 - bp8d > -2 && bt84 - bp8d < 30 ? bt84 - bp8d : null;
+  const k = d.kilde || {};
+  return { bp8d, bt84, sh, bp9d: v('bp9d'), bp8p: v('bp8p'), bp9p: v('bp9p'),
+           ber8: k.bp8d === 'beregnet', ber9: k.bp9d === 'beregnet' };
+}
+async function fetchKjole(base, key){
+  if (Date.now() - kjoleLast < KJOLE_EVERY) return;
+  kjoleLast = Date.now();
+  try {
+    const v = (await hentVarer(base, key, [KJOLE_VAR])).find(x => x && x.name === KJOLE_VAR);
+    if (v && v.value) {
+      const p = JSON.parse(v.value);
+      if (p && p.v === 1 && p.p) { kjoleData = p; try { localStorage.setItem('kjoleCache', v.value); } catch(_) {} }
+    }
+  } catch (_) {}
+  try { if (nibe_last) buildVPInternal(nibe_last); } catch (_) {}
 }
 
 // Frittstående: feil her skal aldri velte resten av dashbordet
@@ -3755,7 +3834,7 @@ async function exJSON(url, h){
 async function exVariabler(t){
   const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
   const ut = {};
-  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history']) {
+  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history', 'nibe_kjolekrets']) {
     const v = vars.find(x => x.name === navn);
     if (!v) { ut[navn] = null; continue; }
     try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
