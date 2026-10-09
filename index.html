@@ -383,7 +383,7 @@ label.ex-r>span{flex:1;min-width:0}
       <div class="pt">NIBE S1256 · 8 kW</div>
 
     </div>
-    <!-- 10 tiles in 2-col grid, symmetrical 5 rows -->
+    <!-- 16 fliser i 2 kolonner, 8 rader -->
     <div class="mg" style="margin-bottom:6px">
       <div class="mc" id="mSnitt">
         <div class="ml">Snitt tank</div>
@@ -397,6 +397,12 @@ label.ex-r>span{flex:1;min-width:0}
       <div class="mc" id="mOutAvg">
         <div class="ml">Ute temp.</div>
         <div class="mv" id="vOutAvg">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mStue">
+        <div class="ml">Stue · ønsket</div>
+        <div class="mv" id="vStue">–<span class="mu">°C</span></div></div>
+      <div class="mc" id="mRomRH">
+        <div class="ml">Luftfukt. stue</div>
+        <div class="mv" id="vRomRH">–<span class="mu">%</span></div></div>
       <div class="mc" id="mBrineIn">
         <div class="ml">Brine Inn</div>
         <div class="mv" id="vBrineIn">–<span class="mu">°C</span></div></div>
@@ -527,7 +533,7 @@ label.ex-r>span{flex:1;min-width:0}
       <span class="vpi-l vpi-vert" id="vpiElp" style="left:5%;top:48%">–</span>
       <!-- Brine ΔT -->
       <span class="vpi-l vpi-sm" id="vpiBrineDT" style="left:82%;top:68%">–</span>
-      <!-- Kjølekrets fra myUplink (v43): skjult til ferske verdier finnes -->
+      <!-- Kjølekrets fra pumpens REST-API (nibe_lokal.js): skjult til ferske verdier finnes -->
       <span class="vpi-l vpi-sm" id="vpiBP8"  style="left:81.7%;top:73.7%;display:none"></span>
       <span class="vpi-l vpi-sm" id="vpiBT84" style="left:90.6%;top:83%;display:none"></span>
       <span class="vpi-l vpi-sm" id="vpiSH"   style="left:80%;top:87.5%;display:none"></span>
@@ -615,7 +621,7 @@ label.ex-r>span{flex:1;min-width:0}
       <div class="cfh">Finn på
         <a href="https://my.homey.app" target="_blank" rel="noopener"
            style="color:#60a5fa;text-decoration:none">my.homey.app</a>
-        → Innstillinger → API Keys → Opprett ny med <em>Vis enheter</em>, <em>Vis variabler</em> og <em>Vis innsikt</em> (den siste gir trendgrafene historikk bakover og trengs til eksport).
+        → Innstillinger → API Keys → Opprett ny med <em>Vis enheter</em>, <em>Vis variabler</em> og <em>Vis innsikt</em> (den siste gir trendgrafene historikk bakover og trengs til eksport). Bare lesetilganger – dashbordet skal ikke kunne skrive.
       </div>
       <button class="cfc" id="cfc" type="button" onclick="doFetch()">Koble til</button>
       <div class="cfh" id="cfver" style="text-align:center;margin-top:.6rem;opacity:.7">Versjon –</div>
@@ -631,7 +637,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 44;
+const APP_VERSION = 45;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -758,7 +764,7 @@ const COPH_DEV    = 'Nibe COP Varme 24t';      // COP husvarme 24t
 const COPW_DEV    = 'Nibe COP Tappevann 24t';  // COP tappevann 24t
 const COPHT_DEV   = 'Nibe COP Varme Total';       // COP husvarme akkumulert
 const COPWT_DEV   = 'Nibe COP Tappevann Total';   // COP tappevann akkumulert
-const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) via MyUplink
+const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) – nibe_lokal.js (REST), før myUplink
 
 const REF = 25, KWH = 0.5815;
 const HIST_EVERY = 20; // SCOP-grafen får nytt punkt hvert 20. fetch (20×15s = 5 min)
@@ -842,9 +848,13 @@ const dc = (c,a) => { const m=c.match(/\d+/g).map(Number); return `rgb(${Math.ma
 //      40 °C per sjikt, ≈ 1 min). Brønnhodet vises rått i disse timene (se
 //      trBronn). Innsikt krever «Vis innsikt» på API-nøkkelen. Svarer Homey
 //      401/403, prøves den ikke igjen på 30 min, og grafen bruker bare 1.
-//   Kjølekretsen: loggen i «nibe_kjolekrets» (nibe_myuplink.js, punkt hvert
-//   10. min mens kompressoren går). Snitt per time av punktene, med samme
-//   plausibilitetskrav som i appen (kjoleVerdier).
+//   Kjølekretsen: loggen «nibe_kjolekrets_logg» fra nibe_lokal.js (punkt hvert
+//   10. min mens kompressoren går), hentet først når et kjølekretsvindu åpnes.
+//   Med det gamle nibe_myuplink.js lå loggen inne i «nibe_kjolekrets» – den
+//   brukes da. Snitt per time av punktene, med samme plausibilitetskrav som
+//   i appen (kjoleVerdier).
+//   Romsonen (stue, ønsket, fukt): bare fra nibe_trend v1.1, som leser
+//   «nibe_sone» (nibe_lokal.js) hvert minutt.
 //   Brønnens egenskaper (λ, Rb, T₀ …): døgnestimatene fra utviklingsgrafen
 //   (utvCache). De regnes én gang per døgn med data – ett punkt per døgn.
 //
@@ -937,7 +947,12 @@ const TRS = {
   bronnInn: { inn: ['brineOt','outAvg','trom','srcPct'], f: r => trBronn(r, 'inn'), d: 1, enh: '°C' },
   // Re ∝ flow: et timesnitt av GP2 tar med stopp-tiden og ville gitt for lav Re – bare fra scriptet
   re:       { f: r => r.kilde === 'I' ? null : wellRe(trFlowW(r), trSn([r.brineIn, r.brineOt])), d: 0, enh: '' },
-  // Kjølekretsen – loggen i nibe_kjolekrets
+  // Romsonen (v45) – nibe_sone via nibe_trend v1.1; finnes ikke i Innsikt
+  stue:  { d: 1, enh: '°C', sone: true, linjer: [
+           { navn: 'Stue', f: r => r.romT },
+           { navn: 'Ønsket', f: r => r.soneSp, stiplet: true }] },
+  romRH: { f: r => r.romRH, d: 0, enh: '%', sone: true },
+  // Kjølekretsen – loggen «nibe_kjolekrets_logg» (nibe_lokal.js)
   bp8d: { kilde: 'kjole', d: 1, enh: '°C' }, bt84: { kilde: 'kjole', d: 1, enh: '°C' },
   sh:   { kilde: 'kjole', d: 1, enh: 'K' },  bp9d: { kilde: 'kjole', d: 1, enh: '°C' },
   // Brønnens egenskaper – døgnestimat e = [λ, σλ, Rb, σRb, T₀, σT₀, Rb ved lav last, uttak, nedkjøling nå]
@@ -1057,7 +1072,7 @@ function trTegn(){
   if (!D) { Lg.innerHTML = ''; return status(a.feil ? trFeilTekst(a.feil) : 'Henter …'); }
   Lg.innerHTML = D.linjer.length > 1
     ? D.linjer.map((l, i) => `<span><i class="${l.stiplet ? 'st' : ''}" style="border-color:${trFarge(l, i)}"></i>${l.navn}</span>`).join('') : '';
-  if (!D.linjer.some(l => l.pts.length)) return status(a.vent ? 'Henter …' : trTomTekst(D));
+  if (!D.linjer.some(l => l.pts.length)) return status(a.vent ? 'Henter …' : trTomTekst(D, def));
   const W = Math.max(260, Math.round(G.clientWidth || 340));
   const H = Math.round(Math.min(Math.max(W * 0.72, 220), Math.max(220, window.innerHeight - 200)));
   const g = trSVG(D, W, H, def);
@@ -1065,8 +1080,9 @@ function trTegn(){
   trScrub(G.querySelector('svg'), g);
   S.textContent = trStatTekst(D, def) + (a.vent ? ' · henter mer …' : '');
 }
-function trTomTekst(D){
+function trTomTekst(D, def){
   if (D.oppl === 'k') return 'Ingen målinger i drift siste 7 døgn';
+  if (def && def.sone && D.logg) return 'Ingen timesverdier ennå – krever nibe_lokal og nibe_trend 1.1 i Homey';
   if (D.oppl === 'd') return 'Ingen pålitelige døgnestimat siste 7 døgn';
   return D.logg ? 'Ingen timesverdier for denne verdien ennå' : 'Venter på timesverdier fra nibe_trend i Homey';
 }
@@ -1118,6 +1134,8 @@ function trLiveRec(){
   r.vv    = (pwrKW == null || !prioOk) ? null : (pwrKW > 0.2 && (pL.includes('water') || pL.includes('hot')) ? 1 : 0);
   r.dusj  = showerMinutes({ bt7: n.bt7, bt6: n.bt6, bt5: n.bt5 });
   r.flowW = wellFlowLps(n) ?? wellFlowEst(n);
+  const s = soneVerdier();
+  r.romT = s ? s.romT : null; r.romRH = s ? s.romRH : null; r.soneSp = s ? s.sp : null;
   return r;
 }
 const trFitE = f => f ? [f.lambda, f.sLambda, f.Rb, f.sRb, f.T0, f.sT0, f.RbLow, f.qMean, f.coolNow] : null;
@@ -1276,7 +1294,7 @@ async function trData(id, medIns){
   if (!def) throw new Error('ingen trend');
   const nu = Date.now(), t0 = nu - TR_DOGN * 86400000;
   const linjer = def.linjer || [{ navn: '', f: def.f }];
-  if (def.kilde === 'kjole') return trKjoleData(id, t0, nu);
+  if (def.kilde === 'kjole') return trKjoleData(id, t0, nu, await trKjoleLogg());
   if (def.kilde === 'dogn') return trDognData(linjer, t0, nu);
   const t = trTilk();
   const L = await trHentLogg(t);
@@ -1323,10 +1341,26 @@ async function trData(id, medIns){
       pts: recs.map(r => { let v = null; try { v = l.f(r); } catch (_) {} return { t: Math.min(r.tc, nu), v }; })
                .filter(p => p.v != null && Number.isFinite(p.v) && p.t >= t0) })) };
 }
+// Kjølekretsens logg: egen variabel fra nibe_lokal.js, hentet først når et
+// kjølekretsvindu åpnes og gjenbrukt i 5 min (≈ 40 kB – skal ikke lastes
+// ned hvert minutt). Med det gamle nibe_myuplink.js lå loggen inne i
+// «nibe_kjolekrets»; den brukes da.
+const KJOLE_LOGG_VAR = 'nibe_kjolekrets_logg';
+let kjLogg = null, kjLoggT = 0, kjLoggN = '';
+async function trKjoleLogg(){
+  if (kjoleData && Array.isArray(kjoleData.logg) && kjoleData.logg.length) return kjoleData.logg;
+  const t = trTilk(), nk = t.base + '|' + t.key;
+  if (kjLogg && kjLoggN === nk && Date.now() - kjLoggT < TR_HENT) return kjLogg;
+  const v = (await hentVarer(t.base, t.key, [KJOLE_LOGG_VAR], true)).find(x => x && x.name === KJOLE_LOGG_VAR);
+  let rader = [];
+  try { const p = JSON.parse((v && v.value) || 'null'); if (p && p.v === 1 && Array.isArray(p.rader)) rader = p.rader; } catch (_) {}
+  kjLogg = rader; kjLoggT = Date.now(); kjLoggN = nk;
+  return rader;
+}
 // Kjølekretsen: punktene i loggen (hvert 10. min i drift) snittet per time.
 // Rad: [min, BP8 dugg·10, BT84·10, BP9 dugg·10, Hz, BT10·10, BT11·10, GP2, min i drift, BT17·10]
-function trKjoleData(id, t0, nu){
-  const L = (kjoleData && Array.isArray(kjoleData.logg)) ? kjoleData.logg : [];
+function trKjoleData(id, t0, nu, logg){
+  const L = Array.isArray(logg) ? logg : [];
   const b = new Map();
   for (const r of L) {
     if (!Array.isArray(r) || !Number.isFinite(r[0])) continue;
@@ -2143,6 +2177,9 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mGm'),      'Gradminutter',      'gm',     'GM');
   btt(document.getElementById('mBt7'),     'Tappevann BT7',     'bt7',    '°C');
   btt(document.getElementById('mOutAvg'),  'Utetemperatur',      'outAvg','°C');
+  btt(document.getElementById('mStue'),    'Romtemperatur stue', 'stue',  '°C');
+  btt(document.getElementById('mRomRH'),   'Luftfuktighet stue', 'romRH', '%');
+  buildSone();
   btt(document.getElementById('mCompStarts'),'Kompressorstarter', 'compStarts','');
   btt(document.getElementById('mCompHours'), 'Driftstid',         'compHours','t');
   btt(document.getElementById('mDhwSnitt'), 'Tappevann snitt',    'dhwSnitt','°C');
@@ -2234,7 +2271,7 @@ function showerMinutes({ bt7, bt5, bt6 }) {
 function buildDHW(nibe) {
   const bt7 = nibe.bt7;     // topp (BT7)
   const bt6 = nibe.bt6;     // oppvarming/midt (BT6)
-  const bt5 = nibe.bt5;     // bunn/start (BT5 via MyUplink)
+  const bt5 = nibe.bt5;     // bunn/start (BT5 via nibe_lokal.js)
 
   const temps = [bt7, bt6, bt5].filter(v => v != null);
   const snitt = temps.length ? r1(temps.reduce((a,b)=>a+b,0)/temps.length) : null;
@@ -2490,7 +2527,7 @@ function buildVPInternal(nibe) {
   // BT17 lenger fram på suggassrøyret mot kompressoren. Homey-appen
   // (net.sparud.nibe_s 2.2.0) les BT17 (register 16), men ikkje BT84 (2129),
   // lågtrykket BP8 (2308, bar) eller BP8-duggpunktet (2127, R454B omrekna av
-  // NIBE). Dei kjem frå myUplink via nibe_myuplink.js v1.1 (sjå kjoleVerdier).
+  // NIBE). De kommer fra pumpens lokale REST-API via nibe_lokal.js (se kjoleVerdier).
   // BT17 kan derfor vere varmare enn BT10: gassen tek opp varme etter
   // fordamparen. Ved 25 Hz er ṁ·cp for dampen berre ≈ 10 W/K (≈ 9 g/s R454B),
   // så 15–40 W frå kabinett og kompressor gir 1,5–4 K. Som duggpunkt frå
@@ -2514,7 +2551,7 @@ function buildVPInternal(nibe) {
   // Elpatron (internt eltilskudd, register 1027) – viste fast «0,00 kW» før v44
   el('vpiElp').textContent = nibe.elAdd != null ? (nibe.elAdd / 1000).toFixed(2) + ' kW' : '–';
 
-  // Kjølekrets fra myUplink (v43): bare når kompressoren går og verdiene er ferske
+  // Kjølekrets fra REST (nibe_lokal.js): bare når kompressoren går og verdiene er ferske
   const kv = kjoleVerdier(nibe);
   const vis = (id, txt) => { const e = el(id); if (!e) return; e.textContent = txt || ''; e.style.display = txt ? '' : 'none'; };
   vis('vpiBP8',  kv && kv.bp8d != null ? 'fordamping ' + fmt(kv.bp8d) + ' °C' : '');
@@ -2836,6 +2873,7 @@ async function doFetch() {
     fetchBrine(base, key).catch(()=>{});
     fetchTrt(base, key).catch(()=>{});
     fetchKjole(base, key).catch(()=>{});
+    fetchSone(base, key).catch(()=>{});
     _failCount=0;
     _savCounter=(_savCounter+1)%4;
     if(_savCounter===0) savH();
@@ -2971,14 +3009,16 @@ async function hentVarListe(base, key){
   try { return await varListeP; } finally { varListeP = null; }
 }
 
-// ── Kjølekrets fra myUplink (v43) ──
-// nibe_myuplink.js v1.1 finner BT84, BP8 og BP9 i myUplink og skriver
-// «nibe_kjolekrets» hvert minutt: { v:1, t, komp:{on,fra}, kilde,
-// p: { bt84|bp8d|bp8p|bp9d|bp9p: [verdi, tid i myUplink, tid lest] } }.
+// ── Kjølekrets (v43, kilde fra v45: pumpens lokale REST-API) ──
+// nibe_lokal.js leser BT84, BP8 og BP9 fra pumpen og skriver
+// «nibe_kjolekrets» hvert minutt: { v:1, t, src:'rest', komp:{on,fra}, kilde,
+// p: { bt84|bp8d|bp8p|bp9d|bp9p: [verdi, tid målt, tid lest] } }. Med REST er
+// målt = lest. Det gamle nibe_myuplink.js skrev samme format (målt = tiden i
+// myUplink), så begge virker.
 // Vises bare når
 //   – kompressoren går nå (Modbus) og ifølge scriptet,
 //   – scriptet har skrevet de siste 5 min og verdien er lest de siste 5 min,
-//   – verdien er høyst 15 min gammel i myUplink og fra denne kjøringen
+//   – verdien er høyst 15 min gammel (målt) og fra denne kjøringen
 //     (en verdi fra før start viser stillstandstrykket, ikke drift).
 // Overheting = BT84 − BP8-duggpunkt, bare når −2 < SH < 30 K og fordampingen
 // ligger under brinen inn (BT10) – ellers kan ikke tallene stemme sammen.
@@ -3016,6 +3056,48 @@ async function fetchKjole(base, key){
     }
   } catch (_) {}
   try { if (nibe_last) buildVPInternal(nibe_last); } catch (_) {}
+}
+
+// ── Romsonen (v45) ──
+// nibe_lokal.js skriver «nibe_sone» hvert minutt: { v:1, t, sp, spMin, spMax,
+// romT, romRH } – ønsket temperatur i sone 1 (holding-register 2505) og
+// THS10-giveren i stua. nibe_setpunkt.js legger til spT når settpunktet endres.
+// Dashbordet viser bare: settpunktet endres i MerTappevann, som ligger lokalt.
+// Denne appen ligger på GitHub og brukes utenfra – den skal aldri kunne skrive
+// til pumpen, og API-nøkkelen skal ikke ha HomeyScript-tilgang.
+// Verdiene vises bare når de er skrevet de siste 5 min.
+const SONE_VAR = 'nibe_sone', SONE_EVERY = 60000, SONE_FERSK = 5 * 60000;
+let soneData = null, soneLast = 0;
+try { const c = localStorage.getItem('soneCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) soneData = p; } } catch(_) {}
+function soneVerdier(nu){
+  const d = soneData, now = nu ?? Date.now();
+  if (!d || d.v !== 1) return null;
+  const fT  = Number.isFinite(d.t) && now - d.t <= SONE_FERSK;
+  const fSp = fT || (Number.isFinite(d.spT) && now - d.spT <= SONE_FERSK);
+  if (!fT && !fSp) return null;
+  const ok = (v, a, b) => (typeof v === 'number' && isFinite(v) && v >= a && v <= b) ? v : null;
+  return { romT: fT ? ok(d.romT, 0, 45) : null, romRH: fT ? ok(d.romRH, 0, 100) : null, sp: ok(d.sp, 5, 35) };
+}
+function buildSone(){
+  const el = document.getElementById('vStue'), rh = document.getElementById('vRomRH');
+  if (!el || !rh) return;
+  const s = soneVerdier();
+  // Som utetemperaturen: målt verdi, med ønsket verdi nedtonet i parentes bak
+  el.innerHTML = (s && s.romT != null ? `${s.romT.toFixed(1)}<span class="mu">°C</span>` : '–') +
+    (s && s.sp != null ? `<span style="opacity:.45;font-size:.8em;margin-left:.25em">(${s.sp.toFixed(1)}°)</span>` : '');
+  rh.innerHTML = s && s.romRH != null ? `${Math.round(s.romRH)}<span class="mu">%</span>` : '–';
+}
+async function fetchSone(base, key){
+  if (Date.now() - soneLast < SONE_EVERY) return;
+  soneLast = Date.now();
+  try {
+    const v = (await hentVarer(base, key, [SONE_VAR])).find(x => x && x.name === SONE_VAR);
+    if (v && v.value) {
+      const p = JSON.parse(v.value);
+      if (p && p.v === 1) { soneData = p; try { localStorage.setItem('soneCache', v.value); } catch(_) {} }
+    }
+  } catch (_) {}
+  try { buildSone(); } catch (_) {}
 }
 
 // Frittstående: feil her skal aldri velte resten av dashbordet
@@ -4453,7 +4535,7 @@ async function exJSON(url, h){
 async function exVariabler(t){
   const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
   const ut = {};
-  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history', 'nibe_kjolekrets', 'nibe_trend', 'nibe_trend_naa']) {
+  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history', 'nibe_kjolekrets', 'nibe_kjolekrets_logg', 'nibe_sone', 'nibe_trend', 'nibe_trend_naa']) {
     const v = vars.find(x => x.name === navn);
     if (!v) { ut[navn] = null; continue; }
     try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
