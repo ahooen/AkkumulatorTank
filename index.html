@@ -245,41 +245,21 @@ body{font-family:var(--f);color:var(--t1);
 /* ── EXTRA METRICS ROW ── */
 .emu{font:400 8px/1 var(--m);color:var(--t3)}
 
-/* ── TRENDVINDU (langt trykk på en verdi) ── */
-.tm{position:fixed;inset:0;z-index:1000;display:none;
-  align-items:center;justify-content:center;
-  padding:calc(var(--safe-top) + 8px) 8px calc(var(--safe-bot) + 8px);
-  background:rgba(3,8,16,.66);
-  -webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);
-  overscroll-behavior:contain;touch-action:none;
-  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.tm.on{display:flex}
-.tm-w{position:relative;width:100%;max-width:760px;max-height:100%;
-  overflow:hidden;background:#0c1a2d;border:1px solid var(--b2);
-  border-radius:16px;padding:12px 12px 10px;
-  box-shadow:0 24px 64px rgba(0,0,0,.7);animation:tmInn .16s ease-out}
-@keyframes tmInn{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
-@media(prefers-reduced-motion:reduce){.tm-w{animation:none}}
-.tm-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:0 2px 6px}
-.tm-t{font:600 12px/1.35 var(--f);color:var(--t2);letter-spacing:.02em}
-.tm-v{font:500 22px/1.15 var(--m);color:var(--t1);margin-top:3px}
-.tm-v small{font-size:11px;color:var(--t3);margin-left:4px}
-.tm-x{flex:none;width:40px;height:40px;margin:-4px -4px 0 0;padding:0;
-  display:flex;align-items:center;justify-content:center;cursor:pointer;
-  border-radius:12px;border:1px solid var(--b2);background:rgba(255,255,255,.05);color:var(--t1);
-  -webkit-tap-highlight-color:transparent;touch-action:manipulation}
-.tm-x:active{background:rgba(255,255,255,.13)}
-.tm-x svg{width:18px;height:18px}
-.tm-g{position:relative;width:100%;touch-action:none}
-.tm-g svg{display:block;width:100%;height:auto}
-.tm-st{display:flex;align-items:center;justify-content:center;min-height:200px;padding:0 12px;
-  font:400 11px/1.5 var(--m);color:var(--t3);text-align:center}
-.tm-lg{display:flex;flex-wrap:wrap;gap:3px 14px;margin:2px 2px 4px;font:400 10px/1.3 var(--m);color:var(--t2)}
-.tm-lg i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
-.tm-lg i.st{border-top-style:dashed}
-.tm-s{margin:6px 2px 0;font:400 10px/1.5 var(--m);color:var(--t3);min-height:15px}
-html.tm-laast,html.tm-laast body{overflow:hidden}
-#vMod{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;cursor:pointer}
+/* ── TOOLTIP ── */
+.tt{position:fixed;z-index:999;background:#14243c;
+  border:1px solid rgba(255,255,255,.09);border-radius:12px;
+  padding:11px 13px;min-width:175px;pointer-events:none;
+  opacity:0;transition:opacity .14s;
+  box-shadow:0 16px 48px rgba(0,0,0,.65)}
+.tt.on{opacity:1}
+.tt-t{font:700 8px/1 var(--f);color:var(--t3);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
+.tt-v{font:500 18px/1 var(--m);color:var(--t1);margin-bottom:9px}
+.tt-g{width:100%;height:40px;display:block}
+.tt-r{display:flex;justify-content:space-between;
+  margin-top:3px;font:400 9px/1 var(--m);color:var(--t3)}
+.tt-h{font:400 9px/1 var(--f);color:var(--t3);
+  text-align:center;margin-top:5px;opacity:.6}
 
 /* ── CONFIG ── */
 .cfg{background:var(--s1);border:1px solid var(--b1);
@@ -342,22 +322,13 @@ label.ex-r>span{flex:1;min-width:0}
   </div>
 </div>
 
-<div class="tm" id="tm" aria-hidden="true">
-  <div class="tm-w" role="dialog" aria-modal="true" aria-labelledby="tmT">
-    <div class="tm-h">
-      <div>
-        <div class="tm-t" id="tmT"></div>
-        <div class="tm-v" id="tmV"></div>
-      </div>
-      <button class="tm-x" id="tmX" type="button" aria-label="Lukk">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-          <path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
-    </div>
-    <div class="tm-lg" id="tmL"></div>
-    <div class="tm-g" id="tmG"></div>
-    <div class="tm-s" id="tmS"></div>
-  </div>
+<div class="tt" id="tt">
+  <div class="tt-t" id="ttt"></div>
+  <div class="tt-v" id="ttv"></div>
+  <svg class="tt-g" id="ttg" viewBox="0 0 170 40"
+       preserveAspectRatio="none"></svg>
+  <div class="tt-r"><span id="ttn"></span><span id="ttx"></span></div>
+  <div class="tt-h" id="tth"></div>
 </div>
 
 <div class="wrap">
@@ -570,7 +541,7 @@ label.ex-r>span{flex:1;min-width:0}
     <div class="cfb" id="exb">
     <div class="ex">
       <label class="ex-r"><input type="checkbox" id="exVar" checked>
-        <span>Brønnanalyse, historikk, COP-timer og timesverdier <span class="ex-n">Logic-variabler</span></span></label>
+        <span>Brønnanalyse, historikk og COP-timer <span class="ex-n">Logic-variabler</span></span></label>
       <label class="ex-r"><input type="checkbox" id="exIns" checked>
         <span>Innsikt: kompressorfrekvens, GP2, effekt, BT10, BT11, BT50, ute <span class="ex-n">krever «Vis innsikt» på API-nøkkelen</span></span></label>
       <div class="ex-r">Periode
@@ -615,7 +586,7 @@ label.ex-r>span{flex:1;min-width:0}
       <div class="cfh">Finn på
         <a href="https://my.homey.app" target="_blank" rel="noopener"
            style="color:#60a5fa;text-decoration:none">my.homey.app</a>
-        → Innstillinger → API Keys → Opprett ny med <em>Vis enheter</em>, <em>Vis variabler</em> og <em>Vis innsikt</em> (den siste gir trendgrafene historikk bakover og trengs til eksport).
+        → Innstillinger → API Keys → Opprett ny med <em>Vis enheter</em>, <em>Vis variabler</em> og <em>Vis innsikt</em> (den siste trengs bare til eksport).
       </div>
       <button class="cfc" id="cfc" type="button" onclick="doFetch()">Koble til</button>
       <div class="cfh" id="cfver" style="text-align:center;margin-top:.6rem;opacity:.7">Versjon –</div>
@@ -631,7 +602,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 44;
+const APP_VERSION = 43;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -641,9 +612,9 @@ const APP_VERSION = 44;
 //
 // Seksjoner (Ctrl+F etter «//»-merke):
 //   KONFIGURASJON   konstanter, device-navn, Modbus-kapabiliteter
-//   SCOP-HISTORIKK  scopH7 (15-min bøtter, localStorage)
+//   HISTORIKK       trenddata (H-objekt, localStorage)
 //   FARGER          temperaturbasert fargeskala
-//   TREND           btt() langt trykk → trendvindu, timesverdier 7 døgn
+//   TOOLTIP         btt() long-press → 12t trend-popup
 //   HOVED-ILLUSTRASJON  buildSvg()  tank·VP·borehole
 //   PANELER         renderPanels()  .mc-fliser + btt-bindings
 //   RENDER          render()  koordinator
@@ -761,22 +732,51 @@ const COPWT_DEV   = 'Nibe COP Tappevann Total';   // COP tappevann akkumulert
 const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) via MyUplink
 
 const REF = 25, KWH = 0.5815;
-const HIST_EVERY = 20; // SCOP-grafen får nytt punkt hvert 20. fetch (20×15s = 5 min)
+const MAX_PTS = 144; // 12 t: 144 punkter × 5 min
+const HIST_EVERY = 20; // lagre historikk hvert 20. fetch (20×15s = 5 min)
 let _histTick = 0;
+const LS_KEY  = 'vs6';
 
 // ═══════════════════════════════════════════
-// SCOP-HISTORIKK – scopH7 (15-min bøtter, localStorage 'scopH7d')
-// Trendvinduet (langt trykk) henter timesverdier fra Homey – se TREND.
-// Den gamle 12-timers historikken i nettleseren (H, 'vs6') er fjernet i v44.
+// HISTORIKK – trenddata (H-objekt, localStorage 'vs6', 12t × 5min)
 // ═══════════════════════════════════════════
+const H = {
+  t100:[], t75:[], t50:[], t25:[], t0:[],
+  snitt:[], energi:[], dtb:[], flow:[],
+  scopDC:[], scop24:[], copHeat:[], copHw:[], copHeatT:[], copHwT:[], brineIn:[], brineOt:[],
+  hz:[], pwr:[], gm:[], pTerm:[], elAdd:[],
+  bt7:[], outAvg:[], compStarts:[], compHours:[],
+  dhwSnitt:[], dhwKwh:[], dhwDusj:[], dhwDt:[],
+  bt5:[], bt6:[], supply:[], ret:[], hpPct:[], srcPct:[],
+  bt12:[], bt15:[], disch:[], bt17:[], brineDT:[],
+  calcSupply:[],
+  bp8d:[], bt84:[], sh:[], bp9d:[],          // kjølekrets fra myUplink (v43)
+};
+
 const r1 = v => Math.round(v * 10) / 10;
 const r2 = v => Math.round(v * 100) / 100;
 
+function ph(k, v) {
+  if (v == null || !isFinite(v)) return;
+  H[k].push(typeof v === 'number' ? r1(v) : v);
+  if (H[k].length > MAX_PTS) H[k].shift();
+}
+function phR2(k, v) {
+  if (v == null || !isFinite(v)) return;
+  H[k].push(r2(v));
+  if (H[k].length > MAX_PTS) H[k].shift();
+}
+
 function savH() {
-  try { if(scopH7.length) localStorage.setItem('scopH7d',JSON.stringify(scopH7)); } catch(_) {}
+  try { localStorage.setItem(LS_KEY, JSON.stringify(H)); if(scopH7.length)localStorage.setItem('scopH7d',JSON.stringify(scopH7)); } catch(_) {}
 }
 function lodH() {
-  try { localStorage.removeItem('vs6'); } catch(_) {}   // rydder bort 12-timershistorikken fra v43
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+    Object.keys(H).forEach(k => {
+      if (Array.isArray(d[k])) H[k] = d[k].slice(-MAX_PTS);
+    });
+  } catch(_) {}
   // Last SCOP-historikk og migrer gammelt format. Tidligere ble ett
   // punkt lagret per oppslag (hvert 15. sek); de foldes ned til samme
   // 15-min bøtter som nye punkter, så grafen får jevn oppløsning.
@@ -823,705 +823,68 @@ const lc = (c,a) => { const m=c.match(/\d+/g).map(Number); return `rgb(${Math.mi
 const dc = (c,a) => { const m=c.match(/\d+/g).map(Number); return `rgb(${Math.max(0,m[0]-a)},${Math.max(0,m[1]-a)},${Math.max(0,m[2]-a)})`; };
 
 // ═══════════════════════════════════════════
-// TREND – btt(el, tittel, id, enhet): langt trykk → trendvindu
+// TOOLTIP – btt(el, label, hk, unit): long-press 400ms → 12t trend-graf
 // ═══════════════════════════════════════════
-// Langt trykk (450 ms) på en verdi åpner et vindu over nesten hele bredden
-// med timesverdier for siste 7 døgn. X øverst til høyre (eller Esc) lukker.
-// Høyreklikk åpner det samme på PC. Berøring i grafen viser tid og verdi.
-//
-// Kilder per time, i prioritert rekkefølge:
-//   1. «nibe_trend» (ferdige timer) og «nibe_trend_naa» (inneværende time)
-//      fra nibe_trend.js. Har alle verdiene, også de som må regnes hvert
-//      minutt: termisk effekt, kapasitet, driftsandeler, dusjtid og
-//      brineflow fra energibalansen.
-//   2. Homey Innsikt, timesnitt («last7Days»), for timer scriptet ikke har –
-//      typisk før det ble installert. Bare målte capabilityer og verdier som
-//      er lineære i dem (snitt, differanser). Ikke-lineære verdier regnes
-//      aldri fra timesnitt: går kompressoren halve timen, gir snitt-flow ×
-//      snitt-ΔT bare halve effekten. Unntak med liten feil: dusjtid (terskel
-//      40 °C per sjikt, ≈ 1 min). Brønnhodet vises rått i disse timene (se
-//      trBronn). Innsikt krever «Vis innsikt» på API-nøkkelen. Svarer Homey
-//      401/403, prøves den ikke igjen på 30 min, og grafen bruker bare 1.
-//   Kjølekretsen: loggen i «nibe_kjolekrets» (nibe_myuplink.js, punkt hvert
-//   10. min mens kompressoren går). Snitt per time av punktene, med samme
-//   plausibilitetskrav som i appen (kjoleVerdier).
-//   Brønnens egenskaper (λ, Rb, T₀ …): døgnestimatene fra utviklingsgrafen
-//   (utvCache). De regnes én gang per døgn med data – ett punkt per døgn.
-//
-// Tidsstempel i Innsikt: om et timesnitt er merket med timens start eller
-// slutt, er ikke dokumentert. Når både scriptet og Innsikt har utetemperatur
-// for minst 6 felles timer, velges forskyvningen (0 eller −1 t) som passer
-// best, og den huskes («trSkift»). Til da brukes 0. Virkningen er uansett
-// høyst én time i en graf over sju døgn.
-//
-// Telleverdier (kompressorstarter, driftstid) vises som timesnitt av
-// telleren; linja under grafen viser økningen i perioden.
-
-const TR_HOLD  = 450;                          // ms – langt trykk
-const TR_VAR   = 'nibe_trend', TR_NAA = 'nibe_trend_naa';
-const TR_DOGN  = 7;
-const TR_HENT  = 5 * 60000;                    // timesverdiene hentes på nytt etter 5 min
-const TR_INS   = 15 * 60000;                   // innsikt per verdi gjenbrukes i 15 min
-const TR_DAG   = ['sø','ma','ti','on','to','fr','lø'];
-const TR_FARGE = ['#60a5fa', '#fbbf24', '#34d399'];
-const DC_NUM   = 'devicecapabilities_number.number1';
-const KWH_DHW  = 180 * 4.186 / 3600;           // kWh/K i tappevannstanken (som buildDHW)
-const TANKK = ['t100','t75','t50','t25','t0'], DHWK = ['bt7','bt6','bt5'];
-
-const trSn    = a => { let s = 0, n = 0; for (const v of a) if (v != null && isFinite(v)) { s += v; n++; } return n ? s / n : null; };
-const trDiff  = (a, b) => (a != null && b != null) ? a - b : null;
-const trPos   = v => (v != null && v > 0) ? v : null;          // COP 0 = ingen data
-const trPst   = v => (v == null ? null : v * 100);
-const trTankSn = r => trSn(TANKK.map(k => r[k]));
-const trDhwSn  = r => trSn(DHWK.map(k => r[k]));
-// Flow i kuldebæreren: fra energibalansen (snitt over minuttene i timen),
-// ellers anslått fra GP2 – som i brønnpanelet
-const trFlowW  = r => r.flowW != null ? r.flowW : wellFlowEst(r);
-// Kuldebæreren ved brønnhodet – samme korreksjon som wellSVG. Den er liten
-// (≈ 35 W rørvarme / ṁcp ≈ 1600 W/K ≈ 0,02 K). I timer fra Innsikt er flowen
-// bare anslått fra timesnittet av GP2, som tar med stopp-tiden – lav snitt-%
-// ville gitt en altfor stor korreksjon. Der vises rå BT10/BT11.
-function trBronn(r, side){
-  const T = side === 'ut' ? r.brineIn : r.brineOt;
-  if (T == null) return null;
-  if (r.kilde === 'I') return T;
-  const fl = trFlowW(r);
-  if (!(fl > 0)) return T;                                   // stillstand: rå verdi, som i panelet
-  const k = wellLegGain(T, r.outAvg, r.trom, r.t) / (fl * BRINE.cpv);
-  return side === 'ut' ? T - k : T + k;
-}
-
-// ── Seriene ─────────────────────────────────────────────────
-// inn: verdiene fra Innsikt som trengs (tom = bare fra nibe_trend)
-// f: timespost → verdi · d: desimaler · enh: enhet · type: snitt|teller|andel
-const trM   = (k, d, enh) => ({ inn: [k], f: r => r[k], d, enh });
-const trCop = k => ({ inn: [k], f: r => trPos(r[k]), d: 2, enh: '' });
-const TRS = {
-  t100: trM('t100', 1, '°C'), t75: trM('t75', 1, '°C'), t50: trM('t50', 1, '°C'),
-  t25: trM('t25', 1, '°C'), t0: trM('t0', 1, '°C'),
-  snitt:     { inn: TANKK, f: trTankSn, d: 1, enh: '°C' },
-  energi:    { inn: TANKK, f: r => { const s = trTankSn(r); return s == null ? null : Math.max(0, KWH * (s - REF)); }, d: 1, enh: 'kWh' },
-  dtb:       { inn: ['t100','t0'], f: r => trDiff(r.t100, r.t0), d: 1, enh: 'K' },
-  overskudd: { inn: [...TANKK, 'calcSupply'], f: r => trDiff(trTankSn(r), r.calcSupply), d: 1, enh: 'K' },
-  outAvg:    { inn: ['outAvg','out37'], d: 1, enh: '°C', linjer: [
-               { navn: 'BT1', f: r => r.outAvg },
-               { navn: 'Snitt (reg. 37)', f: r => r.out37, stiplet: true }] },
-  brineIn: trM('brineIn', 1, '°C'), brineOt: trM('brineOt', 1, '°C'),
-  brineDT:   { inn: ['brineIn','brineOt'], f: r => trDiff(r.brineIn, r.brineOt), d: 2, enh: 'K' },
-  bt7: trM('bt7', 1, '°C'), bt6: trM('bt6', 1, '°C'), bt5: trM('bt5', 1, '°C'),
-  supply: trM('supply', 1, '°C'), ret: trM('ret', 1, '°C'), calcSupply: trM('calcSupply', 1, '°C'),
-  bt12: trM('bt12', 1, '°C'), bt15: trM('bt15', 1, '°C'), disch: trM('disch', 1, '°C'), bt17: trM('bt17', 1, '°C'),
-  flow: trM('flow', 1, 'l/m'), hpPct: trM('hpPct', 0, '%'), srcPct: trM('srcPct', 0, '%'),
-  gm: trM('gm', 0, 'GM'), hz: trM('hz', 1, 'Hz'), pwr: trM('pwr', 0, 'W'),
-  // Innsikt har appens rå verdi (kW, skala 100) – normaliseres som i doFetch
-  elAdd:     { inn: ['elAdd','pwr'], f: r => r.elAdd == null ? null : (r.kilde === 'I' ? elToKW(r.elAdd, r.pwr ?? 0) : r.elAdd), d: 2, enh: 'kW' },
-  compStarts: { ...trM('compStarts', 0, 'stk'), type: 'teller' },
-  compHours:  { ...trM('compHours', 0, 't'), type: 'teller' },
-  scopDC: trCop('scopDC'), scop24: trCop('scop24'), copHeat: trCop('copHeat'),
-  copHw: trCop('copHw'), copHeatT: trCop('copHeatT'), copHwT: trCop('copHwT'),
-  // Bare fra nibe_trend – regnes per minutt (0 når kompressoren står)
-  pTerm: { f: r => r.pTerm, d: 2, enh: 'kWt' },
-  kap:   { f: r => r.pTerm == null ? null : Math.min(100, Math.max(0, r.pTerm / TOT_KW_MAX * 100)), d: 0, enh: '%' },
-  komp:  { f: r => trPst(r.komp), d: 0, enh: '%', type: 'andel' },
-  modus: { d: 0, enh: '%', type: 'andel', linjer: [
-           { navn: 'Varme', f: r => trPst(r.varme), farge: '#22c55e' },
-           { navn: 'Tappevann', f: r => trPst(r.vv), farge: '#f59e0b' }] },
-  // Tappevann
-  dhwSnitt: { inn: DHWK, f: trDhwSn, d: 1, enh: '°C' },
-  dhwKwh:   { inn: DHWK, f: r => { const s = trDhwSn(r); return s == null ? null : (s > 35 ? KWH_DHW * (s - 35) : 0); }, d: 1, enh: 'kWh' },
-  dhwDusj:  { inn: DHWK, f: r => r.kilde === 'I' ? showerMinutes({ bt7: r.bt7, bt6: r.bt6, bt5: r.bt5 }) : r.dusj, d: 0, enh: 'min' },
-  dhwDt:    { inn: ['bt7','bt6'], f: r => trDiff(r.bt7, r.bt6), d: 1, enh: 'K' },
-  // Brønnen – målte verdier per time
-  trom:     trM('trom', 1, '°C'),
-  bronnUt:  { inn: ['brineIn','outAvg','trom','srcPct'], f: r => trBronn(r, 'ut'), d: 1, enh: '°C' },
-  bronnInn: { inn: ['brineOt','outAvg','trom','srcPct'], f: r => trBronn(r, 'inn'), d: 1, enh: '°C' },
-  // Re ∝ flow: et timesnitt av GP2 tar med stopp-tiden og ville gitt for lav Re – bare fra scriptet
-  re:       { f: r => r.kilde === 'I' ? null : wellRe(trFlowW(r), trSn([r.brineIn, r.brineOt])), d: 0, enh: '' },
-  // Kjølekretsen – loggen i nibe_kjolekrets
-  bp8d: { kilde: 'kjole', d: 1, enh: '°C' }, bt84: { kilde: 'kjole', d: 1, enh: '°C' },
-  sh:   { kilde: 'kjole', d: 1, enh: 'K' },  bp9d: { kilde: 'kjole', d: 1, enh: '°C' },
-  // Brønnens egenskaper – døgnestimat e = [λ, σλ, Rb, σRb, T₀, σT₀, Rb ved lav last, uttak, nedkjøling nå]
-  lam:   { kilde: 'dogn', f: e => e[0], d: 2, enh: 'W/mK' },
-  rb:    { kilde: 'dogn', f: e => e[2], d: 3, enh: 'K·m/W' },
-  rbLow: { kilde: 'dogn', f: e => e[6], d: 2, enh: 'K·m/W' },
-  t0w:   { kilde: 'dogn', f: e => e[4], d: 1, enh: '°C' },
-  ratio: { kilde: 'dogn', f: e => e[0] == null ? null : e[0] / WELLX.lamPrior, d: 2, enh: '×' },
-  qMean: { kilde: 'dogn', f: e => e[7], d: 1, enh: 'W/m' },
-};
-// Temperaturkortene i brønnen: upåvirket og ved hullet nå på tre dyp
-['zTop', 'zMid', 'zBot'].forEach((z, i) => {
-  const ug = e => e[4] == null ? null : e[4] + WELLX.gradMålt * (WELLX[z] - WELLX.zMid);
-  TRS['dybde' + i] = { kilde: 'dogn', d: 1, enh: '°C', linjer: [
-    { navn: 'upåvirket', f: ug },
-    { navn: 'ved hullet nå', f: e => { const u = ug(e); return u == null || e[8] == null ? null : u - e[8]; }, stiplet: true }] };
-});
-// Fysisk mulig område for rå verdier fra Innsikt (som i nibe_trend.js) –
-// en frakoblet giver gir −3276,8 og skal ikke bli et timesnitt
-const TR_OMR = { t100: [-20,110], t75: [-20,110], t50: [-20,110], t25: [-20,110], t0: [-20,110],
-  supply: [-20,110], ret: [-20,110], calcSupply: [-20,110], brineIn: [-30,40], brineOt: [-30,40],
-  bt7: [-20,110], bt6: [-20,110], bt5: [-20,110], gm: [-10000,10000], flow: [0,200],
-  outAvg: [-50,50], out37: [-50,50], hpPct: [0,100], srcPct: [0,100], disch: [-30,150],
-  bt12: [-20,110], bt15: [-30,110], bt17: [-40,80], hz: [0,200], pwr: [0,30000], elAdd: [0,1000],
-  compStarts: [0,1e7], compHours: [0,1e6], trom: [5,40],
-  scopDC: [0.01,20], scop24: [0.01,20], copHeat: [0.01,20], copHw: [0.01,20], copHeatT: [0.01,20], copHwT: [0.01,20] };
-
-// ── Langt trykk ─────────────────────────────────────────────
+let _ttTO = null;
 const _ttBound = new WeakSet();
-let _trTrykk = null, trSisteTouch = 0, trApen = null, trXNed = false, temps_last = null;
-let wellVist = null;                           // tilpasningen brønnpanelet viser nå (buildWellPanel)
-function trAvbryt(){ if (_trTrykk) { clearTimeout(_trTrykk.tmr); _trTrykk = null; } }
-function trHaptic(){ try { navigator.vibrate && navigator.vibrate(8); } catch (_) {} }
+
+function showTT(el, label, hk, unit) {
+  const data = H[hk] || [], last = data.length ? data[data.length-1] : null;
+  document.getElementById('ttt').textContent = label;
+  document.getElementById('ttv').textContent = last != null ? `${last} ${unit}` : '–';
+  const g = document.getElementById('ttg'), n = data.length;
+  if (n > 2) {
+    const mn = Math.min(...data), mx = Math.max(...data), rng = mx-mn||1;
+    const pts = data.map((v,i) => `${(i/(n-1))*170},${40-((v-mn)/rng)*34-3}`).join(' ');
+    document.getElementById('ttn').textContent = mn.toFixed(1)+unit;
+    document.getElementById('ttx').textContent = mx.toFixed(1)+unit;
+    document.getElementById('tth').textContent = `${n} målinger · ~${Math.round(n*5/60*10)/10}t`;
+    g.innerHTML = `<defs><linearGradient id="gg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2d7cf6" stop-opacity=".25"/>
+      <stop offset="100%" stop-color="#2d7cf6" stop-opacity="0"/>
+      </linearGradient></defs>
+      <polygon points="0,40 ${pts} 170,40" fill="url(#gg)"/>
+      <polyline points="${pts}" fill="none" stroke="#2d7cf6"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+  } else {
+    document.getElementById('ttn').textContent = '';
+    document.getElementById('ttx').textContent = '';
+    document.getElementById('tth').textContent = n === 0 ? 'Ingen data ennå' : `${n}/3 målinger…`;
+    g.innerHTML = `<text x="85" y="23" text-anchor="middle"
+      font-size="9" fill="#2e4d6a" font-family="monospace">Samler data…</text>`;
+  }
+  const r = el.getBoundingClientRect();
+  let lx = r.left + window.scrollX + r.width/2 - 87;
+  let ty = r.top  + window.scrollY - 145;
+  if (ty < 60) ty = r.bottom + window.scrollY + 8;
+  if (lx < 6) lx = 6;
+  if (lx + 190 > window.innerWidth) lx = window.innerWidth - 195;
+  const tt = document.getElementById('tt');
+  tt.style.cssText = `left:${lx}px;top:${ty}px`;
+  tt.classList.add('on'); clearTimeout(_ttTO);
+}
+function hideTT() {
+  _ttTO = setTimeout(() => document.getElementById('tt').classList.remove('on'), 320);
+}
 function btt(el, label, hk, unit) {
-  if (!el) return;
   el._ttLabel = label; el._ttHk = hk; el._ttUnit = unit;
   if (_ttBound.has(el)) return;
   _ttBound.add(el);
-  const start = (x, y) => {
-    trAvbryt();
-    _trTrykk = { x, y, tmr: setTimeout(() => { _trTrykk = null; if (!trApen) { trHaptic(); trAapne(el); } }, TR_HOLD) };
-  };
+  const haptic = () => { try { navigator.vibrate && navigator.vibrate(8); } catch(_){} };
+  el.addEventListener('mouseenter', () => showTT(el, el._ttLabel, el._ttHk, el._ttUnit));
+  el.addEventListener('mouseleave', hideTT);
+  let tmr=null, moved=false, sx=0, sy=0;
   el.addEventListener('touchstart', e => {
-    trSisteTouch = Date.now();
-    if (e.touches.length !== 1) { trAvbryt(); return; }
-    start(e.touches[0].clientX, e.touches[0].clientY);
-  }, { passive: true });
-  // Tegnes elementet på nytt mens fingeren ligger på (hvert 15. s), går resten
-  // av berøringen til det gamle elementet og når aldri dokumentet – derfor
-  // avbrytes trykket også herfra
-  el.addEventListener('touchmove', trTouchFlytt, { passive: true });
-  el.addEventListener('touchend', trTouchSlutt, { passive: true });
-  el.addEventListener('touchcancel', trAvbryt, { passive: true });
-  // Mus: bare når det ikke nettopp var berøring (nettleseren etterligner mus etter trykk)
-  el.addEventListener('mousedown', e => {
-    if (e.button !== 0 || Date.now() - trSisteTouch < 800) return;
-    start(e.clientX, e.clientY);
-  });
-  // Høyreklikk på PC, og Androids langtrykk-meny: åpne vinduet i stedet
-  el.addEventListener('contextmenu', e => {
-    e.preventDefault();
-    if (!trApen) { trAvbryt(); trAapne(el); }
-  });
-}
-function trTouchFlytt(e){
-  const t = e.touches[0];
-  if (_trTrykk && t && Math.hypot(t.clientX - _trTrykk.x, t.clientY - _trTrykk.y) > 8) trAvbryt();
-}
-function trTouchSlutt(){ trSisteTouch = Date.now(); trAvbryt(); }
-document.addEventListener('touchmove', trTouchFlytt, { passive: true });
-document.addEventListener('touchend', trTouchSlutt, { passive: true });
-document.addEventListener('touchcancel', trAvbryt, { passive: true });
-document.addEventListener('mousemove', e => {
-  if (_trTrykk && Math.hypot(e.clientX - _trTrykk.x, e.clientY - _trTrykk.y) > 8) trAvbryt();
-}, { passive: true });
-document.addEventListener('mouseup', trAvbryt, { passive: true });
-window.addEventListener('scroll', trAvbryt, { passive: true });
-
-// ── Vinduet ─────────────────────────────────────────────────
-function trAapne(el){
-  const id = el._ttHk, def = TRS[id] || null;
-  trApen = { el, id, def, tittel: el._ttLabel || '', t: Date.now(), data: null, feil: null, vent: true };
-  trXNed = false;
-  document.getElementById('tmT').textContent = trApen.tittel;
-  document.getElementById('tmL').innerHTML = '';
-  document.getElementById('tmS').textContent = '';
-  const m = document.getElementById('tm');
-  m.classList.add('on'); m.setAttribute('aria-hidden', 'false');
-  document.documentElement.classList.add('tm-laast');
-  trTegn();
-  trLast(trApen);
-}
-function trLukk(){
-  trApen = null;
-  const m = document.getElementById('tm');
-  m.classList.remove('on'); m.setAttribute('aria-hidden', 'true');
-  document.documentElement.classList.remove('tm-laast');
-  document.getElementById('tmG').innerHTML = '';
-}
-async function trLast(a){
-  const vis = () => { if (trApen === a) trTegn(); };
-  try {
-    a.data = await trData(a.id, false);
-    a.vent = !!a.data.trengerIns; vis();
-    if (a.data.trengerIns) { a.data = await trData(a.id, true); a.vent = false; vis(); }
-  } catch (e) {
-    a.feil = e; a.vent = false; vis();
-  }
-}
-function trTegn(){
-  const a = trApen; if (!a) return;
-  const G = document.getElementById('tmG'), S = document.getElementById('tmS'), Lg = document.getElementById('tmL');
-  document.getElementById('tmV').innerHTML = trNaaTekst(a);
-  const D = a.data, def = a.def;
-  const status = t => { G.innerHTML = `<div class="tm-st">${t}</div>`; S.textContent = ''; };
-  if (!def) { Lg.innerHTML = ''; return status('Ingen trend for denne verdien'); }
-  if (!D) { Lg.innerHTML = ''; return status(a.feil ? trFeilTekst(a.feil) : 'Henter …'); }
-  Lg.innerHTML = D.linjer.length > 1
-    ? D.linjer.map((l, i) => `<span><i class="${l.stiplet ? 'st' : ''}" style="border-color:${trFarge(l, i)}"></i>${l.navn}</span>`).join('') : '';
-  if (!D.linjer.some(l => l.pts.length)) return status(a.vent ? 'Henter …' : trTomTekst(D));
-  const W = Math.max(260, Math.round(G.clientWidth || 340));
-  const H = Math.round(Math.min(Math.max(W * 0.72, 220), Math.max(220, window.innerHeight - 200)));
-  const g = trSVG(D, W, H, def);
-  G.innerHTML = g.svg;
-  trScrub(G.querySelector('svg'), g);
-  S.textContent = trStatTekst(D, def) + (a.vent ? ' · henter mer …' : '');
-}
-function trTomTekst(D){
-  if (D.oppl === 'k') return 'Ingen målinger i drift siste 7 døgn';
-  if (D.oppl === 'd') return 'Ingen pålitelige døgnestimat siste 7 døgn';
-  return D.logg ? 'Ingen timesverdier for denne verdien ennå' : 'Venter på timesverdier fra nibe_trend i Homey';
-}
-function trFeilTekst(e){
-  if (e && e.tilk) return 'Koble til Homey under ⚙ Tilkobling';
-  if (e && (e.status === 401 || e.status === 403)) return 'API-nøkkelen mangler tilgangen «Vis variabler»';
-  return 'Kunne ikke hente timesverdier' + (e && e.status ? ' (HTTP ' + e.status + ')' : '');
-}
-
-// ── Tall og tid ─────────────────────────────────────────────
-function trFmt(v, d){ const s = Number(v).toFixed(d); return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s; }
-const trTo = x => String(x).padStart(2, '0');
-function trTid(t, oppl){
-  if (oppl === 'd') { const d = new Date(t); return `${TR_DAG[d.getDay()]} ${d.getDate()}.${d.getMonth() + 1}.`; }
-  const h = new Date(Math.floor(t / 3600000) * 3600000), h2 = new Date(h.getTime() + 3600000);
-  return `${TR_DAG[h.getDay()]} ${h.getDate()}. kl. ${trTo(h.getHours())}–${trTo(h2.getHours())}`;
-}
-function trFra(t){ const h = new Date(Math.floor(t / 3600000) * 3600000); return `${TR_DAG[h.getDay()]} ${h.getDate()}. kl. ${trTo(h.getHours())}`; }
-const trFarge = (l, i) => l.farge || TR_FARGE[i % TR_FARGE.length];
-function trStatTekst(D, def){
-  const ls = D.linjer.filter(l => l.pts.length);
-  const l = ls[0], v = l.pts.map(p => p.v), enh = def.enh ? ' ' + def.enh : '';
-  let s;
-  if (def.type === 'teller') s = `økning ${v[v.length - 1] - v[0] >= 0 ? '+' : ''}${trFmt(v[v.length - 1] - v[0], def.d)}${enh}`;
-  else if (def.type === 'andel') s = ls.map(x => (x.navn ? x.navn + ' ' : 'snitt ') + trFmt(trSn(x.pts.map(p => p.v)), 0) + ' %').join(' · ');
-  else s = `min ${trFmt(Math.min(...v), def.d)} · snitt ${trFmt(trSn(v), def.d)} · maks ${trFmt(Math.max(...v), def.d)}${enh}`;
-  const forste = Math.min(...ls.map(x => x.pts[0].t));
-  if (D.oppl === 'd') s += ` · ${l.pts.length} døgnestimat`;
-  else if (forste > D.t0 + 3 * 3600000) s += ' · fra ' + trFra(forste);
-  if (D.logg && D.loggSist && D.t1 - D.loggSist > 20 * 60000) s = '⚠️ nibe_trend sist kjørt ' + trFra(D.loggSist) + ' · ' + s;
-  return s;
-}
-// Verdien slik appen viser den nå
-function trLiveRec(){
-  const n = nibe_last || {}, T = temps_last || [];
-  const pwrKW = n.pwr == null ? null : n.pwr / 1000;
-  const pL = String(n.prio ?? '').toLowerCase(), prioOk = n.prio != null;
-  const r = { kilde: 'live', t: Date.now(),
-    t100: T[0], t75: T[1], t50: T[2], t25: T[3], t0: T[4],
-    supply: n.supply, ret: n.ret, calcSupply: n.calcSupply, brineIn: n.brineIn, brineOt: n.brineOt,
-    bt7: n.bt7, bt6: n.bt6, bt5: n.bt5, gm: n.gm, flow: n.flow, outAvg: n.outAvg, out37: n.outAvg37,
-    hpPct: n.hpPct, srcPct: n.srcPct, disch: n.disch, bt12: n.bt12, bt15: n.bt15, bt17: n.bt17,
-    hz: n.hz, pwr: n.pwr, elAdd: n.elAdd != null ? n.elAdd / 1000 : null,
-    compStarts: n.compStarts, compHours: n.compHours, trom: n.trom,
-    scopDC: n.scopDC, scop24: n.scop24, copHeat: n.copHeat, copHw: n.copHw, copHeatT: n.copHeatT, copHwT: n.copHwT };
-  r.pTerm = pwrKW == null ? null : (pwrKW > 0.2 ? (thermalKW(n) ?? thermalEstKW(n, pwrKW)) : 0);
-  r.komp  = n.hz == null ? null : (n.hz >= 1 ? 1 : 0);
-  r.varme = (pwrKW == null || !prioOk) ? null : (pwrKW > 0.2 && pL.includes('heat') && !pL.includes('water') ? 1 : 0);
-  r.vv    = (pwrKW == null || !prioOk) ? null : (pwrKW > 0.2 && (pL.includes('water') || pL.includes('hot')) ? 1 : 0);
-  r.dusj  = showerMinutes({ bt7: n.bt7, bt6: n.bt6, bt5: n.bt5 });
-  r.flowW = wellFlowLps(n) ?? wellFlowEst(n);
-  return r;
-}
-const trFitE = f => f ? [f.lambda, f.sLambda, f.Rb, f.sRb, f.T0, f.sT0, f.RbLow, f.qMean, f.coolNow] : null;
-function trNaaTekst(a){
-  const def = a.def, id = a.id;
-  if (!def) return '–';
-  if (id === 'modus') return document.getElementById('vMod').textContent || '–';
-  if (id === 'komp') return nibe_last && nibe_last.hz != null ? (nibe_last.hz >= 1 ? 'I drift' : 'Stopp') : '–';
-  const f = def.f || (def.linjer && def.linjer[0].f);
-  let v = null;
-  try {
-    if (def.kilde === 'kjole') { const kv = kjoleVerdier(nibe_last); v = kv ? kv[id] : null; }
-    else if (def.kilde === 'dogn') { const e = trFitE(wellVist); v = e ? f(e) : null; }
-    else v = f(trLiveRec());
-  } catch (_) { v = null; }
-  return v != null && isFinite(v) ? trFmt(v, def.d) + (def.enh ? `<small>${def.enh}</small>` : '') : '–';
-}
-
-// ── Data ────────────────────────────────────────────────────
-let trEnheter = null, trRom = null;            // fra doFetch: enhetsliste og romgiverens kilde
-function trTilk(){
-  const hid = document.getElementById('hid').value.trim(), key = document.getElementById('hkey').value.trim();
-  if (!hid || !key) { const e = new Error('ikke tilkoblet'); e.tilk = true; throw e; }
-  return { base: hid.includes('.') ? `https://${hid}` : `https://${hid}.connect.athom.com`, key, h: { 'Authorization': 'Bearer ' + key } };
-}
-let trLogg = null, trLoggT = 0, trLoggN = '';
-async function trHentLogg(t){
-  const nk = t.base + '|' + t.key;
-  if (trLogg && trLoggN === nk && Date.now() - trLoggT < TR_HENT) return trLogg;
-  const vs = await hentVarer(t.base, t.key, [TR_VAR, TR_NAA], true);
-  const hv = vs.find(v => v && v.name === TR_VAR), nv = vs.find(v => v && v.name === TR_NAA);
-  const les = (v, ok) => { try { const p = JSON.parse((v && v.value) || 'null'); return p && ok(p) ? p : null; } catch (_) { return null; } };
-  trLogg = {
-    hist: les(hv, p => p.v === 1 && Array.isArray(p.keys) && Array.isArray(p.rader)),
-    naa:  les(nv, p => p.v === 1 && Array.isArray(p.keys) && Array.isArray(p.s) && Array.isArray(p.n) && Number.isFinite(p.hs)),
-    funnet: !!(hv || nv) };
-  trLoggT = Date.now(); trLoggN = nk;
-  return trLogg;
-}
-// Timesposter fra nibe_trend: Map(timeindeks → { kilde, t, tc, verdi… })
-// t = timens start, tc = punktets plass i grafen (midt i timen; for
-// inneværende time midt mellom start og siste prøve)
-function trLoggTimer(L, nu){
-  const m = new Map();
-  const rad = (keys, r) => {
-    if (!Array.isArray(r) || !Number.isFinite(r[0])) return;
-    const h = Math.round(r[0] / 60);
-    const rec = { kilde: 'L', t: h * 3600000, tc: h * 3600000 + 1800000 };
-    keys.forEach((k, i) => { const v = r[i + 1]; if (typeof v === 'number' && isFinite(v)) rec[k] = v; });
-    m.set(h, rec);
-  };
-  if (L && L.hist) for (const r of L.hist.rader) rad(L.hist.keys, r);
-  const n = L && L.naa;
-  if (n) {
-    if (n.venter && Array.isArray(n.venter.keys) && Array.isArray(n.venter.rader))
-      for (const r of n.venter.rader) if (Array.isArray(r) && !m.has(Math.round(r[0] / 60))) rad(n.venter.keys, r);
-    const h = Math.round(n.hs / 3600000);
-    if (n.m > 0 && !m.has(h)) {
-      const slutt = (h + 1) * 3600000, ferdig = slutt <= nu;
-      const rec = { kilde: 'L', t: h * 3600000, del: !ferdig,
-                    tc: ferdig ? h * 3600000 + 1800000 : (h * 3600000 + Math.min(nu, Number.isFinite(n.t) ? n.t : nu)) / 2 };
-      n.keys.forEach((k, i) => { if (n.n[i] > 0 && Number.isFinite(n.s[i])) rec[k] = n.s[i] / n.n[i]; });
-      m.set(h, rec);
+    moved=false; sx=e.touches[0].clientX; sy=e.touches[0].clientY;
+    tmr = setTimeout(() => { if(!moved){haptic();showTT(el,el._ttLabel,el._ttHk,el._ttUnit);} }, 500);
+  }, {passive:true});
+  el.addEventListener('touchmove', e => {
+    if(Math.abs(e.touches[0].clientX-sx)>8||Math.abs(e.touches[0].clientY-sy)>8){
+      moved=true; clearTimeout(tmr); hideTT();
     }
-  }
-  return m;
+  }, {passive:true});
+  el.addEventListener('touchend', () => { clearTimeout(tmr); setTimeout(hideTT,2500); }, {passive:true});
 }
-// Innsikt: enhet og capability for hver rå verdi ([navn, capability, prefiks?])
-const TR_INSK = {
-  t100: [FIBARO_DEV, TANK_SENSORS[0].cap], t75: [FIBARO_DEV, TANK_SENSORS[1].cap], t50: [FIBARO_DEV, TANK_SENSORS[2].cap],
-  t25: [FIBARO_DEV, TANK_SENSORS[3].cap], t0: [FIBARO_DEV, TANK_SENSORS[4].cap],
-  supply: [NIBE_DEV, N.supply], ret: [NIBE_DEV, N.ret], calcSupply: [NIBE_DEV, N.calcSupply],
-  brineIn: [NIBE_DEV, N.brineIn], brineOt: [NIBE_DEV, N.brineOt], bt7: [NIBE_DEV, N.bt7], bt6: [NIBE_DEV, N.bt6],
-  gm: [NIBE_DEV, N.gm], flow: [NIBE_DEV, N.flow], outAvg: [NIBE_DEV, N.outdoor],
-  out37: [NIBE_DEV, 'measure_temperature_NIBE.i37', true],
-  hpPct: [NIBE_DEV, N.hpPct], srcPct: [NIBE_DEV, N.srcPct], disch: [NIBE_DEV, N.disch],
-  bt12: [NIBE_DEV, N.bt12], bt15: [NIBE_DEV, N.bt15], bt17: [NIBE_DEV, N.bt17], hz: [NIBE_DEV, N.hz],
-  pwr: [NIBE_DEV, N.pwr], elAdd: [NIBE_DEV, EL_CAP], compStarts: [NIBE_DEV, N.compStarts], compHours: [NIBE_DEV, N.compHours],
-  bt5: [BT5_DEV, DC_NUM], scopDC: [SCOP_DEV, DC_NUM], scop24: [SCOP24_DEV, DC_NUM], copHeat: [COPH_DEV, DC_NUM],
-  copHw: [COPW_DEV, DC_NUM], copHeatT: [COPHT_DEV, DC_NUM], copHwT: [COPWT_DEV, DC_NUM],
-};
-function trKilde(k){
-  if (k === 'trom') return trRom;
-  const s = TR_INSK[k];
-  if (!s || !trEnheter) return null;
-  const kand = trEnheter.filter(d => d.name === s[0]);
-  const d = kand.find(x => x.caps.length > 10) || kand[0];
-  if (!d) return null;
-  let cap = s[2] ? d.caps.find(c => c.startsWith(s[1])) : (d.caps.includes(s[1]) ? s[1] : null);
-  if (!cap && k === 'elAdd') cap = d.caps.find(c => c.includes('.' + EL_CAP_PREFIX + '_') || c.endsWith('.' + EL_CAP_PREFIX));
-  return cap ? { id: d.id, cap } : null;
-}
-const trIns = {};
-let trInsNekt = 0;
-function trInsFersk(k){ const c = trIns[k]; return c && Date.now() - c.t < TR_INS ? c : null; }
-async function trInnsikt(t, k){
-  const c = trInsFersk(k);
-  if (c) return c.m;
-  if (Date.now() < trInsNekt) return null;
-  if (!trEnheter) return null;                       // enhetslista er ikke hentet ennå – ikke husk «ingen innsikt»
-  const src = trKilde(k);
-  if (!src) { trIns[k] = { t: Date.now(), m: null }; return null; }
-  const uri = 'homey:device:' + src.id;
-  let data = null;
-  // Homey Pro 2023: logg-id «homey:device:<id>:<capability>»; eldre: bare capability
-  for (const id of [uri + ':' + src.cap, src.cap]) {
-    try { data = await exJSON(`${t.base}/api/manager/insights/log/${uri}/${id}/entry?resolution=last7Days`, t.h); break; }
-    catch (e) {
-      if (e.status === 401 || e.status === 403) { trInsNekt = Date.now() + 30 * 60000; return null; }
-      if (e.status !== 404) break;
-    }
-  }
-  const m = data ? trLesInnsikt(data, TR_OMR[k]) : null;
-  trIns[k] = { t: Date.now(), m };
-  return m;
-}
-// Innsiktssvar → Map(timeindeks → snitt). Tåler { values:[{t,v}] }, [[t,v]] og
-// tid som ISO-tekst eller ms. Flere punkt i samme time snittes.
-function trLesInnsikt(data, omr){
-  const vals = Array.isArray(data && data.values) ? data.values : (Array.isArray(data) ? data : []);
-  const acc = new Map();
-  for (const p of vals) {
-    let t, v;
-    if (Array.isArray(p)) { t = p[0]; v = p[1]; }
-    else if (p && typeof p === 'object') { t = p.t ?? p.time ?? p.date; v = p.v ?? p.value; }
-    const ms = typeof t === 'number' ? (t < 1e11 ? t * 1000 : t) : Date.parse(t);
-    if (!Number.isFinite(ms) || typeof v !== 'number' || !Number.isFinite(v)) continue;
-    if (omr && (v < omr[0] || v > omr[1])) continue;
-    const h = Math.floor(ms / 3600000), a = acc.get(h);
-    if (a) { a[0] += v; a[1]++; } else acc.set(h, [v, 1]);
-  }
-  const m = new Map();
-  for (const [h, a] of acc) m.set(h, a[0] / a[1]);
-  return m.size ? m : null;
-}
-function trSkiftLes(){ try { const v = JSON.parse(localStorage.getItem('trSkift') || 'null'); return v && (v.s === 0 || v.s === -1) ? v : null; } catch (_) { return null; } }
-// Velg forskyvningen der Innsikt passer best med scriptets utetemperatur
-function trSkiftFinn(timer, ins){
-  if (!ins) return;
-  const avvik = s => {
-    let sum = 0, n = 0;
-    for (const [h, r] of timer) {
-      if (r.del || r.outAvg == null) continue;
-      const v = ins.get(h - s);
-      if (v != null) { sum += Math.abs(r.outAvg - v); n++; }
-    }
-    return n ? { e: sum / n, n } : null;
-  };
-  const a = avvik(0), b = avvik(-1);
-  if (!a || !b || a.n < 6 || b.n < 6) return;
-  if (Math.min(a.e, b.e) < 0.7 * Math.max(a.e, b.e))
-    try { localStorage.setItem('trSkift', JSON.stringify({ s: a.e <= b.e ? 0 : -1, n: a.n, e0: +a.e.toFixed(3), e1: +b.e.toFixed(3), t: Date.now() })); } catch (_) {}
-}
-async function trData(id, medIns){
-  const def = TRS[id];
-  if (!def) throw new Error('ingen trend');
-  const nu = Date.now(), t0 = nu - TR_DOGN * 86400000;
-  const linjer = def.linjer || [{ navn: '', f: def.f }];
-  if (def.kilde === 'kjole') return trKjoleData(id, t0, nu);
-  if (def.kilde === 'dogn') return trDognData(linjer, t0, nu);
-  const t = trTilk();
-  const L = await trHentLogg(t);
-  const timer = trLoggTimer(L, nu);
-  const h0 = Math.floor(t0 / 3600000), h1 = Math.floor(nu / 3600000);
-  const inn = def.inn || [];
-  // En ferdig time med under 60 % av det vanlige antallet prøver (scriptets
-  // første time, omstart av Homey) er bare delvis dekket – der brukes
-  // Innsikts hele timesnitt når det finnes for alle verdiene serien trenger
-  const ns = [...timer.values()].filter(r => !r.del && r._m > 0).map(r => r._m).sort((a, b) => a - b);
-  const typisk = ns.length >= 3 ? ns[Math.floor(ns.length / 2)] : null;
-  const delvis = r => typisk != null && !r.del && r._m != null && r._m < 0.6 * typisk;
-  let mangler = 0;
-  for (let h = h0; h <= h1; h++) { const r = timer.get(h); if (!r || delvis(r)) mangler++; }
-  const ins = {};
-  let trenger = false;
-  if (inn.length && mangler && Date.now() >= trInsNekt) {
-    for (const k of inn) {
-      const c = trInsFersk(k);
-      if (c) ins[k] = c.m;
-      else if (medIns) ins[k] = await trInnsikt(t, k);
-      else trenger = true;
-    }
-    if (medIns && !trSkiftLes() && Date.now() >= trInsNekt)
-      trSkiftFinn(timer, 'outAvg' in ins ? ins.outAvg : await trInnsikt(t, 'outAvg'));
-  }
-  const sk = (trSkiftLes() || { s: 0 }).s;
-  const recs = [];
-  for (let h = h0; h <= h1; h++) {
-    let r = timer.get(h);
-    if ((!r || delvis(r)) && inn.length) {
-      const rr = { kilde: 'I', t: h * 3600000, tc: h * 3600000 + 1800000 };
-      let n = 0;
-      for (const k of inn) { const m = ins[k], v = m ? m.get(h - sk) : undefined; if (v != null) { rr[k] = v; n++; } }
-      if (r ? n === inn.length : n) r = rr;
-    }
-    if (r) recs.push(r);
-  }
-  // Siste prøve fra scriptet – stopper det, skal det synes i vinduet
-  let sist = L.naa && Number.isFinite(L.naa.t) && L.naa.t > 0 ? L.naa.t : null;
-  if (sist == null && L.hist && L.hist.rader.length) sist = (L.hist.rader[L.hist.rader.length - 1][0] + 60) * 60000;
-  return { oppl: 't', t0, t1: nu, logg: L.funnet, loggSist: sist, trengerIns: trenger,
-    linjer: linjer.map(l => ({ navn: l.navn, farge: l.farge, stiplet: l.stiplet,
-      pts: recs.map(r => { let v = null; try { v = l.f(r); } catch (_) {} return { t: Math.min(r.tc, nu), v }; })
-               .filter(p => p.v != null && Number.isFinite(p.v) && p.t >= t0) })) };
-}
-// Kjølekretsen: punktene i loggen (hvert 10. min i drift) snittet per time.
-// Rad: [min, BP8 dugg·10, BT84·10, BP9 dugg·10, Hz, BT10·10, BT11·10, GP2, min i drift, BT17·10]
-function trKjoleData(id, t0, nu){
-  const L = (kjoleData && Array.isArray(kjoleData.logg)) ? kjoleData.logg : [];
-  const b = new Map();
-  for (const r of L) {
-    if (!Array.isArray(r) || !Number.isFinite(r[0])) continue;
-    const t = r[0] * 60000;
-    if (t < t0 - 3600000 || t > nu + 60000) continue;
-    const x = i => (typeof r[i] === 'number' && isFinite(r[i])) ? r[i] / 10 : null;
-    let bp8d = x(1); const bt84 = x(2), bp9d = x(3), bt10 = x(5);
-    if (bp8d != null && bt10 != null && bp8d > bt10 + 0.5) bp8d = null;   // som kjoleVerdier
-    const sh = bp8d != null && bt84 != null && bt84 - bp8d > -2 && bt84 - bp8d < 30 ? bt84 - bp8d : null;
-    const v = { bp8d, bt84, sh, bp9d }[id];
-    if (v == null) continue;
-    const h = Math.floor(t / 3600000), a = b.get(h) || { s: 0, n: 0, ts: 0 };
-    a.s += v; a.n++; a.ts += t; b.set(h, a);
-  }
-  const pts = [...b.entries()].sort((p, q) => p[0] - q[0])
-    .map(([, a]) => ({ t: a.ts / a.n, v: a.s / a.n })).filter(p => p.t >= t0);
-  return { oppl: 'k', t0, t1: nu, linjer: [{ navn: '', pts }] };
-}
-// Brønnens egenskaper: døgnestimatene fra utviklingsgrafen + gjeldende tilpasning
-function trDognData(linjer, t0, nu){
-  const pts = [];
-  const origo = utvCache && Number.isFinite(utvCache.origo) ? utvCache.origo : null;
-  // Som wellKvalitet, så langt det går uten serien: λ i søkegrensen og Rb under
-  // 0,05 er fysisk umulige og vises heller ikke i panelet
-  const mulig = e => e[0] > 0.6 && e[0] < 7.5 && e[2] >= 0.05;
-  if (origo != null && utvCache.e)
-    for (const [d, e] of Object.entries(utvCache.e)) if (Array.isArray(e) && mulig(e)) pts.push({ t: origo + (+d) * 86400000, e });
-  const f = (typeof trtFit !== 'undefined' && trtFit && trtFit.ok && wellKvalitet(trtFit).ok) ? trtFit : null;
-  if (f && origo != null && trtData) {
-    const tf = origo + (f.days + Math.round((trtData.base - origo) / 86400000)) * 86400000;
-    if (!pts.some(p => Math.abs(p.t - tf) < 0.05 * 86400000)) pts.push({ t: tf, e: trFitE(f) });
-  }
-  pts.sort((p, q) => p.t - q.t);
-  const inne = pts.filter(p => p.t >= t0 - 3600000 && p.t <= nu + 6 * 3600000);
-  return { oppl: 'd', t0, t1: nu, linjer: linjer.map(l => ({ navn: l.navn, farge: l.farge, stiplet: l.stiplet,
-    pts: inne.map(p => { let v = null; try { v = l.f(p.e); } catch (_) {} return { t: Math.min(Math.max(p.t, t0), nu), v }; })
-             .filter(p => p.v != null && Number.isFinite(p.v)) })) };
-}
-
-// ── Grafen ──────────────────────────────────────────────────
-// Y: autoskala med «pene» steg. X: siste 7 døgn, skillelinje ved hver
-// midnatt og ukedag + dato midt i hvert døgn.
-function trTicks(lo, hi, maks){
-  // Blant stegene 1, 2, 2,5 og 5 · 10ⁿ velges det som gir minst tomrom over
-  // og under dataene, med 3 til maks+2 merker
-  const e0 = Math.floor(Math.log10((hi - lo) / Math.max(2, maks - 1)));
-  let steg = null, best = Infinity;
-  for (let e = e0 - 1; e <= e0 + 1; e++) for (const m of [1, 2, 2.5, 5]) {
-    const st = m * Math.pow(10, e);
-    const a = Math.floor(lo / st + 1e-9) * st, b = Math.ceil(hi / st - 1e-9) * st, n = Math.round((b - a) / st) + 1;
-    if (n < 3 || n > maks + 2) continue;
-    const poeng = (b - a) / (hi - lo) + n * 0.03;
-    if (poeng < best) { best = poeng; steg = st; }
-  }
-  if (steg == null) steg = Math.pow(10, e0 + 1);
-  const a = Math.floor(lo / steg + 1e-9) * steg, b = Math.ceil(hi / steg - 1e-9) * steg;
-  const t = [];
-  for (let k = 0; a + k * steg <= b + steg * 1e-6 && k < 50; k++) t.push(+(a + k * steg).toFixed(10));
-  let dec = 0;
-  while (dec < 6 && Math.abs(Math.round(steg * Math.pow(10, dec)) - steg * Math.pow(10, dec)) > 1e-6) dec++;
-  return { t, steg, lo: a, hi: b, dec };
-}
-function trSVG(D, W, H, def){
-  const PL = 44, PR = 10, PT = 10, PB = 22, pW = W - PL - PR, pH = H - PT - PB;
-  const t0 = D.t0, t1 = D.t1, d = def.d, enh = def.enh || '';
-  const linjer = D.linjer.map((l, i) => ({ ...l, farge: trFarge(l, i) }));
-  const alle = [];
-  linjer.forEach(l => l.pts.forEach(p => alle.push(p.v)));
-  let lo = Math.min(...alle), hi = Math.max(...alle);
-  if (!(hi - lo > 1e-9)) {
-    if (lo === 0) hi = 1;
-    else { const p = Math.max(Math.abs(lo) * 0.02, Math.pow(10, -d)); lo -= p; hi += p; }
-  }
-  const tk = trTicks(lo, hi, H > 280 ? 6 : 5);
-  const px = t => PL + (t - t0) / (t1 - t0) * pW;
-  const py = v => PT + (1 - (v - tk.lo) / (tk.hi - tk.lo)) * pH;
-  const f1 = v => v.toFixed(1);
-  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" font-family="DM Mono,monospace">`;
-  s += `<defs><linearGradient id="tmGr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${linjer[0].farge}" stop-opacity=".26"/>`
-     + `<stop offset="1" stop-color="${linjer[0].farge}" stop-opacity="0"/></linearGradient></defs>`;
-  for (const v of tk.t) {
-    const y = f1(py(v));
-    s += `<line x1="${PL}" y1="${y}" x2="${W - PR}" y2="${y}" stroke="rgba(255,255,255,.07)" stroke-dasharray="3,3"/>`;
-    s += `<text x="${PL - 6}" y="${(+y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="rgba(255,255,255,.45)">${trFmt(v, tk.dec)}</text>`;
-  }
-  // Midnatt (lokal tid; setDate tåler sommertid)
-  const mid = [];
-  { const m = new Date(t0); m.setHours(24, 0, 0, 0); while (m.getTime() < t1) { mid.push(m.getTime()); m.setDate(m.getDate() + 1); } }
-  for (const t of mid) s += `<line x1="${f1(px(t))}" y1="${PT}" x2="${f1(px(t))}" y2="${PT + pH + 4}" stroke="rgba(255,255,255,.14)"/>`;
-  // Ukedag og dato midt i hvert døgn. Fra høyre (i dag) og mot venstre, så
-  // en smal bit av et døgn i kanten aldri skyver ut de hele døgnene.
-  const gr = [t0, ...mid, t1];
-  let forrigeX = Infinity;
-  for (let i = gr.length - 2; i >= 0; i--) {
-    const xa = px(gr[i]), xb = px(gr[i + 1]);
-    const dd = new Date((gr[i] + gr[i + 1]) / 2);
-    const tekst = pW / 7 >= 40 ? `${TR_DAG[dd.getDay()]} ${dd.getDate()}.` : TR_DAG[dd.getDay()];   // smal skjerm: bare ukedag
-    const hb = tekst.length * 3.1 + 1;                               // halv bredde ved 10 px DM Mono
-    let xm = (xa + xb) / 2;
-    if (i === gr.length - 2 && i > 0) xm = Math.min(Math.max(xm, xa + hb + 2), W - hb);   // dagens døgn: etter midnattsstreken
-    if (i === 0 && gr.length > 2) xm = Math.max(Math.min(xm, xb - hb - 2), PL - 6 + hb);  // første døgn: før midnattsstreken
-    if (forrigeX - xm < 2 * hb + 4 || xm - hb < PL - 8 || xm + hb > W) continue;
-    if (i === 0 && gr.length > 2 && !tekst.includes('.')) continue;   // bare ukedag: ikke samme ukedag to ganger
-    s += `<text x="${f1(xm)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="rgba(255,255,255,.5)">${tekst}</text>`;
-    forrigeX = xm;
-  }
-  s += `<line x1="${PL}" y1="${PT}" x2="${PL}" y2="${PT + pH}" stroke="rgba(255,255,255,.14)"/>`;
-  s += `<line x1="${PL}" y1="${PT + pH}" x2="${W - PR}" y2="${PT + pH}" stroke="rgba(255,255,255,.14)"/>`;
-  // Linjene – brudd der det mangler timer
-  const hull = D.oppl === 'd' ? 1.6 * 86400000 : 1.6 * 3600000;
-  linjer.forEach(l => {
-    const segs = [];
-    let cur = [];
-    l.pts.forEach((p, j) => { if (j && p.t - l.pts[j - 1].t > hull) { segs.push(cur); cur = []; } cur.push(p); });
-    if (cur.length) segs.push(cur);
-    for (const sg of segs) {
-      if (sg.length === 1) { s += `<circle cx="${f1(px(sg[0].t))}" cy="${f1(py(sg[0].v))}" r="2.2" fill="${l.farge}"/>`; continue; }
-      const pts = sg.map(p => `${f1(px(p.t))},${f1(py(p.v))}`).join(' ');
-      if (linjer.length === 1)
-        s += `<polygon points="${f1(px(sg[0].t))},${PT + pH} ${pts} ${f1(px(sg[sg.length - 1].t))},${PT + pH}" fill="url(#tmGr)"/>`;
-      s += `<polyline points="${pts}" fill="none" stroke="${l.farge}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"${l.stiplet ? ' stroke-dasharray="5,4"' : ''}/>`;
-    }
-    if (D.oppl === 'd') l.pts.forEach(p => { s += `<circle cx="${f1(px(p.t))}" cy="${f1(py(p.v))}" r="2.6" fill="${l.farge}"/>`; });
-  });
-  const l0 = linjer.find(l => l.pts.length);
-  if (l0) { const p = l0.pts[l0.pts.length - 1]; s += `<circle cx="${f1(px(p.t))}" cy="${f1(py(p.v))}" r="3" fill="${l0.farge}" stroke="#0c1a2d" stroke-width="1.5"/>`; }
-  // Markør som følger berøringen
-  s += `<g class="tm-k" style="display:none" pointer-events="none"><line class="tm-kl" y1="${PT}" y2="${PT + pH}" stroke="rgba(255,255,255,.55)" stroke-dasharray="2,2"/>`;
-  linjer.forEach((l, i) => { s += `<circle class="tm-kp" data-i="${i}" r="3.6" fill="${l.farge}" stroke="#0c1a2d" stroke-width="1.5"/>`; });
-  s += `<rect class="tm-kr" rx="6" fill="rgba(12,26,45,.95)" stroke="rgba(255,255,255,.2)"/><text class="tm-kt" font-size="10.5" fill="#e2eef8"></text></g>`;
-  s += '</svg>';
-  return { svg: s, PL, PR, PT, pW, pH, W, H, t0, t1, px, py, linjer, oppl: D.oppl, d, enh };
-}
-function trScrub(svg, g){
-  if (!svg) return;
-  const K = svg.querySelector('.tm-k'), Kl = svg.querySelector('.tm-kl'), Kr = svg.querySelector('.tm-kr'), Kt = svg.querySelector('.tm-kt');
-  const Kp = [...svg.querySelectorAll('.tm-kp')];
-  const halv = g.oppl === 'd' ? 0.6 * 86400000 : 0.75 * 3600000;
-  const naermest = (pts, t) => {
-    if (!pts.length) return null;
-    let a = 0, b = pts.length - 1;
-    while (b - a > 1) { const m = (a + b) >> 1; if (pts[m].t < t) a = m; else b = m; }
-    return Math.abs(pts[a].t - t) <= Math.abs(pts[b].t - t) ? pts[a] : pts[b];
-  };
-  const vis = ev => {
-    const r = svg.getBoundingClientRect();
-    if (!r.width) return;
-    const x = Math.min(Math.max((ev.clientX - r.left) / r.width * g.W, g.PL), g.PL + g.pW);
-    const t = g.t0 + (x - g.PL) / g.pW * (g.t1 - g.t0);
-    let best = null;
-    g.linjer.forEach(l => { const p = naermest(l.pts, t); if (p && (!best || Math.abs(p.t - t) < Math.abs(best.t - t))) best = p; });
-    if (!best) return;
-    const cx = g.px(best.t), rader = [trTid(best.t, g.oppl)];
-    g.linjer.forEach((l, i) => {
-      const p = naermest(l.pts, best.t), c = Kp[i];
-      if (p && Math.abs(p.t - best.t) <= halv) {
-        c.setAttribute('cx', g.px(p.t).toFixed(1)); c.setAttribute('cy', g.py(p.v).toFixed(1)); c.style.display = '';
-        rader.push((l.navn ? l.navn + ' ' : '') + trFmt(p.v, g.d) + (g.enh ? ' ' + g.enh : ''));
-      } else c.style.display = 'none';
-    });
-    Kl.setAttribute('x1', cx.toFixed(1)); Kl.setAttribute('x2', cx.toFixed(1));
-    Kt.innerHTML = rader.map((tx, i) => `<tspan x="0" dy="${i ? 13 : 0}">${tx}</tspan>`).join('');
-    const bw = Math.max(...rader.map(tx => tx.length)) * 6.4 + 14, bh = rader.length * 13 + 7;
-    let bx = cx + 10;
-    if (bx + bw > g.W - g.PR) bx = cx - 10 - bw;
-    if (bx < g.PL) bx = g.PL;
-    const by = g.PT + 4;
-    Kr.setAttribute('x', bx.toFixed(1)); Kr.setAttribute('y', by); Kr.setAttribute('width', bw.toFixed(1)); Kr.setAttribute('height', bh);
-    Kt.setAttribute('transform', `translate(${(bx + 7).toFixed(1)},${by + 14})`);
-    K.style.display = '';
-  };
-  svg.addEventListener('pointerdown', e => { try { svg.setPointerCapture(e.pointerId); } catch (_) {} vis(e); });
-  svg.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' || e.buttons) vis(e); });
-}
-
-// Lukkeknappen reagerer bare på et trykk som begynner på den etter at vinduet
-// åpnet – ellers kunne fingeren som holdt verdien (f.eks. driftsmodus øverst
-// til høyre) lukke vinduet idet den slippes.
-// iOS kan etterligne mus (mousedown/click) der fingeren slippes etter et langt
-// trykk – derfor teller mus bare når det ikke har vært berøring på 0,8 s.
-(function(){
-  const X = document.getElementById('tmX');
-  X.addEventListener('touchstart', () => { trXNed = true; }, { passive: true });
-  X.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') trXNed = true; });
-  X.addEventListener('mousedown', () => { if (Date.now() - trSisteTouch > 800) trXNed = true; });
-  X.addEventListener('click', e => {
-    const ok = trXNed || e.detail === 0;          // detail 0 = tastatur
-    trXNed = false;
-    if (ok && trApen && Date.now() - trApen.t > 250) trLukk();
-  });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && trApen) trLukk(); });
-  let rt = null;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (trApen && trApen.data) trTegn(); }, 150); });
-  btt(document.getElementById('vMod'), 'Driftsmodus · andel av timen', 'modus', '%');
-})();
 
 // ═══════════════════════════════════════════
 // HOVED-ILLUSTRASJON – buildSvg(temps, nibe)
@@ -1985,16 +1348,6 @@ function buildSvg(temps, nibe) {
   s+=`<rect id="svgScopHit"    x="${vpX+vpW/2-28}" y="${vpY+68}"     width="56" height="26" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
   s+=`<rect id="svgKwtHit"     x="${vpX+vpW/2-28}" y="${vpY+vpH-46}" width="56" height="13" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
   s+=`<rect id="svgGmHit"      x="${vpX+vpW/2-28}" y="${vpY+vpH-32}" width="56" height="13" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
-  // v44: alle verdier i illustrasjonen har trend – pumpene, 24t-COP, LED-raden, modus og tankoverskuddet
-  s+=`<rect id="svgGp1Hit"     x="${pmid+39-14}" y="${hotY-9}"  width="28" height="32" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
-  s+=`<rect id="svgGp2Hit"     x="${bMid+50-14}" y="${boY-23}"  width="28" height="32" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
-  s+=`<rect id="svgScop24Hit"  x="${vpX+vpW/2-34}" y="${vpY+94}"  width="68" height="12" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
-  s+=`<rect id="svgLedHit"     x="${vpX+8}" y="${vpY+121}" width="${vpW-16}" height="18" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
-  s+=`<rect id="svgModusHit"   x="${vpX+8}" y="${vpY+vpH-17}" width="${vpW-16}" height="14" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
-  if (surplusDeg != null && surplusDeg > 0.3) {
-    const sbw = 14 + ('+' + surplusDeg.toFixed(1) + '°').length * 6.4, by = tTop + eRy*2 + 16;
-    s+=`<rect id="svgOverskuddHit" x="${(tCX-sbw/2).toFixed(1)}" y="${by-9}" width="${sbw.toFixed(1)}" height="16" fill="transparent" pointer-events="all" style="cursor:pointer"/>`;
-  }
 
   document.getElementById('svg').innerHTML = s;
 
@@ -2004,19 +1357,13 @@ function buildSvg(temps, nibe) {
   const bindSvg=(id,label,hk,unit)=>{const e=document.getElementById(id);if(e)btt(e,label,hk,unit);};
   bindSvg('svgBrineOtHit','Brine ut BT11',     'brineOt',   '°C');
   bindSvg('svgBrineInHit','Brine inn BT10',    'brineIn',   '°C');
-  bindSvg('svgVarmTurHit','Varm tur · tank topp', 't100',    '°C');
+  bindSvg('svgVarmTurHit','Varm tur (topp)',   't100',      '°C');
   bindSvg('svgCalcHit',   'Beregnet turledning','calcSupply','°C');
-  bindSvg('svgKaldRetHit','Kald retur · tank retur','t0',     '°C');
-  bindSvg('svgScopHit',   'SCOP siden oppstart','scopDC',    '');
+  bindSvg('svgKaldRetHit','Kald retur',        't0',        '°C');
+  bindSvg('svgScopHit',   'SCOP',              'scopDC',    '');
   bindSvg('svgKwtHit',    'Termisk effekt',    'pTerm',     'kWt');
   bindSvg('svgGmHit',     'Gradminutter',      'gm',        'GM');
-  bindSvg('svgGp1Hit',    'Varmebærerpumpe GP1','hpPct',    '%');
-  bindSvg('svgGp2Hit',    'Brinepumpe GP2',    'srcPct',    '%');
-  bindSvg('svgScop24Hit', 'Snitt COP siste 24t','scop24',   '');
-  bindSvg('svgLedHit',    'SCOP siden oppstart','scopDC',    '');
-  bindSvg('svgModusHit',  'Driftsmodus · andel av timen','modus','%');
-  bindSvg('svgOverskuddHit','Tankoverskudd over beregnet tur','overskudd','K');
-  TANK_SENSORS.forEach((sen,i)=>{const e=document.getElementById('svgTankHit'+i);if(e)btt(e,'Akkumulatortank · '+sen.name,HK[i],'°C');});
+  TANK_SENSORS.forEach((sen,i)=>{const e=document.getElementById('svgTankHit'+i);if(e)btt(e,sen.name+' (illustrasjon)',HK[i],'°C');});
 }
 
 // ═══════════════════════════════════════════
@@ -2036,7 +1383,7 @@ function renderPanels(temps, nibe) {
       +`<div class="sp">${sen.pct}%</div>`
       +`<div class="sn">${sen.name}</div>`
       +`<div class="sv">${t!=null?t.toFixed(1)+'\u202F°C':'–'}</div>`;
-    btt(d, 'Akkumulatortank · ' + sen.name, HK[i], '°C');
+    btt(d, sen.name, HK[i], '°C');
     rows.appendChild(d);
   });
 
@@ -2149,7 +1496,6 @@ function renderPanels(temps, nibe) {
   btt(document.getElementById('mDhwKwh'),   'Tappevann energi',   'dhwKwh', 'kWh');
   btt(document.getElementById('mDhwDusj'),  'Forventet dusjtid',  'dhwDusj','min');
   btt(document.getElementById('mDhwDT'),    'Tappevann ΔT',       'dhwDt',  'K');
-  btt(document.getElementById('mCap'),      'Kapasitet i bruk',   'kap',    '%');
 }
 
 // ═══════════════════════════════════════════
@@ -2158,9 +1504,66 @@ function renderPanels(temps, nibe) {
 // ═══════════════════════════════════════════
 let nibe_last = null;
 function render(temps, nibe, isLive) {
-  nibe_last = nibe; temps_last = temps;
+  nibe_last = nibe;
   try { buildWellPanel(); } catch (_) {}
   if (isLive && (_histTick++ % HIST_EVERY) === 0) {
+    ph('t100',temps[0]); ph('t75',temps[1]); ph('t50',temps[2]);
+    ph('t25', temps[3]); ph('t0', temps[4]);
+    const vld=temps.filter(t=>t!=null);
+    if(vld.length){
+      const sn=r1(vld.reduce((a,b)=>a+b,0)/vld.length);
+      ph('snitt',sn); ph('energi',r1(Math.max(0,KWH*(sn-REF))));
+    }
+    if(temps[0]!=null&&temps[4]!=null) ph('dtb',r1(temps[0]-temps[4]));
+    ph('flow',    nibe.flow);
+    phR2('scopDC', nibe.scopDC);  // cumulative SCOP
+    // 0 betyr "ingen data" og skal ikke bli et punkt i trendgrafen
+    if(nibe.scop24  >0) phR2('scop24',  nibe.scop24);
+    if(nibe.copHeat >0) phR2('copHeat', nibe.copHeat);
+    if(nibe.copHw   >0) phR2('copHw',   nibe.copHw);
+    if(nibe.copHeatT>0) phR2('copHeatT',nibe.copHeatT);
+    if(nibe.copHwT  >0) phR2('copHwT',  nibe.copHwT);
+    ph('brineIn', nibe.brineIn);
+    ph('brineOt', nibe.brineOt);
+    ph('hz',      nibe.hz);
+    ph('pwr',     nibe.pwr);
+    ph('gm',      nibe.gm);
+    ph('bt7',     nibe.bt7);
+    ph('outAvg',  nibe.outAvg);
+    ph('compStarts', nibe.compStarts);
+    ph('compHours',  nibe.compHours);
+    // Kjølekrets-følere
+    ph('bt5',     nibe.bt5);
+    ph('bt6',     nibe.bt6);
+    ph('supply',  nibe.supply);
+    ph('calcSupply', nibe.calcSupply);
+    ph('ret',     nibe.ret);
+    ph('hpPct',   nibe.hpPct);
+    ph('srcPct',  nibe.srcPct);
+    ph('bt12',    nibe.bt12);
+    ph('bt15',    nibe.bt15);
+    ph('disch',   nibe.disch);
+    ph('bt17',    nibe.bt17);
+    if(nibe.brineIn!=null&&nibe.brineOt!=null) ph('brineDT', r1(nibe.brineIn-nibe.brineOt));
+    { const kv = kjoleVerdier(nibe);           // kjølekrets fra myUplink (v43)
+      if (kv) { ph('bp8d', kv.bp8d); ph('bt84', kv.bt84); ph('sh', kv.sh); ph('bp9d', kv.bp9d); } }
+    // Tappevann avledede verdier
+    const dhwV=[nibe.bt7,nibe.bt6,nibe.bt5].filter(t=>t!=null);
+    if(dhwV.length){
+      const dsn=r1(dhwV.reduce((a,b)=>a+b,0)/dhwV.length);
+      const KWH_K=180*4.186/3600;
+      const kwhv=dsn>35?KWH_K*(dsn-35):0;
+      ph('dhwSnitt',dsn);
+      ph('dhwKwh', r1(kwhv));
+      ph('dhwDusj', showerMinutes({bt7:nibe.bt7, bt6:nibe.bt6, bt5:nibe.bt5}));
+    }
+    if(nibe.bt7!=null&&nibe.bt6!=null) ph('dhwDt', r1(nibe.bt7-nibe.bt6));
+    // Termisk effekt: målt via flowmåler × ΔT (se thermalKW)
+    if(nibe.pwr!=null&&nibe.pwr>200){
+      const v = thermalKW(nibe) ?? thermalEstKW(nibe, nibe.pwr/1000);
+      if(v!=null) ph('pTerm', r1(v));
+    }
+    if(nibe.elAdd!=null) ph('elAdd', r1(nibe.elAdd/1000));
     if(nibe.scopDC!=null){
       // Én verdi per 15-min bøtte; innenfor samme bøtte oppdateres
       // punktet, så grafen alltid ender på ferskeste måling.
@@ -2181,7 +1584,6 @@ function render(temps, nibe, isLive) {
   renderPanels(temps, nibe);
   buildDHW(nibe);
   buildVPInternal(nibe);
-  if (trApen) document.getElementById('tmV').innerHTML = trNaaTekst(trApen);   // trendvinduet: verdien nå
 }
 
 /* ── DUSJTID — sjiktet tankmodell forankret i EN16147 ────
@@ -2511,8 +1913,8 @@ function buildVPInternal(nibe) {
   el('vpiComp').textContent = running ? 'On' : 'Off';
   el('vpiHz').textContent   = running ? hz.toFixed(0) + ' Hz' : '';
 
-  // Elpatron (internt eltilskudd, register 1027) – viste fast «0,00 kW» før v44
-  el('vpiElp').textContent = nibe.elAdd != null ? (nibe.elAdd / 1000).toFixed(2) + ' kW' : '–';
+  // Elpatron (internal addition)
+  el('vpiElp').textContent = '0,00 kW';
 
   // Kjølekrets fra myUplink (v43): bare når kompressoren går og verdiene er ferske
   const kv = kjoleVerdier(nibe);
@@ -2539,8 +1941,6 @@ function buildVPInternal(nibe) {
   btt(el('vpiBT17'),  'Sugegass BT17 ved kompressoren' + (kv && kv.bt84 != null && nibe.bt17 != null
         ? ' · ' + (nibe.bt17 - kv.bt84 >= 0 ? '+' : '') + fmt(nibe.bt17 - kv.bt84) + ' K etter fordamperen' : ''), 'bt17', '°C');
   btt(el('vpiHz'),    'Kompressor Hz',             'hz',     'Hz');
-  btt(el('vpiComp'),  'Kompressor i drift · andel av timen', 'komp', '%');
-  btt(el('vpiElp'),   'Elpatron (spisslast)',      'elAdd',  'kW');
   btt(el('vpiBrineDT'),'Brine ΔT (BT10 − BT11)',   'brineDT','K');
   btt(el('vpiBP8'),  'Fordamping, duggpunkt BP8' + trykk(kv && kv.bp8p, kv && kv.ber8), 'bp8d', '°C');
   btt(el('vpiBT84'), 'Suggass etter fordamperen BT84', 'bt84', '°C');
@@ -2769,24 +2169,21 @@ async function doFetch() {
       const nd=devs.find(x=>x.name===NIBE_DEV);
       const co=(nd&&nd.capabilitiesObj)||{};
       const k26=Object.keys(co).find(k=>k.startsWith('measure_temperature')&&/\.i26(_|$)/.test(k));
-      if(k26&&ok(co[k26].value)) return {t:Number(co[k26].value), src:'BT50', id:nd.id, cap:k26};
+      if(k26&&ok(co[k26].value)) return {t:Number(co[k26].value), src:'BT50'};
       for(const k of Object.keys(co)){
         const c=co[k]||{};
         if(!k.startsWith('measure_temperature')) continue;
         if(!/room|romtemp|bt50/i.test(k+' '+(c.title||''))) continue;
-        if(ok(c.value)) return {t:Number(c.value), src:'NIBE '+(c.title||k), id:nd.id, cap:k};
+        if(ok(c.value)) return {t:Number(c.value), src:'NIBE '+(c.title||k)};
       }
       for(const d of devs){
         if(d===nd||!/teknisk/i.test(d.name||'')) continue;
         const c=d.capabilitiesObj&&d.capabilitiesObj.measure_temperature;
-        if(c&&ok(c.value)) return {t:Number(c.value), src:d.name, id:d.id, cap:'measure_temperature'};
+        if(c&&ok(c.value)) return {t:Number(c.value), src:d.name};
       }
       return null;
     };
     const rom=findRoom();
-    // Til trendvinduet: hvilke enheter og capabilityer som finnes (for Innsikt)
-    trEnheter=devs.map(d=>({id:d.id, name:d.name, caps:Object.keys(d.capabilitiesObj||{})}));
-    trRom=rom&&rom.id?{id:rom.id, cap:rom.cap}:null;
 
     // Tank sensors (via Device Capabilities)
     const temps=TANK_SENSORS.map(s=>gvN(s.dev,s.cap));
@@ -2840,6 +2237,7 @@ async function doFetch() {
     _savCounter=(_savCounter+1)%4;
     if(_savCounter===0) savH();
 
+    const pts=H.t100.length;
     setStatus('Live · '+new Date().toLocaleTimeString('nb-NO',
       {hour:'2-digit',minute:'2-digit'})+''  ,'live');
     // Lukk tilkoblingsskuffen automatisk ved vellykket tilkobling
@@ -2936,13 +2334,11 @@ let varListe = null, varListeT = 0, varListeP = null, varListeN = '';
 // 150 kB), som dashbordet ikke bruker. Feiler henting per id (ny id, eller et
 // endepunkt som mangler), brukes hele lista igjen.
 let varIder = null, varIderT = 0;
-async function hentVarer(base, key, navn, tving){
+async function hentVarer(base, key, navn){
   // En variabel som ikke finnes ennå, gir ny full liste høyst hvert 30. min –
-  // ellers ville minuttloggen blitt lastet ned hver runde til den dukket opp.
-  // tving (trendvinduet, et bevisst trykk): høyst hvert 2. min, så nye
-  // variabler (nibe_trend) blir funnet straks scriptet er satt opp.
+  // ellers ville minuttloggen blitt lastet ned hver runde til den dukket opp
   const ukjente = varIder ? navn.filter(n => !varIder[n]) : navn;
-  if (varIder && (!ukjente.length || Date.now() - varIderT < (tving ? 2 : 30) * 60000)) {
+  if (varIder && (!ukjente.length || Date.now() - varIderT < 30 * 60000)) {
     try {
       return await Promise.all(navn.filter(n => varIder[n]).map(async n => {
         const r = await fetch(`${base}/api/manager/logic/variable/${varIder[n]}`, {headers:{'Authorization':'Bearer '+key}});
@@ -4025,8 +3421,8 @@ function wellGround05(ts){
   const doy = (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 0)) / 86400000;
   return 8.5 + 5 * Math.cos(2 * Math.PI * (doy - 222) / 365);
 }
-function wellLegGain(Tb, out, trom, t){
-  const P = WELLX.pipe, Tj = wellGround05(t ?? Date.now());
+function wellLegGain(Tb, out, trom){
+  const P = WELLX.pipe, Tj = wellGround05(Date.now());
   return ((trom ?? P.Trom) - Tb) * P.inne / P.Rluft + ((out ?? Tj) - Tb) * P.ute / P.Rluft + (Tj - Tb) * P.jord / P.Rjord;
 }
 
@@ -4143,17 +3539,6 @@ function wellSVG(fit, live){
     }
   });
   s += `<text x="6" y="${H - 7}" font-size="7.5" fill="rgba(255,255,255,.4)" ${mono}>gradient ${(pr.G * 100).toFixed(1)} K/100 m · målt i hullet 28.09 (grov)</text>`;
-  // Trefffelt for trendvinduet (v44) – øverst, så de får det lange trykket
-  const hit = (x, y, w, h, tr, trt) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="transparent" pointer-events="all" style="cursor:pointer" data-tr="${tr}" data-trt="${trt}"/>`;
-  s += hit(6, 14, 104, top - 24, 'trom', 'Teknisk rom');
-  if (live && live.bt10 != null && live.bt11 != null) {
-    s += hit(X - 104, top - 33, 96, 11, 'bronnUt', 'Brønnhode · ut av brønnen');
-    s += hit(X - 104, top - 22, 96, 11, 'bronnInn', 'Brønnhode · inn i brønnen');
-  }
-  pr.pts.forEach((p, i) => {
-    const cy = Math.min(H - 78, Math.max(top + 30, y(p.z) - 24));
-    s += hit(6, cy, 176, p.now == null ? 40 : 52, 'dybde' + i, `Fjellet · ${p.n} ${Math.round(p.z)} m`);
-  });
   return s + '</svg>';
 }
 
@@ -4185,7 +3570,7 @@ function wellScale(c){
     mk += `<div class="ws-m" style="left:${p}%"></div>`;
     val = `${c.val.toFixed(c.dec)}${c.err ? ' ± ' + c.err.toFixed(c.dec) : ''} <small>${c.unit}</small>`;
   } else val = `<span class="ws-wait">${c.wait || 'samler data'}</span>`;
-  return `<div class="ws"${c.tr ? ` data-tr="${c.tr}" data-trt="${c.trt}"` : ''}>
+  return `<div class="ws">
     <div class="ws-h"><span class="ws-lab">${c.label}</span><span class="ws-val">${val}</span></div>
     <div class="ws-t"><div class="ws-zw">${z}</div>${ref}${mk}</div>
     <div class="ws-lb">${lbl}</div>
@@ -4210,12 +3595,12 @@ function wellScales(fit, live){
     : 'Innenfor det bergarten selv kan gi — i hovedsak ren varmeledning.';
   // Alle skalaer har dårligere til venstre og bedre til høyre (v34).
   return [
-    wellScale({ tr: 'lam', trt: 'Varmeledningsevne λ', label: 'Varmeledningsevne <span class="ws-sym">λ</span>', unit: 'W/mK', dec: 2, min: 1.5, max: 4.5,
+    wellScale({ label: 'Varmeledningsevne <span class="ws-sym">λ</span>', unit: 'W/mK', dec: 2, min: 1.5, max: 4.5,
       zones: [{ to: 2.5, col: '#b45309', name: 'lav' }, { to: 3.0, col: '#0e7490', name: 'typisk' },
               { to: 3.5, col: '#15803d', name: 'god' }, { to: 4.5, col: '#1d4ed8', name: 'høy' }],
       ref: [W.lamRock[0], W.lamRock[1], 'Lindåsdekket, bergarten alene'],
       val: lam, err: eLam, wait: wait, note: lamNote }),
-    wellScale({ tr: 'rb', trt: 'Borehullsmotstand Rb', label: 'Borehullsmotstand <span class="ws-sym">R<sub>b</sub></span>', unit: 'K·m/W', dec: 3, min: 0.04, max: 0.22, rev: true,
+    wellScale({ label: 'Borehullsmotstand <span class="ws-sym">R<sub>b</sub></span>', unit: 'K·m/W', dec: 3, min: 0.04, max: 0.22, rev: true,
       zones: [{ to: 0.08, col: '#1d4ed8', name: 'svært god' }, { to: 0.10, col: '#15803d', name: 'god' },
               { to: 0.15, col: '#0e7490', name: 'middels' }, { to: 0.22, col: '#b45309', name: 'dårlig' }],
       ref: [0.088, 0.092, 'TurboCollector-datablad 0,09 (40 mm, turbulent)'],
@@ -4223,7 +3608,7 @@ function wellScales(fit, live){
       note: ok ? (fit.Rb > 0.11 ? 'Høyere enn databladet — passer med at strømningen ofte er laminær i 45 mm-røret.'
                                 : 'På nivå med databladet — god varmeovergang fra væske til fjell.')
                : 'Lavere er bedre. Laminær strømning øker motstanden merkbart.' }),
-    wellScale({ tr: 'rbLow', trt: 'Effektiv Rb ved lav last', label: 'Effektiv R<sub>b</sub> ved lav last', unit: 'K·m/W', dec: 2, min: 0.05, max: 0.8, rev: true,
+    wellScale({ label: 'Effektiv R<sub>b</sub> ved lav last', unit: 'K·m/W', dec: 2, min: 0.05, max: 0.8, rev: true,
       zones: [{ to: 0.15, col: '#15803d', name: 'lite tap' }, { to: 0.30, col: '#0e7490', name: 'merkbart' },
               { to: 0.8, col: '#b45309', name: 'vurder fast delta' }],
       val: okLow ? fit.RbLow : null, err: okLow ? Math.hypot(fit.sRbLow || 0, W.sysRb) : null, wait: wait,
@@ -4231,22 +3616,22 @@ function wellScales(fit, live){
                  `(ṁcp ${Math.round(fit.mcpLow || 0)} W/K) kjøler nedløpet oppløpet, og motstanden stiger fra ${fit.Rb.toFixed(3)} til ${fit.RbLow.toFixed(2)}. ` +
                  `Over 0,30: test fast delta 3,0 K i meny 7.1.2.7. Flow målt i ${fit.nMcp ?? 0} av ${fit.n} punkt.`
                : 'Ved lav flow kjøler nedløpet oppløpet. Over 0,30 kan fast delta 3,0 K i meny 7.1.2.7 lønne seg.' }),
-    wellScale({ tr: 't0w', trt: 'Upåvirket temperatur T₀', label: 'Upåvirket temperatur <span class="ws-sym">T₀</span>', unit: '°C', dec: 1, min: 3, max: 12,
+    wellScale({ label: 'Upåvirket temperatur <span class="ws-sym">T₀</span>', unit: '°C', dec: 1, min: 3, max: 12,
       zones: [{ to: 6, col: '#b45309', name: 'kaldt' }, { to: 8, col: '#0e7490', name: 'middels' },
               { to: 10, col: '#15803d', name: 'godt' }, { to: 12, col: '#1d4ed8', name: 'svært godt' }],
       ref: [W.Tsurf, W.Tsurf + W.gradMålt * W.zBot, 'forventet: årsmiddel 8 °C + målt gradient i hullet'],
       val: ok ? fit.T0 : null, err: ok ? Math.hypot(fit.sT0, W.sysT0) : null, wait: wait,
       note: 'Middel over den vannfylte sonen, 17–250 m. Usikkerheten domineres av givernes absolutte nøyaktighet.' }),
-    wellScale({ tr: 'ratio', trt: 'Grunnvannsbidrag λ / λbergart', label: 'Grunnvannsbidrag <span class="ws-sym">λ / λ<sub>bergart</sub></span>', unit: '×', dec: 2, min: 0.8, max: 1.8,
+    wellScale({ label: 'Grunnvannsbidrag <span class="ws-sym">λ / λ<sub>bergart</sub></span>', unit: '×', dec: 2, min: 0.8, max: 1.8,
       zones: [{ to: 1.05, col: '#475569', name: 'ledning' }, { to: 1.2, col: '#0e7490', name: 'lite' },
               { to: 1.5, col: '#0369a1', name: 'tydelig' }, { to: 1.8, col: '#1d4ed8', name: 'sterkt' }],
       val: ratio, wait: wait,
       note: 'Én aktiv sprekk gir typisk ~1,1. Brønnen har én kjent vannførende sprekk, på 70 m.' }),
-    wellScale({ tr: 'qMean', trt: 'Belastning, snitt', label: 'Belastning, snitt', unit: 'W/m', dec: 1, min: 0, max: 25, rev: true,
+    wellScale({ label: 'Belastning, snitt', unit: 'W/m', dec: 1, min: 0, max: 25, rev: true,
       zones: [{ to: 9, col: '#15803d', name: 'lett' }, { to: 17, col: '#0e7490', name: 'normal dim.' }, { to: 25, col: '#b45309', name: 'høy' }],
       val: ok ? fit.qMean : null, wait: wait,
       note: ok ? `Tilsvarer ${(fit.qMean * 8.76).toFixed(0)} kWh/m·år ved dagens rate. Norsk praksis tåler 80–150.` : 'Midlere uttak per meter over måleperioden.' }),
-    wellScale({ tr: 're', trt: 'Strømning i kollektoren (Re)', label: 'Strømning i kollektoren', unit: 'Re', dec: 0, min: 400, max: 3200,
+    wellScale({ label: 'Strømning i kollektoren', unit: 'Re', dec: 0, min: 400, max: 3200,
       zones: [{ to: 1800, col: '#b45309', name: 'laminær' }, { to: 3200, col: '#15803d', name: 'turbulent' }],
       val: re, wait: 'ingen flow',
       note: re ? `${flowAnslag ? 'Anslått' : 'Målt'} flow ${(live.flow * 60).toFixed(1)} l/min ved GP2 ${live.gp2} %` +
@@ -4310,8 +3695,6 @@ function buildWellPanel(){
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(fv, live) + '</div>' +
     `<div class="wp-st">${status}</div>` +
     `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) + kapasitetSeksjon(fv) + maalekontrollSeksjon();
-  wellVist = fv;                                       // trendvinduet viser verdien nå fra samme tilpasning
-  el.querySelectorAll('[data-tr]').forEach(e => btt(e, e.dataset.trt || '', e.dataset.tr, ''));
   // Om modellen (vises ikke i appen): samme fysikk som en termisk responstest
   // (linjekilde, superposisjon), anvendt på vanlig drift. Vannet i borehullet
   // er eget varmelager (61,6 kJ/m·K), og varmeutvekslingen mellom rørbeina ved
@@ -4361,9 +3744,7 @@ function wellUtvikling(){
                                    still: (trtData.still || []).filter(p => p[0] < k) }), forrige, { seg: arkivSeg() });
       if (r && r.ok) {
         forrige = r;
-        // v44: + Rb ved lav last, snittuttak og nedkjøling nå – til trendvinduet (eldre døgn har bare de seks første)
-        utvCache.e[d + off] = [r.lambda, r.sLambda, r.Rb, r.sRb, r.T0, r.sT0, r.RbLow, r.qMean, r.coolNow]
-          .map(v => Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null);
+        utvCache.e[d + off] = [r.lambda, r.sLambda, r.Rb, r.sRb, r.T0, r.sT0].map(v => Math.round(v * 1000) / 1000);
       } else utvCache.e[d + off] = null;
     } catch (_) { utvCache.e[d + off] = null; }
     visUtv();
@@ -4453,7 +3834,7 @@ async function exJSON(url, h){
 async function exVariabler(t){
   const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
   const ut = {};
-  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history', 'nibe_kjolekrets', 'nibe_trend', 'nibe_trend_naa']) {
+  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history', 'nibe_kjolekrets']) {
     const v = vars.find(x => x.name === navn);
     if (!v) { ut[navn] = null; continue; }
     try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
