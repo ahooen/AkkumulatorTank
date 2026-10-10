@@ -637,7 +637,7 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 45;
+const APP_VERSION = 46;
 
 // ══════════════════════════════════════════════════════════════
 // Varmesystem Dashboard  •  akkumulatortank.html
@@ -1151,7 +1151,13 @@ function trNaaTekst(a){
     else if (def.kilde === 'dogn') { const e = trFitE(wellVist); v = e ? f(e) : null; }
     else v = f(trLiveRec());
   } catch (_) { v = null; }
-  return v != null && isFinite(v) ? trFmt(v, def.d) + (def.enh ? `<small>${def.enh}</small>` : '') : '–';
+  const tekst = v != null && isFinite(v) ? trFmt(v, def.d) + (def.enh ? `<small>${def.enh}</small>` : '') : '–';
+  // Romsonen (v46): siste gyldige måling – nedtonet med måletid når den er over 15 min gammel, som flisa
+  if (def.sone && v != null) {
+    const x = soneVis(id === 'romRH' ? 'romRH' : 'romT');
+    if (x && x.gammel) return `<span style="opacity:.5" title="Målt ${soneTid(x.t)}">${tekst}</span>`;
+  }
+  return tekst;
 }
 
 // ── Data ────────────────────────────────────────────────────
@@ -3058,34 +3064,78 @@ async function fetchKjole(base, key){
   try { if (nibe_last) buildVPInternal(nibe_last); } catch (_) {}
 }
 
-// ── Romsonen (v45) ──
+// ── Romsonen (v45, v46) ──
 // nibe_lokal.js skriver «nibe_sone» hvert minutt: { v:1, t, sp, spMin, spMax,
-// romT, romRH } – ønsket temperatur i sone 1 (holding-register 2505) og
+// romT, romRH, sist } – ønsket temperatur i sone 1 (holding-register 2505) og
 // THS10-giveren i stua. nibe_setpunkt.js legger til spT når settpunktet endres.
 // Dashbordet viser bare: settpunktet endres i MerTappevann, som ligger lokalt.
 // Denne appen ligger på GitHub og brukes utenfra – den skal aldri kunne skrive
 // til pumpen, og API-nøkkelen skal ikke ha HomeyScript-tilgang.
-// Verdiene vises bare når de er skrevet de siste 5 min.
-const SONE_VAR = 'nibe_sone', SONE_EVERY = 60000, SONE_FERSK = 5 * 60000;
-let soneData = null, soneLast = 0;
+//
+// v46: flisene viser siste gyldige verdi, ikke «–». THS10 mister av og til
+// kontakten med pumpen (Wi-Fi), en runde i nibe_lokal kan feile, og ved
+// åpning var lagret data ofte over 5 min gammel – da forsvant både stua,
+// fukten og settpunktet til neste henting. Kilder, nyeste måling vinner:
+//   – nåverdiene i nibe_sone (målt t, settpunktet spT når det er nyere)
+//   – nibe_sone.sist – siste gyldige verdi med måletid (nibe_lokal 1.1)
+//   – det dashbordet selv har sett før (localStorage «soneSist»), så verdiene
+//     står der med en gang appen åpnes, også med nibe_lokal 1.0.
+// Stua og fukten vises nedtonet når målingen er over 15 min gammel, med
+// måletidspunktet i verktøytipset. Settpunktet står alltid nedtonet.
+// Trendloggen (nibe_trend) bruker bare nåverdiene – ingen gjentatte verdier.
+const SONE_VAR = 'nibe_sone', SONE_EVERY = 60000, SONE_GAMMEL = 15 * 60000;
+const SONE_OMR = { sp: [5, 35], romT: [0, 45], romRH: [0, 100] };
+let soneData = null, soneLast = 0, soneSist = {};
 try { const c = localStorage.getItem('soneCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) soneData = p; } } catch(_) {}
+try { const c = JSON.parse(localStorage.getItem('soneSist') || 'null'); if (c && typeof c === 'object') soneSist = c; } catch(_) {}
+const soneOk = (k, v) => typeof v === 'number' && isFinite(v) && v >= SONE_OMR[k][0] && v <= SONE_OMR[k][1];
+// Tar vare på den nyeste gyldige målingen per størrelse: soneSist[k] = [verdi, målt]
+function soneHusk(d){
+  if (!d || d.v !== 1) return;
+  let endret = false;
+  for (const k of Object.keys(SONE_OMR)) {
+    const kand = [];
+    if (soneOk(k, d[k]) && Number.isFinite(d.t))
+      kand.push([d[k], k === 'sp' && Number.isFinite(d.spT) ? Math.max(d.t, d.spT) : d.t]);
+    const si = d.sist && d.sist[k];
+    if (Array.isArray(si) && soneOk(k, si[0]) && Number.isFinite(si[1])) kand.push([si[0], si[1]]);
+    for (const [v, t] of kand) {
+      if (t > Date.now() + 300000) continue;       // Homey-klokke langt foran: ikke lås verdien fast
+      const g = soneSist[k];
+      if (!Array.isArray(g) || !soneOk(k, g[0]) || !(g[1] >= t)) { soneSist[k] = [v, t]; endret = true; }
+    }
+  }
+  if (endret) { try { localStorage.setItem('soneSist', JSON.stringify(soneSist)); } catch(_) {} }
+}
+soneHusk(soneData);                                // lagret nibe_sone fra v45
+// Siste gyldige verdi: { v, t, gammel } eller null
+function soneVis(k, nu){
+  const g = soneSist[k];
+  if (!Array.isArray(g) || !soneOk(k, g[0]) || !Number.isFinite(g[1])) return null;
+  return { v: g[0], t: g[1], gammel: (nu ?? Date.now()) - g[1] > SONE_GAMMEL };
+}
+// Nåverdien slik flisene viser den (trendvinduets «nå»)
 function soneVerdier(nu){
-  const d = soneData, now = nu ?? Date.now();
-  if (!d || d.v !== 1) return null;
-  const fT  = Number.isFinite(d.t) && now - d.t <= SONE_FERSK;
-  const fSp = fT || (Number.isFinite(d.spT) && now - d.spT <= SONE_FERSK);
-  if (!fT && !fSp) return null;
-  const ok = (v, a, b) => (typeof v === 'number' && isFinite(v) && v >= a && v <= b) ? v : null;
-  return { romT: fT ? ok(d.romT, 0, 45) : null, romRH: fT ? ok(d.romRH, 0, 100) : null, sp: ok(d.sp, 5, 35) };
+  const T = soneVis('romT', nu), RH = soneVis('romRH', nu), SP = soneVis('sp', nu);
+  if (!T && !RH && !SP) return null;
+  return { romT: T ? T.v : null, romRH: RH ? RH.v : null, sp: SP ? SP.v : null };
+}
+function soneTid(t){
+  const d = new Date(t), i = new Date();
+  const kl = d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === i.toDateString() ? 'kl. ' + kl : d.toLocaleDateString('nb-NO', { day: 'numeric', month: 'numeric' }) + ' kl. ' + kl;
 }
 function buildSone(){
   const el = document.getElementById('vStue'), rh = document.getElementById('vRomRH');
   if (!el || !rh) return;
-  const s = soneVerdier();
+  const nu = Date.now(), T = soneVis('romT', nu), RH = soneVis('romRH', nu), SP = soneVis('sp', nu);
+  const ned = x => x && x.gammel ? ' style="opacity:.5"' : '';
   // Som utetemperaturen: målt verdi, med ønsket verdi nedtonet i parentes bak
-  el.innerHTML = (s && s.romT != null ? `${s.romT.toFixed(1)}<span class="mu">°C</span>` : '–') +
-    (s && s.sp != null ? `<span style="opacity:.45;font-size:.8em;margin-left:.25em">(${s.sp.toFixed(1)}°)</span>` : '');
-  rh.innerHTML = s && s.romRH != null ? `${Math.round(s.romRH)}<span class="mu">%</span>` : '–';
+  el.innerHTML = (T ? `<span${ned(T)}>${T.v.toFixed(1)}<span class="mu">°C</span></span>` : '–') +
+    (SP ? `<span style="opacity:.45;font-size:.8em;margin-left:.25em">(${SP.v.toFixed(1)}°)</span>` : '');
+  rh.innerHTML = RH ? `<span${ned(RH)}>${Math.round(RH.v)}<span class="mu">%</span></span>` : '–';
+  el.title = T ? 'Stua målt ' + soneTid(T.t) : '';
+  rh.title = RH ? 'Målt ' + soneTid(RH.t) : '';
 }
 async function fetchSone(base, key){
   if (Date.now() - soneLast < SONE_EVERY) return;
@@ -3094,7 +3144,7 @@ async function fetchSone(base, key){
     const v = (await hentVarer(base, key, [SONE_VAR])).find(x => x && x.name === SONE_VAR);
     if (v && v.value) {
       const p = JSON.parse(v.value);
-      if (p && p.v === 1) { soneData = p; try { localStorage.setItem('soneCache', v.value); } catch(_) {} }
+      if (p && p.v === 1) { soneData = p; soneHusk(p); try { localStorage.setItem('soneCache', v.value); } catch(_) {} }
     }
   } catch (_) {}
   try { buildSone(); } catch (_) {}
