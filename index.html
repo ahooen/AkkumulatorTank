@@ -637,9 +637,8 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 49;   // v49 (24.10.2026): grunnvann gjennom brønnen (l/t og andel av varmen, wellVann); opprydding:
-                          // λ fra stillstandene, grunnvann fra kapasitetsdelen, romføler 2 og målekontrollen (etter låsing) ute;
-                          // dagsmerkene i trendgrafene mister ikke lenger gårsdagen; eksporten uten minuttloggen (brønnscriptet 2.13)
+const APP_VERSION = 49;   // v49 (24.10.2026): Nibe Live erstatter Nibe S-series – de tre enhetene settes sammen
+                          // til den gamle «Nibe S-Series» (se nibeLiveInn), og Innsikt hentes fra Nibe Live
                           // v48 (21.10.2026): brønnen – forhistorien 17.5–25.9 låst til målt 3,1 W/m (drift og stillstand),
                           // λ-skala til 6, konservativ grunnvannskonklusjon (λ fra tilpasningen, ikke stillstandene);
                           // romføler nr. 2 i trendene for stue og fukt
@@ -649,7 +648,7 @@ const APP_VERSION = 49;   // v49 (24.10.2026): grunnvann gjennom brønnen (l/t o
 // Varmesystem Dashboard  •  akkumulatortank.html
 // ──────────────────────────────────────────────────────────────
 // Homey Pro  +  Nibe S1256-8kW  +  500L akkumulatortank
-// Data: Homey Cloud API → Fibaro (tank-temps) + NIBE S-Series (Modbus)
+// Data: Homey Cloud API → Fibaro (tank-temps) + NIBE S1256 (Nibe Live, Modbus) og NIBE-skriptene
 //
 // Seksjoner (Ctrl+F etter «//»-merke):
 //   KONFIGURASJON   konstanter, device-navn, Modbus-kapabiliteter
@@ -678,7 +677,7 @@ const TANK_SENSORS = [
   {pct:0,   name:'Retur',  dev:FIBARO_DEV, cap:'measure_temperature.external3'},
 ];
 
-// Nibe S-Series Modbus capabilities
+// Capability-navnene fra Nibe S-series – verdiene kommer fra Nibe Live (se nibeLiveInn)
 const N = {
   scop   : 'devicecapabilities_number.number1', // from DC device
   scopDev:   'Nibe S1256-8kw',
@@ -771,6 +770,76 @@ const COPW_DEV    = 'Nibe COP Tappevann 24t';  // COP tappevann 24t
 const COPHT_DEV   = 'Nibe COP Varme Total';       // COP husvarme akkumulert
 const COPWT_DEV   = 'Nibe COP Tappevann Total';   // COP tappevann akkumulert
 const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) – nibe_lokal.js (REST), før myUplink
+
+// ── Nibe Live (v49, 24.10.2026) ──────────────────────────────
+// Nibe Live erstatter Nibe S-series og deler pumpen i tre enheter: Nibe Main,
+// Nibe Heating og Nibe Hot Water. nibeLiveInn() setter dem sammen til én
+// enhet i enhetslista, med det gamle navnet (NIBE_DEV) og de gamle
+// capability-navnene, så resten av appen er uendret. Spisslasten (1027) gjøres
+// om fra W til kW og driftsprioriteringen (1028) til engelsk tekst, som før.
+// _kilde gir enheten og capabilityen i Nibe Live – Innsikt hentes derfra.
+const NIBE_LIVE = { main: '643249d6-1260-4b67-b25f-67c6ad96af44',       // Nibe Main
+                    heating: 'f6a62b10-96d7-400d-bb15-bf5c6ab74fcb',    // Nibe Heating
+                    hotwater: 'd02b33b2-1efc-4dbd-9dba-f8fccd1fd3cc' }; // Nibe Hot Water
+const NIBE_KART = {   // gammelt navn: [enhet, capability i Nibe Live, omregning]
+  [N.supply]: ['heating', 'measure_temperature.i5_heating_supply'],
+  [N.calcSupply]: ['heating', 'measure_temperature.i1017_calculated_supply'],
+  [N.ret]: ['heating', 'measure_temperature.i7_heating_return'],
+  [N.brineIn]: ['main', 'measure_temperature.i10_source_in'],
+  [N.brineOt]: ['main', 'measure_temperature.i11_source_out'],
+  [N.bt7]: ['hotwater', 'measure_temperature.i8_warmwater_top'],
+  [N.gm]: ['heating', 'measure_degree_minutes_NIBE.h11_degree_minutes'],
+  [N.flow]: ['heating', 'measure_water.i40_flow_sensor'],
+  [N.bt6]: ['hotwater', 'measure_temperature.i9_hot_water'],
+  [N.outdoor]: ['heating', 'measure_temperature.i1_outside'],
+  'measure_temperature_NIBE.i37_outside_avg': ['heating', 'measure_temperature.i37_outside_avg'],
+  'measure_temperature_NIBE.i26_inside': ['heating', 'measure_temperature'],          // BT50, register 26
+  [N.hpPct]: ['heating', 'measure_percentage_NIBE.i1102_heating_pump'],
+  [N.srcPct]: ['main', 'measure_percentage_NIBE.i1104_source_pump'],
+  [N.disch]: ['main', 'measure_temperature.i13_discharge'],
+  [N.bt12]: ['heating', 'measure_temperature.i12_heating_supply'],
+  [N.bt15]: ['main', 'measure_temperature.i14_liquid_line'],
+  [N.bt17]: ['main', 'measure_temperature.i16_suction_gas'],
+  [N.hz]: ['main', 'measure_frequency.i1046_compressor'],
+  [N.pwr]: ['main', 'measure_watt_NIBE.i2166_energy_usage'],
+  [N.compStarts]: ['main', 'measure_count_NIBE.i1083_compressor_starts'],
+  [N.compHours]: ['main', 'measure_hour_NIBE.i1087_compressor_usage_total'],
+  [EL_CAP]: ['main', 'measure_watt_NIBE.i1027_additive_effect', w => w / 1000],   // W → kW
+};
+const PRIO_KODE = { 10: 'Off', 20: 'Hot water', 30: 'Heating', 40: 'Pool', 41: 'Pool', 50: 'Transfer', 60: 'Cooling' };
+function nibePrio(c){
+  const k = c['measure_priority_NIBE.i1028_priority_value']?.value;
+  if (typeof k === 'number' && PRIO_KODE[k]) return PRIO_KODE[k];
+  const t = String(c['measure_enum_NIBE.i1028_priority']?.value ?? '').trim().toLowerCase();
+  if (!t) return null;
+  if (/varmtvann|varmvatten|hot ?water/.test(t)) return 'Hot water';
+  if (/kjøl|kyl|cool/.test(t)) return 'Cooling';
+  if (/basseng|pool/.test(t)) return 'Pool';
+  if (/varme|värme|heat/.test(t)) return 'Heating';
+  if (/^(av|off|från)$/.test(t)) return 'Off';
+  return t;
+}
+// Legger den sammensatte enheten først i lista og tar ut den gamle
+// «Nibe S-Series» (Nibe S-series er avslått og har bare gamle verdier).
+// Finnes ingen av Nibe Live-enhetene, endres ingenting.
+function nibeLiveInn(devs){
+  const enh = {};
+  for (const [r, id] of Object.entries(NIBE_LIVE)) enh[r] = devs.find(d => d && d.id === id) || null;
+  if (!enh.main && !enh.heating && !enh.hotwater) return;
+  const co = {}, kilde = {};
+  for (const [gml, [r, ny, f]] of Object.entries(NIBE_KART)) {
+    const c = enh[r]?.capabilitiesObj?.[ny];
+    if (!c) continue;
+    co[gml] = { ...c, id: gml, value: c.value == null ? null : (f ? f(c.value) : c.value) };
+    kilde[gml] = { id: enh[r].id, cap: ny };
+  }
+  const cm = enh.main?.capabilitiesObj || {};
+  const pc = cm['measure_priority_NIBE.i1028_priority_value'] || cm['measure_enum_NIBE.i1028_priority'];
+  if (pc) co[N.prio] = { ...pc, id: N.prio, value: nibePrio(cm) };
+  for (let i = devs.length - 1; i >= 0; i--) if (devs[i] && devs[i].name === NIBE_DEV) devs.splice(i, 1);
+  devs.unshift({ id: NIBE_LIVE.main, name: NIBE_DEV, capabilitiesObj: co, _kilde: kilde,
+                 available: Object.values(enh).every(d => d && d.available !== false) });
+}
 
 const REF = 25, KWH = 0.5815;
 const HIST_EVERY = 20; // SCOP-grafen får nytt punkt hvert 20. fetch (20×15s = 5 min)
@@ -929,7 +998,7 @@ const TRS = {
   bt12: trM('bt12', 1, '°C'), bt15: trM('bt15', 1, '°C'), disch: trM('disch', 1, '°C'), bt17: trM('bt17', 1, '°C'),
   flow: trM('flow', 1, 'l/m'), hpPct: trM('hpPct', 0, '%'), srcPct: trM('srcPct', 0, '%'),
   gm: trM('gm', 0, 'GM'), hz: trM('hz', 1, 'Hz'), pwr: trM('pwr', 0, 'W'),
-  // Innsikt har appens rå verdi (kW, skala 100) – normaliseres som i doFetch
+  // Innsikt har appens rå verdi (W i Nibe Live, kW i Nibe S-series) – normaliseres som i doFetch
   elAdd:     { inn: ['elAdd','pwr'], f: r => r.elAdd == null ? null : (r.kilde === 'I' ? elToKW(r.elAdd, r.pwr ?? 0) : r.elAdd), d: 2, enh: 'kW' },
   compStarts: { ...trM('compStarts', 0, 'stk'), type: 'teller' },
   compHours:  { ...trM('compHours', 0, 't'), type: 'teller' },
@@ -954,13 +1023,16 @@ const TRS = {
   // Re ∝ flow: et timesnitt av GP2 tar med stopp-tiden og ville gitt for lav Re – bare fra scriptet
   re:       { f: r => r.kilde === 'I' ? null : wellRe(trFlowW(r), trSn([r.brineIn, r.brineOt])), d: 0, enh: '' },
   // Romsonen (v45) – nibe_sone via nibe_trend v1.1; finnes ikke i Innsikt.
-  // v49: «romføler 2» (v48) er tatt ut igjen. Den viste seg å være BT50 i
-  // teknisk bod («Teknisk Bod», bare temperatur, ikke brukt i styringen) –
-  // samme verdi som «Teknisk rom» (trom), som allerede har egen trend.
+  // v48: romføler nr. 2 (nibe_lokal/nibe_trend 1.2) som egen linje, med navnet
+  // den har i pumpen. Valgfri: uten timesverdier vises den ikke (heller ikke i
+  // forklaringen). Står sist, så de andre linjene beholder fargene sine.
   stue:  { d: 1, enh: '°C', sone: true, linjer: [
            { navn: 'Stue', f: r => r.romT },
-           { navn: 'Ønsket', f: r => r.soneSp, stiplet: true }] },
-  romRH: { f: r => r.romRH, d: 0, enh: '%', sone: true },
+           { navn: 'Ønsket', f: r => r.soneSp, stiplet: true },
+           { navnF: rom2Navn, f: r => r.romT2, valgfri: true }] },
+  romRH: { d: 0, enh: '%', sone: true, linjer: [
+           { navn: 'Stue', f: r => r.romRH },
+           { navnF: rom2Navn, f: r => r.romRH2, valgfri: true }] },
   // Kjølekretsen – loggen «nibe_kjolekrets_logg» (nibe_lokal.js)
   bp8d: { kilde: 'kjole', d: 1, enh: '°C' }, bt84: { kilde: 'kjole', d: 1, enh: '°C' },
   sh:   { kilde: 'kjole', d: 1, enh: 'K' },  bp9d: { kilde: 'kjole', d: 1, enh: '°C' },
@@ -969,6 +1041,7 @@ const TRS = {
   rb:    { kilde: 'dogn', f: e => e[2], d: 3, enh: 'K·m/W' },
   rbLow: { kilde: 'dogn', f: e => e[6], d: 2, enh: 'K·m/W' },
   t0w:   { kilde: 'dogn', f: e => e[4], d: 1, enh: '°C' },
+  ratio: { kilde: 'dogn', f: e => e[0] == null ? null : e[0] / WELLX.lamPrior, d: 2, enh: '×' },
   qMean: { kilde: 'dogn', f: e => e[7], d: 1, enh: 'W/m' },
 };
 // Temperaturkortene i brønnen: upåvirket og ved hullet nå på tre dyp
@@ -984,7 +1057,7 @@ const TR_OMR = { t100: [-20,110], t75: [-20,110], t50: [-20,110], t25: [-20,110]
   supply: [-20,110], ret: [-20,110], calcSupply: [-20,110], brineIn: [-30,40], brineOt: [-30,40],
   bt7: [-20,110], bt6: [-20,110], bt5: [-20,110], gm: [-10000,10000], flow: [0,200],
   outAvg: [-50,50], out37: [-50,50], hpPct: [0,100], srcPct: [0,100], disch: [-30,150],
-  bt12: [-20,110], bt15: [-30,110], bt17: [-40,80], hz: [0,200], pwr: [0,30000], elAdd: [0,1000],
+  bt12: [-20,110], bt15: [-30,110], bt17: [-40,80], hz: [0,200], pwr: [0,30000], elAdd: [0,7000],
   compStarts: [0,1e7], compHours: [0,1e6], trom: [5,40],
   scopDC: [0.01,20], scop24: [0.01,20], copHeat: [0.01,20], copHw: [0.01,20], copHeatT: [0.01,20], copHwT: [0.01,20] };
 
@@ -1144,6 +1217,7 @@ function trLiveRec(){
   r.flowW = wellFlowLps(n) ?? wellFlowEst(n);
   const s = soneVerdier();
   r.romT = s ? s.romT : null; r.romRH = s ? s.romRH : null; r.soneSp = s ? s.sp : null;
+  r.romT2 = s ? s.romT2 : null; r.romRH2 = s ? s.romRH2 : null;
   return r;
 }
 const trFitE = f => f ? [f.lambda, f.sLambda, f.Rb, f.sRb, f.T0, f.sT0, f.RbLow, f.qMean, f.coolNow] : null;
@@ -1240,6 +1314,7 @@ function trKilde(k){
   if (!d) return null;
   let cap = s[2] ? d.caps.find(c => c.startsWith(s[1])) : (d.caps.includes(s[1]) ? s[1] : null);
   if (!cap && k === 'elAdd') cap = d.caps.find(c => c.includes('.' + EL_CAP_PREFIX + '_') || c.endsWith('.' + EL_CAP_PREFIX));
+  if (cap && d.kilde && d.kilde[cap]) return d.kilde[cap];          // v49: Nibe Live-enheten
   return cap ? { id: d.id, cap } : null;
 }
 const trIns = {};
@@ -1351,9 +1426,10 @@ async function trData(id, medIns){
   let sist = L.naa && Number.isFinite(L.naa.t) && L.naa.t > 0 ? L.naa.t : null;
   if (sist == null && L.hist && L.hist.rader.length) sist = (L.hist.rader[L.hist.rader.length - 1][0] + 60) * 60000;
   return { oppl: 't', t0, t1: nu, logg: L.funnet, loggSist: sist, trengerIns: trenger,
-    linjer: linjer.map(l => ({ navn: l.navn, farge: l.farge, stiplet: l.stiplet,
+    linjer: linjer.map(l => ({ navn: l.navnF ? l.navnF() : l.navn, farge: l.farge, stiplet: l.stiplet, valgfri: l.valgfri,
       pts: recs.map(r => { let v = null; try { v = l.f(r); } catch (_) {} return { t: Math.min(r.tc, nu), v }; })
-               .filter(p => p.v != null && Number.isFinite(p.v) && p.t >= t0) })) };
+               .filter(p => p.v != null && Number.isFinite(p.v) && p.t >= t0) }))
+      .filter(l => !(l.valgfri && !l.pts.length)) };
 }
 // Kjølekretsens logg: egen variabel fra nibe_lokal.js, hentet først når et
 // kjølekretsvindu åpnes og gjenbrukt i 5 min (≈ 40 kB – skal ikke lastes
@@ -1474,13 +1550,7 @@ function trSVG(D, W, H, def){
     const tekst = pW / 7 >= 40 ? `${TR_DAG[dd.getDay()]} ${dd.getDate()}.` : TR_DAG[dd.getDay()];   // smal skjerm: bare ukedag
     const hb = tekst.length * 3.1 + 1;                               // halv bredde ved 10 px DM Mono
     let xm = (xa + xb) / 2;
-    if (i === gr.length - 2 && i > 0) {
-      xm = Math.min(Math.max(xm, xa + hb + 2), W - hb);   // dagens døgn: etter midnattsstreken
-      // v49: får ikke dagens merke plass uten å skyve ut gårsdagens (hele) døgn,
-      // står i dag uten merke. Før forsvant gårsdagen midt på dagen – et hull i aksen.
-      const xg = (px(gr[i - 1]) + xa) / 2;
-      if (xm - xg < 2 * hb + 4) continue;
-    }
+    if (i === gr.length - 2 && i > 0) xm = Math.min(Math.max(xm, xa + hb + 2), W - hb);   // dagens døgn: etter midnattsstreken
     if (i === 0 && gr.length > 2) xm = Math.max(Math.min(xm, xb - hb - 2), PL - 6 + hb);  // første døgn: før midnattsstreken
     if (forrigeX - xm < 2 * hb + 4 || xm - hb < PL - 8 || xm + hb > W) continue;
     if (i === 0 && gr.length > 2 && !tekst.includes('.')) continue;   // bare ukedag: ikke samme ukedag to ganger
@@ -2784,6 +2854,7 @@ async function doFetch() {
     if(res.status===403) throw new Error('403 – Mangler rettigheter');
     if(!res.ok) throw new Error('HTTP '+res.status);
     const devs=Object.values(await res.json());
+    nibeLiveInn(devs);   // v49: Nibe Live som den gamle «Nibe S-Series»
 
     // Helper: get value from any capability
     const gv=(devName, capKey)=>{
@@ -2826,7 +2897,8 @@ async function doFetch() {
       const nd=devs.find(x=>x.name===NIBE_DEV);
       const co=(nd&&nd.capabilitiesObj)||{};
       const k26=Object.keys(co).find(k=>k.startsWith('measure_temperature')&&/\.i26(_|$)/.test(k));
-      if(k26&&ok(co[k26].value)) return {t:Number(co[k26].value), src:'BT50', id:nd.id, cap:k26};
+      if(k26&&ok(co[k26].value)){ const kk=nd._kilde&&nd._kilde[k26];
+        return {t:Number(co[k26].value), src:'BT50', id:kk?kk.id:nd.id, cap:kk?kk.cap:k26}; }
       for(const k of Object.keys(co)){
         const c=co[k]||{};
         if(!k.startsWith('measure_temperature')) continue;
@@ -2842,13 +2914,13 @@ async function doFetch() {
     };
     const rom=findRoom();
     // Til trendvinduet: hvilke enheter og capabilityer som finnes (for Innsikt)
-    trEnheter=devs.map(d=>({id:d.id, name:d.name, caps:Object.keys(d.capabilitiesObj||{})}));
+    trEnheter=devs.map(d=>({id:d.id, name:d.name, caps:Object.keys(d.capabilitiesObj||{}), kilde:d._kilde||null}));
     trRom=rom&&rom.id?{id:rom.id, cap:rom.cap}:null;
 
     // Tank sensors (via Device Capabilities)
     const temps=TANK_SENSORS.map(s=>gvN(s.dev,s.cap));
 
-    // NIBE data direct from Modbus (Nibe S-Series)
+    // NIBE-data (Nibe Live, satt sammen til «Nibe S-Series» av nibeLiveInn)
     const nibe={
       trom   : rom ? rom.t : null, tromSrc: rom ? rom.src : null,
       scopDC : gvN(SCOP_DEV,   N.scop),      // cumulative SCOP since startup
@@ -3098,7 +3170,7 @@ async function fetchKjole(base, key){
 // måletidspunktet i verktøytipset. Settpunktet står alltid nedtonet.
 // Trendloggen (nibe_trend) bruker bare nåverdiene – ingen gjentatte verdier.
 const SONE_VAR = 'nibe_sone', SONE_EVERY = 60000, SONE_GAMMEL = 15 * 60000;
-const SONE_OMR = { sp: [5, 35], romT: [0, 45], romRH: [0, 100] };
+const SONE_OMR = { sp: [5, 35], romT: [0, 45], romRH: [0, 100], romT2: [0, 45], romRH2: [0, 100] };   // romT2/romRH2: føler nr. 2 (v48)
 let soneData = null, soneLast = 0, soneSist = {};
 try { const c = localStorage.getItem('soneCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) soneData = p; } } catch(_) {}
 try { const c = JSON.parse(localStorage.getItem('soneSist') || 'null'); if (c && typeof c === 'object') soneSist = c; } catch(_) {}
@@ -3131,8 +3203,15 @@ function soneVis(k, nu){
 // Nåverdien slik flisene viser den (trendvinduets «nå»)
 function soneVerdier(nu){
   const T = soneVis('romT', nu), RH = soneVis('romRH', nu), SP = soneVis('sp', nu);
-  if (!T && !RH && !SP) return null;
-  return { romT: T ? T.v : null, romRH: RH ? RH.v : null, sp: SP ? SP.v : null };
+  const T2 = soneVis('romT2', nu), RH2 = soneVis('romRH2', nu);
+  if (!T && !RH && !SP && !T2 && !RH2) return null;
+  return { romT: T ? T.v : null, romRH: RH ? RH.v : null, sp: SP ? SP.v : null,
+           romT2: T2 ? T2.v : null, romRH2: RH2 ? RH2.v : null };
+}
+// Navnet romføler nr. 2 har i pumpen (nibe_sone.navn.romT2 fra nibe_lokal 1.2)
+function rom2Navn(){
+  const n = soneData && soneData.navn && soneData.navn.romT2;
+  return typeof n === 'string' && n.trim() ? n.trim().slice(0, 24) : 'Rom 2';
 }
 function soneTid(t){
   const d = new Date(t), i = new Date();
@@ -3491,12 +3570,9 @@ function wellFit(d, forrige, valg){
     // ukjent, og q_før er fri parameter som før.
     const forSlutt = wStart + hb.b0 * 1000, DAG = 86400000;
     const fastQ = Math.abs(forSlutt - W.loggStart) <= DAG && wStart - base <= DAG && W.opStart < forSlutt ? W.qFor : null;
-    const a0 = Math.min(0, (W.opStart - wStart) / 1000);
-    // v49: med låst forhistorie er hele uttaket før perioden kjent – [fra, til, W/m]
-    // i sekunder før periodestart – og simuleres med samme modell (forSim)
-    const pre = fastQ != null ? [[a0, hb.b0, fastQ], ...hb.blk] : null;
-    return { q, row, start, N, days, qA, vi, hb: hb.blk, a0, b0: hb.b0,
-             prior: Math.max(0, (wStart - W.opStart) / 1000), fastQ, pre };
+    return { q, row, start, N, days, qA, vi, hb: hb.blk,
+             a0: Math.min(0, (W.opStart - wStart) / 1000), b0: hb.b0,
+             prior: Math.max(0, (wStart - W.opStart) / 1000), fastQ };
   }
   // Kjent døgnhistorikk før perioden (scriptets st.hist, W/m·10 per døgn),
   // slått sammen i blokker som blir lengre jo eldre de er (maks alder/8):
@@ -3523,8 +3599,7 @@ function wellFit(d, forrige, valg){
     return { blk, b0: (dager[0][0] - S) / 1000 };
   }
   // Respons fra kjent historikk: Σ q·[E1(xk/(t−a)) − E1(xk/(t−b))], på et
-  // rutenett hver 6. time og interpolert (glatt, og første døgn hoppes over).
-  // Brukes bare når forhistorien er fri (uten grunnvannsledd).
+  // rutenett hver 6. time og interpolert (glatt, og første døgn hoppes over)
   function histRespons(sg, xk){
     if (!sg.hb.length) return null;
     const st = 6 * 3600, M = Math.ceil(sg.N * HOUR / st) + 2, Hg = new Float64Array(M);
@@ -3554,94 +3629,24 @@ function wellFit(d, forrige, valg){
   }
   const K = segs.length, P = 4 + 2 * (K - 1);
   const kQ = s => s === 0 ? 1 : 4 + 2 * (s - 1), kR = s => s === 0 ? 2 : 5 + 2 * (s - 1);
-  const { N, qA, start, days, q } = hoved;
-
-  // v49: GRUNNVANN GJENNOM HULLET. Vann som strømmer gjennom borehullet
-  // (sprekken på 70 m) kommer inn med fjellets temperatur T₀ og blander seg
-  // med vannet i hullet (fyllet). Det gir fyllet en ekstra varmetilførsel
-  //     G_w · (T₀ − T_fyll)   W/m,   G_w = ṁ·c / L
-  // parallelt med fjellet. Ren varmeledning svarer med ln(tid) uten ende;
-  // med grunnvann flater nedkjølingen ut – den formen skiller de to.
-  // Vannmengden er V = G_w·L / (ρc), ρc = 4,19 MJ/m³K – som om grunnvannet
-  // går inn med T₀ og ut med temperaturen i hullet. Blander det seg bare
-  // delvis, er strømmen større enn dette.
-  // Krever kjent forhistorie (låst q_før), for grunnvannet virket også før
-  // loggingen. Uten valg.vann er G_w = 0 (dashbordets hovedtilpasning): da
-  // er λ effektiv og tar med alt som tilfører varme. Med valg.vann søkes G_w;
-  // valg.lam låser λ (bergartens egen – se wellVann), valg.gw låser G_w.
-  // Med alt fritt skiller dataene 21.10–24.10 IKKE de to: restsummen er nesten
-  // flat fra λ 5,5 uten vann til λ 2,2 med 570 l/t (avvik 0,120 → 0,125 K).
-  // I syntetiske data med 0,02 K støy fant tilpasningen både λ og G_w.
-  const vann = segs.every(sg => sg.pre) && !!valg && (valg.vann === true || Number.isFinite(valg.gw));
-  const gwF = !vann ? 0 : Number.isFinite(valg.gw) ? valg.gw : null;
-  const lamF = valg && Number.isFinite(valg.lam) ? valg.lam : null;
-
-  // Uttaket før perioden (sg.pre), simulert grovt (6–24 t-steg) med fjell, fyll
-  // og grunnvann. Fyllet er i likevekt innen hvert steg (τ under 1,2 t). Svar:
-  // veggtemperaturen uttaket før perioden gir i perioden (glatt, på samme
-  // rutenett) og fyllets tilstand og fluksen ut av fjellet ved periodestart.
-  // Med G_w = 0 er dette samme ledd som v48 (q_før·Pr og kjent historikk).
-  function forSim(sg, xk, fl, R2, Gw){
-    const blk = sg.pre, a = Math.min(...blk.map(b => b[0]));
-    // Grovsteg 6 t, men høyst ≈ 600 steg: lengre steg når forhistorien blir
-    // lang (≈ 15 t etter ett år), aldri over ett døgn – døgnhistorikken har
-    // uansett døgnoppløsning. Kostnaden holder seg da under ≈ 0,4 M operasjoner.
-    const Hc = Math.min(86400, Math.max(21600, Math.ceil(-a / 600 / 3600) * 3600));
-    const nC = Math.max(1, Math.ceil(-a / Hc)), t0 = -nC * Hc;
-    const qc = new Float64Array(nC);                // snittuttak per grovsteg
-    for (const [fa, ta, v] of blk) {
-      if (!(ta > fa) || !Number.isFinite(v)) continue;
-      for (let k = Math.max(0, Math.floor((fa - t0) / Hc)); k < nC; k++) {
-        const s0 = t0 + k * Hc;
-        if (s0 >= ta) break;
-        const ov = Math.min(ta, s0 + Hc) - Math.max(fa, s0);
-        if (ov > 0) qc[k] += v * ov / Hc;
-      }
-    }
-    const gC = new Float64Array(nC + 1);
-    for (let m = 0; m <= nC; m++) gC[m] = wellE1(xk / ((m + 0.5) * Hc));
-    // Fyll i likevekt: q_w = al·T_vegg + q/(1 + G_w·R2), al = G_w/(1 + G_w·R2)
-    const c1 = 1 + Gw * R2, al = Gw / c1;
-    const dq = new Float64Array(nC);
-    let qp = 0, tb = 0;
-    for (let n = 0; n < nC; n++) {
-      let S = 0; for (let k = 0; k < n; k++) S += dq[k] * gC[n - k];
-      const qw = (qc[n] / c1 - al * (S - qp * gC[0]) / fl) / (1 + al * gC[0] / fl);
-      dq[n] = qw - qp; qp = qw;
-      const tw = -(S + dq[n] * gC[0]) / fl;
-      tb = (tw / R2 - qc[n]) / (1 / R2 + Gw);
-    }
-    const st = Hc, M = Math.ceil(sg.N * HOUR / st) + 2, Th = new Float64Array(M);
-    for (let m = 0; m < M; m++) {
-      const t = m * st; let s = 0;
-      for (let k = 0; k < nC; k++) if (dq[k]) s += dq[k] * wellE1(xk / (t - (t0 + k * Hc)));
-      Th[m] = -s / fl;
-    }
-    return { th: t => { const x = t / st, m = Math.min(M - 2, Math.max(0, Math.floor(x)));
-                        return Th[m] + (Th[m + 1] - Th[m]) * (x - m); },
-             tb0: tb, qw0: qp };
-  }
+  const { N, qA, row, start, prior, days, q } = hoved, vi = hoved.vi;
 
   // 2) Koblet modell med borehullskapasitet. Vannet i hullet er et
   //    varmelager mellom fjellveggen og væsken:
   //        fjell --R2--> [fyll, Cb] --R1--> væske
-  //                         ↑ grunnvann G_w (v49)
   //    Fjellet svarer på fluksen INN I FYLLET (qw), ikke på væskens
   //    uttak – fyllet leverer fra eget lager de første timene etter hvert
   //    lastskifte. Systemet simuleres derfor koblet, tidssteg for tidssteg.
   //    Uten kapasitet ble λ 19–52 % for lav i test, med R² 0,97–0,997.
-  //    De lineære parameterne løses eksakt for hver (λ, R2, G_w);
-  //    de tre søkes med rutenett + Nelder–Mead.
-  // Simuler fyllets temperatur med T₀ = 0. Ev og Eq: varme fra grunnvannet og
-  // samlet uttak i perioden (W/m·steg), Tw: veggtemperaturen i siste steg.
-  function simuler(sg, lam, R2, Gw){
+  //    De lineære parameterne løses eksakt for hver (λ, R2);
+  //    λ og R2 søkes i to dimensjoner (rutenett + Nelder–Mead).
+  // Simuler fyllets temperatur med T₀ = 0 og uten forhistorie
+  function simuler(sg, lam, R2){
     const N = sg.N, qA = sg.qA;
     const xk = W.rb * W.rb / (4 * lam / W.C), fl = 4 * Math.PI * lam;
     const g = new Float64Array(N + 1);
     for (let k = 0; k <= N; k++) g[k] = wellE1(xk / ((k + 0.5) * HOUR));
-    const cG = 1 / R2 + Gw;
-    const e = Math.exp(-HOUR / Math.max(60, W.Cb / cG));
-    const fs = sg.pre ? forSim(sg, xk, fl, R2, Gw) : null;
+    const e = Math.exp(-HOUR / Math.max(60, W.Cb * R2));
     const dqw = new Float64Array(N), D = new Float64Array(N);
     // Lastaggregering: siste døgn eksakt, eldre historikk i blokker på 2 t
     // med kjernens middel over blokken (prefikssum). Kjernen varierer
@@ -3655,7 +3660,7 @@ function wellFit(d, forrige, valg){
     // første moment tas med mot kjernens helning. Uten den: opptil 2 % i λ.
     const nb = Math.ceil(N / B) + 1, blk = new Float64Array(nb), blk1 = new Float64Array(nb);
     const cB = (B - 1) / 2;
-    let Tb = fs ? fs.tb0 : 0, qwPrev = fs ? fs.qw0 : 0, Ev = 0, Eq = 0, Tw = 0;
+    let Tb = 0, qwPrev = 0;
     for (let n = 0; n < N; n++) {
       const kb = Math.max(0, Math.floor((n - M) / B) * B);
       let s = 0;
@@ -3665,30 +3670,29 @@ function wellFit(d, forrige, valg){
         s += blk[j] * gm - blk1[j] * gp;
       }
       for (let k = kb; k < n; k++) s += dqw[k] * g[n - k];  // nylig: eksakt
-      Tw = -s / fl + (fs ? fs.th((n + 0.5) * HOUR) : 0);
-      const mal = (Tw / R2 - qA[n]) / cG;         // eksakt steg for stykkevis konstant last
-      const Tb0 = Tb;
+      const Tw = -s / fl;
+      const mal = Tw - R2 * qA[n];               // eksakt steg for stykkevis konstant last
       Tb = mal + (Tb - mal) * e;
       const qw = (Tw - Tb) / R2;
-      if (Gw > 0) Ev -= Gw * (Tb0 + Tb) / 2;      // T₀ − T_fyll = −T_fyll
-      Eq += qA[n];
       dqw[n] = qw - qwPrev; qwPrev = qw;
       { const j = Math.floor(n / B); blk[j] += dqw[n]; blk1[j] += dqw[n] * (n - j * B - cB); }
       D[n] = Tb;
     }
-    return { D, g, xk, Ev, Eq, Tw, Tb };
+    return { D, g, xk };
   }
-  function prosjekter(lam, R2, Gw){
-    if (!(lam > 0.5 && lam < 8 && R2 > 0.001 && R2 < 0.4 && Gw >= 0 && Gw < 60)) return null;
+  function prosjekter(lam, R2){
+    if (!(lam > 0.5 && lam < 8 && R2 > 0.001 && R2 < 0.4)) return null;
     const fl = 4 * Math.PI * lam;
-    const X = [], y = [], meta = [], Ds = [], Hs = [];
-    let sim0 = null;
+    const X = [], y = [], meta = [], Ds = [];
+    let g0 = null, xk0 = null, Hf0 = null;
     segs.forEach((sg, s) => {
-      const sim = simuler(sg, lam, R2, Gw), { D, xk } = sim;
-      const Hf = sg.pre ? null : histRespons(sg, xk);
-      Ds.push(D); Hs.push(Hf); if (s === 0) sim0 = sim;
+      const { D, g, xk } = simuler(sg, lam, R2);
+      const Hf = histRespons(sg, xk);
+      Ds.push(D); if (s === 0) { g0 = g; xk0 = xk; Hf0 = Hf; }
       for (const j of sg.vi) {
         const b = sg.row[sg.start + j], tj = (j + 0.5) * HOUR;
+        const Pr = sg.b0 > sg.a0 ? wellE1(xk / (tj - sg.a0)) - wellE1(xk / (tj - sg.b0)) : 0;
+        const Hk = Hf ? Hf(tj) / fl : 0;            // kjent historikk før perioden
         // Varmeutveksling mellom rørbeina (Hellström): q·(L/ṁcp)²/(3·Ra).
         // Lineær i 1/Ra. ṁcp er målt der den finnes, ellers anslått fra Auto.
         const mcp = b[5] > 0 ? b[5] : (b[2] * W.L + W.pipeW) / W.dTauto;
@@ -3696,14 +3700,9 @@ function wellFit(d, forrige, valg){
         // kortslutningen faller ut og punktet måler fjellets temperatur
         const sc = b[6] ? 0 : -b[2] * Math.pow(W.L / mcp, 2) / 3;
         const x = new Array(P).fill(0);
-        x[0] = 1; x[kR(s)] = -b[2]; x[3] = sc;
-        if (sg.pre) y.push(b[3] - D[j]);           // forhistorien ligger i D (forSim)
-        else {
-          // Fri forhistorie: Tf − fyllets respons + kjent historikk = T₀ + ulogget forhistorie − R1·q − q(L/ṁcp)²/3Ra
-          const Pr = sg.b0 > sg.a0 ? wellE1(xk / (tj - sg.a0)) - wellE1(xk / (tj - sg.b0)) : 0;
-          x[kQ(s)] = -Pr / fl;
-          y.push(b[3] - D[j] + (Hf ? Hf(tj) / fl : 0));
-        }
+        const fq = sg.fastQ;                       // låst forhistorie (v48) er et kjent ledd
+        x[0] = 1; x[kQ(s)] = fq == null ? -Pr / fl : 0; x[kR(s)] = -b[2]; x[3] = sc;
+        y.push(b[3] - D[j] + Hk + (fq == null ? 0 : fq * Pr / fl));   // Tf − fyllets respons + kjent historikk = T₀ + ulogget forhistorie − R1·q − q(L/ṁcp)²/3Ra
         X.push(x); meta.push([s, j]);
       }
     });
@@ -3712,60 +3711,51 @@ function wellFit(d, forrige, valg){
       for (let c = 0; c < P; c++) XtX[a][c] += r[a] * r[c]; } });
     if (!X.some(r => r[3] !== 0)) XtX[3][3] += 1e-9;   // bare stillstand: intet kortslutningsledd
     for (let a = 4; a < P; a++) XtX[a][a] += 1e-9;      // arkivperioder med lite drift
-    segs.forEach((sg, s) => { if (sg.pre) XtX[kQ(s)][kQ(s)] += 1; });   // låst: tom kolonne, β = 0
+    segs.forEach((sg, s) => { if (sg.fastQ != null) XtX[kQ(s)][kQ(s)] += 1; });   // låst: tom kolonne, β = 0
     const beta = wellSolve(XtX, Xty);
     if (!beta) return null;
     let rss = 0; X.forEach((r, n) => { rss += (y[n] - r.reduce((s, v, a) => s + v * beta[a], 0)) ** 2; });
-    return { lam, R2, Gw, beta, rss, X, y, XtX, sim: sim0, Ds, Hs, meta };
+    return { lam, R2, beta, rss, X, y, XtX, g: g0, xk: xk0, H: Hf0, D: Ds[0], Ds, meta };
   }
 
-  // Søket: λ, R2 og G_w (de som ikke er låst). Varmstart fra forrige
-  // løsning, ellers grovt rutenett i λ og R2. Så Nelder–Mead.
-  const tilP = v => { let i = 0; const l = lamF ?? v[i++], r = v[i++], gw = gwF ?? v[i++]; return [l, r, gw]; };
-  const fraP = (l, r, gw) => [...(lamF == null ? [l] : []), r, ...(gwF == null ? [gw] : [])];
-  const prov = v => { const [l, r, gw] = tilP(v); const res = prosjekter(l, r, gw); return { p: v, r: res, f: res ? res.rss : Infinity }; };
+  // Varmstart fra forrige løsning; ellers grovt rutenett. Så Nelder–Mead.
   let best = null;
-  if (forrige && forrige.ok && forrige.lambda > 0.5 && forrige.R2 > 0.001) {
-    const s = prov(fraP(lamF ?? forrige.lambda, forrige.R2, gwF ?? (Number.isFinite(forrige.Gw) ? forrige.Gw : 0)));
-    if (s.r) best = s;
-  }
+  if (forrige && forrige.ok && forrige.lambda > 0.5 && forrige.R2 > 0.001)
+    best = prosjekter(forrige.lambda, forrige.R2);
   if (!best)
-    for (const l of (lamF != null ? [lamF] : [1.6, 2.0, 2.4, 2.8, 3.3, 3.9]))
-      for (const r of [0.01, 0.03, 0.06, 0.10, 0.16])
-        for (const gw of (gwF != null ? [gwF] : [0, 4])) {
-          const s = prov(fraP(l, r, gw));
-          if (s.r && (!best || s.f < best.f)) best = s;
-        }
+    for (const lam of [1.6, 2.0, 2.4, 2.8, 3.3, 3.9])
+      for (const R2 of [0.01, 0.03, 0.06, 0.10, 0.16]) {
+        const r = prosjekter(lam, R2);
+        if (r && (!best || r.rss < best.rss)) best = r;
+      }
   if (!best) return { ok: false, why: 'modellen konvergerte ikke', days: days };
-  const nd = best.p.length;
-  const steg = v => { let i = 0; const u = [];
-    if (lamF == null) u.push(v[i++] * 0.12);
-    u.push(v[i++] * 0.4 + 0.004);
-    if (gwF == null) u.push(Math.max(1, v[i++] * 0.5));
-    return u; };
-  const du = steg(best.p);
-  let simplex = [best];
-  for (let k = 0; k < nd; k++) { const p = best.p.slice(); p[k] += du[k]; simplex.push(prov(p)); }
-  for (let it = 0; it < 60 * nd; it++) {
+  let simplex = [[best.lam, best.R2], [best.lam * 1.12, best.R2], [best.lam, best.R2 * 1.4 + 0.004]]
+    .map(p => ({ p, r: prosjekter(p[0], p[1]) }))
+    .map(s => ({ p: s.p, r: s.r, f: s.r ? s.r.rss : Infinity }));
+  for (let it = 0; it < 60; it++) {
     simplex.sort((a, b) => a.f - b.f);
-    const b0 = simplex[0], w = simplex[nd];
+    const [b0, b1, w] = simplex;
     if (Math.abs(w.f - b0.f) < 1e-6 * (1 + b0.f)) break;   // λ stabil til ~0,02 %
-    const c = Array(nd).fill(0);
-    for (let k = 0; k < nd; k++) for (let i = 0; i < nd; i++) c[i] += simplex[k].p[i] / nd;
-    const at = k => prov(c.map((ci, i) => ci + k * (w.p[i] - ci)));
+    const c = [(b0.p[0] + b1.p[0]) / 2, (b0.p[1] + b1.p[1]) / 2];
+    const at = (k) => { const p = [c[0] + k * (w.p[0] - c[0]), c[1] + k * (w.p[1] - c[1])];
+      const r = prosjekter(p[0], p[1]); return { p, r, f: r ? r.rss : Infinity }; };
     const refl = at(-1);
-    if (refl.f < b0.f) { const ex = at(-2); simplex[nd] = ex.f < refl.f ? ex : refl; }
-    else if (refl.f < simplex[nd - 1].f) simplex[nd] = refl;
+    if (refl.f < b0.f) { const exp = at(-2); simplex[2] = exp.f < refl.f ? exp : refl; }
+    else if (refl.f < b1.f) simplex[2] = refl;
     else { const con = at(0.5);
-      if (con.f < w.f) simplex[nd] = con;
-      else simplex = [b0, ...simplex.slice(1).map(s => prov(s.p.map((v, i) => (v + b0.p[i]) / 2)))]; }
+      if (con.f < w.f) simplex[2] = con;
+      else simplex = [b0, ...[b1, w].map(s => { const p = [(s.p[0] + b0.p[0]) / 2, (s.p[1] + b0.p[1]) / 2];
+        const r = prosjekter(p[0], p[1]); return { p, r, f: r ? r.rss : Infinity }; })]; }
   }
   simplex.sort((a, b) => a.f - b.f);
   best = simplex[0].r;
-  const lam = best.lam, R2fit = best.R2, Gwfit = best.Gw;
+  const lam = best.lam, R2fit = best.R2;
+  const gLast = best.g, xkLast = best.xk;
+  const dqLast = new Float64Array(N);
+  { let pv = 0; for (let i = 0; i < N; i++) { dqLast[i] = qA[i] - pv; pv = qA[i]; } }
 
   // 3) Usikkerhet fra residualene
-  const { beta, X, y, XtX, meta, Ds, Hs } = best;
+  const { beta, X, y, XtX, meta, Ds } = best;
   const rad = k => segs[meta[k][0]].row[segs[meta[k][0]].start + meta[k][1]];
   const hk = meta.map((m, k) => k).filter(k => meta[k][0] === 0);       // dagens vindu
   // Lav last: 20-persentilen av ṁcp blant DRIFTSpunktene i dagens vindu
@@ -3778,69 +3768,39 @@ function wellFit(d, forrige, valg){
   const nArkiv = meta.filter(m => m[0] > 0).length;
   const fit = X.map(r => r.reduce((s, v, a) => s + v * beta[a], 0));
   const rss = y.reduce((s, v, n) => s + (v - fit[n]) ** 2, 0);
-  const nFast = segs.filter(sg => sg.pre).length;
-  const n = y.length, p = beta.length + nd - nFast;     // + søkte parametre, − låste forhistorier
+  const nFast = segs.filter(sg => sg.fastQ != null).length;
+  const n = y.length, p = beta.length + 2 - nFast;      // + λ og R2, − låste forhistorier
   const s2 = rss / Math.max(1, n - p);
   const inv = wellInverse(XtX);
   const se = inv ? inv.map((r, i) => Math.sqrt(Math.max(0, s2 * r[i]))) : beta.map(() => NaN);
-  // De søkte parameterne: krumningen av restsummen (profilert over de
-  // lineære), kovarians = 2·s²·H⁻¹. Ved grensen G_w = 0 brukes ensidige
-  // differanser.
-  const x0 = fraP(lam, R2fit, Gwfit);
-  const hS = (() => { const h = [];
-    if (lamF == null) h.push(lam * 0.02);
-    h.push(Math.max(0.002, R2fit * 0.05));
-    if (gwF == null) h.push(Math.max(0.05, Gwfit * 0.05));
-    return h; })();
-  const gwI = gwF == null ? nd - 1 : -1;
-  const ensidig = gwI >= 0 && Gwfit < hS[gwI] * 1.01;
-  const Fv = v => { const s = prov(v); return s.f; };
+  // λ og R2: krumningen av restsummen, profilert over de lineære parameterne
+  const hL = lam * 0.02, hR = Math.max(0.002, R2fit * 0.05);
+  const F = (a, b) => { const r = prosjekter(lam + a, R2fit + b); return r ? r.rss : NaN; };
   const f0 = best.rss;
-  const Hm = Array.from({ length: nd }, () => Array(nd).fill(0));
-  for (let i = 0; i < nd; i++) {
-    const ei = k => x0.map((v, a) => a === i ? v + k * hS[i] : v);
-    if (ensidig && i === gwI) Hm[i][i] = (Fv(ei(2)) - 2 * Fv(ei(1)) + f0) / (hS[i] * hS[i]);
-    else Hm[i][i] = (Fv(ei(1)) - 2 * f0 + Fv(ei(-1))) / (hS[i] * hS[i]);
-    for (let j = 0; j < i; j++) {
-      if (ensidig && (i === gwI || j === gwI)) { Hm[i][j] = Hm[j][i] = 0; continue; }
-      const eij = (a, b) => x0.map((v, k) => k === i ? v + a * hS[i] : k === j ? v + b * hS[j] : v);
-      Hm[i][j] = Hm[j][i] = (Fv(eij(1, 1)) - Fv(eij(1, -1)) - Fv(eij(-1, 1)) + Fv(eij(-1, -1))) / (4 * hS[i] * hS[j]);
-    }
-  }
-  const Hi = Hm.every(r => r.every(Number.isFinite)) ? wellInverse(Hm) : null;
-  const sdN = i => Hi && Hi[i][i] > 0 ? Math.sqrt(2 * s2 * Hi[i][i]) : NaN;
-  const lamSE = lamF == null ? sdN(0) : 0;
-  const R2SE = sdN(lamF == null ? 1 : 0);
-  const GwSE = gwI >= 0 ? sdN(gwI) : 0;
-  // R² på selve Tf (y er Tf minus fyllets respons, pluss kjent historikk når forhistorien er fri)
-  const Hpt = meta.map((m, k) => { const hf = Hs[m[0]]; return hf ? hf((m[1] + 0.5) * HOUR) / (4 * Math.PI * lam) : 0; });
+  const Hll = (F(hL, 0) - 2 * f0 + F(-hL, 0)) / (hL * hL);
+  const Hrr = (F(0, hR) - 2 * f0 + F(0, -hR)) / (hR * hR);
+  const Hlr = (F(hL, hR) - F(hL, -hR) - F(-hL, hR) + F(-hL, -hR)) / (4 * hL * hR);
+  const det = Hll * Hrr - Hlr * Hlr;
+  const lamSE = det > 0 ? Math.sqrt(2 * s2 * Hrr / det) : NaN;
+  const R2SE  = det > 0 ? Math.sqrt(2 * s2 * Hll / det) : NaN;
+  // R² på selve Tf (y er Tf minus fyllets respons)
+  const Hpt = meta.map(m => m[0] === 0 ? (best.H ? best.H((m[1] + 0.5) * HOUR) / (4 * Math.PI * lam) : 0) : NaN);
+  // For arkivperioder regnes historikkleddet på nytt (lagres ikke per periode)
+  for (let s = 1; s < K; s++) { const sg = segs[s], xk = W.rb * W.rb / (4 * lam / W.C), hf = histRespons(sg, xk);
+    meta.forEach((m, k) => { if (m[0] === s) Hpt[k] = hf ? hf((m[1] + 0.5) * HOUR) / (4 * Math.PI * lam) : 0; }); }
   const Tf = meta.map((m, k) => y[k] + Ds[m[0]][m[1]] - Hpt[k]);
   const ym = Tf.reduce((s, v) => s + v, 0) / n;
   const tss = Tf.reduce((s, v) => s + (v - ym) ** 2, 0);
 
-  // Dagens nedkjøling ved borehullsveggen. Med kjent forhistorie: veggen i
-  // siste steg fra simuleringen. Fri forhistorie: som før v49.
-  let coolNow;
-  const sim = best.sim;
+  // Dagens nedkjøling ved borehullsveggen: hele lasthistorikken
+  // (logget + ulogget) evaluert ved siste tidspunkt.
+  let Slast = 0;
+  for (let i = 0; i < N; i++) Slast += dqLast[i] * gLast[N - 1 - i];
+  const tl = (N - 0.5) * HOUR;
   const qPrior = hoved.fastQ != null ? hoved.fastQ : beta[1];
-  if (hoved.pre) coolNow = -sim.Tw;
-  else {
-    const gL = sim.g, xkL = sim.xk;
-    let Slast = 0, pv = 0;
-    for (let i = 0; i < N; i++) { Slast += (qA[i] - pv) * gL[N - 1 - i]; pv = qA[i]; }
-    const tl = (N - 0.5) * HOUR;
-    const Plast = hoved.b0 > hoved.a0 ? wellE1(xkL / (tl - hoved.a0)) - wellE1(xkL / (tl - hoved.b0)) : 0;
-    coolNow = (Slast + qPrior * Plast) / (4 * Math.PI * lam) + (Hs[0] ? Hs[0](tl) / (4 * Math.PI * lam) : 0);
-  }
+  const Plast = hoved.b0 > hoved.a0 ? wellE1(xkLast / (tl - hoved.a0)) - wellE1(xkLast / (tl - hoved.b0)) : 0;
+  const coolNow = (Slast + qPrior * Plast) / (4 * Math.PI * lam) + (best.H ? best.H(tl) / (4 * Math.PI * lam) : 0);
   let qs = 0; for (let i = 0; i < N; i++) qs += q[start + i];
-  // Grunnvannet: tilsvarende vannmengde og andel av uttaket i vinduet
-  const RHOC_V = 4.19e6;                         // J/(m³·K), vann ved 8 °C
-  const lph = Gw => Gw * W.L / RHOC_V * 3.6e6;
-  const vannRes = vann ? {
-    Gw: Gwfit, sGw: GwSE, lph: lph(Gwfit), slph: Number.isFinite(GwSE) ? lph(GwSE) : NaN,
-    andel: sim.Eq > 0 ? sim.Ev / sim.Eq : null,               // av uttaket i vinduet
-    naaW: -Gwfit * sim.Tb * W.L,                              // W nå
-  } : null;
 
   return {
     ok: true, prelim: days < W.fullDays,
@@ -3853,13 +3813,12 @@ function wellFit(d, forrige, valg){
     sRbLow: Math.hypot(se[2], Math.pow(W.L / mcpLow, 2) * se[3] / 3),
     sRb: Math.sqrt(se[2] * se[2] + (Number.isFinite(R2SE) ? R2SE * R2SE : 0)),
     T0: beta[0], sT0: se[0],
-    Gw: Gwfit, vann: vannRes,
     nStill: nStill, nArkiv: nArkiv, nSeg: K,
     qPrior: qPrior, qPriorFast: hoved.fastQ != null,
     n: n, nHoved: hk.length, days: days, rms: Math.sqrt(rss / n), r2: tss > 0 ? 1 - rss / tss : 0,
     // [i, Tf, modell, stillstand, periode] – periode 0 er dagens vindu
     series: meta.map((m, k) => [segs[m[0]].start + m[1], Tf[k], fit[k] + Ds[m[0]][m[1]] - Hpt[k], rad(k)[6] ? 1 : 0, m[0]]),
-    tau: W.Cb / (1 / R2fit + Gwfit) / 3600,
+    tau: W.Cb * R2fit / 3600,
   };
 }
 
@@ -3911,10 +3870,8 @@ const WELLX = {
                         // (enkeltavlesninger, 0,1 K-steg), men langt under 1,8 K/100 m
                         // som q_geo/λ ga. Trolig grunnvann og konveksjon i vannsøylen,
                         // og i Norge senker ettervirkningen av istiden gradienten øverst.
-  lamRock: [2.2, 2.8],  // Lindåsdekket, bergartens egen ledningsevne (anslag, ikke målt):
-                        // anortositt/gabbro ≈ 1,7–2,6, gneis/granitt ≈ 2,1–3,5 W/mK
-                        // (vannmettet, litteratur). Brukes til grunnvannet (wellVann):
-                        // lavere λ her gir mer vann.
+  lamRock: [2.2, 2.8],  // Lindåsdekket, bergartens egen ledningsevne (anslag)
+  lamPrior: 2.5,
   Tsurf: 8.0,           // °C ved overflaten, Bergen (passer med målte oppstartsverdier)
   zTop: 17, zMid: 133.5, zBot: 250, zFrac: 70, zCase: 3,
   // Ærlige usikkerheter utover statistikken: fjellets varmekapasitet og
@@ -3943,69 +3900,156 @@ function wellSiste(){
   try { const v = JSON.parse(localStorage.getItem('trtSiste') || 'null');
         return v && v.ok && Number.isFinite(v.T0) ? { ...v, gammel: true } : null; } catch (_) { return null; }
 }
-// ── Grunnvann gjennom brønnen (v49) ──
-// Hovedtilpasningen har ikke noe vannledd: λ der er effektiv og tar med alt
-// som tilfører varme. Dataene alene skiller ikke «berg som leder svært godt»
-// fra «vanlig berg + grunnvann» (se wellFit: restsummen er nesten flat mellom
-// λ 5,5 uten vann og λ 2,2 med vann). Vannmengden regnes derfor med λ låst til
-// bergartens egen ledningsevne, WELLX.lamRock, og G_w fri – én tilpasning i
-// hver ende av båndet (lavere λ krever mer vann). Appen viser midten, med halve
-// spennet og den statistiske usikkerheten samlet som ±.
-// Eksport 24.10 (29 døgn): λ 2,2 → 570 l/t og 51 % av varmen, λ 2,8 → 426 l/t
-// og 39 %. Med λ fri: 0 l/t og λ 5,5 – nesten like godt (avvik 0,120 mot 0,125 K).
-// Andelen er varmen grunnvannet leverte til hullet / uttaket i hele vinduet.
-// Regnes etter hovedtilpasningen, høyst én gang i timen (≈ 1 s), og huskes.
-const TRT_VANN_HVERT = 3600000;
-let trtVann = null, trtVannForsok = 0, trtVannPrev = [null, null];
-try { const c = JSON.parse(localStorage.getItem('trtVann') || 'null'); if (c && c.v === 1) trtVann = c; } catch (_) {}
-function wellVann(b){
-  const r = WELLX.lamRock.map((lam, i) => {
-    const f = wellFit(b, trtVannPrev[i], { seg: arkivSeg(), vann: true, lam: lam });
-    if (f && f.ok && f.vann) trtVannPrev[i] = f;
-    return f && f.ok && f.vann ? f.vann : null;
-  });
-  if (!r[0] || !r[1] || !Number.isFinite(r[0].andel) || !Number.isFinite(r[1].andel)) return null;
-  const [hoy, lav] = r;                              // lav λ krever mest vann
-  const mid = (a, c) => (a + c) / 2, halv = (a, c) => Math.abs(a - c) / 2, rel = x => x.Gw > 0 && Number.isFinite(x.sGw) ? x.sGw / x.Gw : 0;
-  const lph = mid(hoy.lph, lav.lph), andel = mid(hoy.andel, lav.andel), rs = mid(rel(hoy), rel(lav));
-  return { v: 1, t: Date.now(), lam: WELLX.lamRock.slice(),
-           lph, elph: Math.hypot(halv(hoy.lph, lav.lph), lph * rs), lphHoy: hoy.lph, lphLav: lav.lph,
-           andel, eandel: Math.hypot(halv(hoy.andel, lav.andel), andel * rs), naaW: mid(hoy.naaW, lav.naaW) };
+// ── Varmeledning fra stillstandene (v36) ──
+// Stillstandspunktene (GP2 sirkulerer, kompressoren står) måler borehulls-
+// veggen uten uttak. Linjekilde med superposisjon over hele uttakshistorikken
+// i vinduet gir λ og T₀ uten at borehullsmotstand eller kortslutning spiller
+// inn. Punkt under 1 t etter stopp utelates (vannet i hullet svinger seg inn).
+// Negativt uttak (v37) er varme fra rør og GP2 som går NED i brønnen når GP2
+// sirkulerer i stillstand (≈ 150 W ved 100 %) – den skal være med. Stillstand
+// = uttak ≤ 0. Kvarter uten data (null) regnes som 0.
+// v48: uttaket FØR vinduet er med (wellForBlokker): kjent døgnhistorikk og
+// ulogget drift 17.5–25.9 låst til WELL.qFor. Uten det tolket modellen den
+// langsomme gjenhentingen etter 131 døgn med uttak som en del av vinduets
+// respons. Eksport 21.10: avviket 0,0498 → 0,0417 K (−16 %), λ 3,64 → 3,30
+// (bånd 3,0–3,7) og T₀ 8,85 → 9,06 °C. Kontrollert i Python (scipy exp1).
+// OBS (v48): metoden er ren linjekilde uten fyllets kapasitet (Cb, R2) og gir
+// for lav λ og for høy T₀ når fyllet virker slik driftsmodellen finner. Syntetisk
+// brønn (uavhengig fremoverregning, støy 0,02 K): sann λ 3,3 → 2,32 (T₀ +0,25),
+// sann 5,5 → 2,56 (T₀ +0,45); wellFit fant 3,27 og 5,59. Fyllmodellen (wellFit)
+// på bare stillstandspunktene ga λ 4,75 for eksporten 21.10. Resultatet her
+// brukes derfor ikke til noen konklusjon i appen – bare som opplysning
+// (kapasitetAnalyse().leiing) og i selvtesten av linjekildematematikken.
+// Uttaket før vinduet (v48), som blokker [fra, til, W/m] i kvarter regnet fra
+// vinduets start: døgnhistorikken scriptet har tatt vare på (d.hist, W/m·10
+// per døgn – eldre døgn slått sammen som i wellFit) og den uloggede driften
+// fra idriftsettingen, låst til WELL.qFor når den slutter ved loggstart
+// (± 1 døgn). Uten d.base (selvtesten) eller når tidsrommet ikke stemmer:
+// ingen ulogget blokk (fast = false), som før v48.
+function wellForBlokker(d){
+  const H = 900, DAG = 86400000, blk = [];
+  if (!d || !Number.isFinite(d.base)) return { blk, fast: false };
+  let slutt = d.base;
+  const h = d.hist;
+  if (h && Array.isArray(h.q) && Number.isFinite(h.base) && h.base < d.base) {
+    const dager = [];
+    for (let k = 0; k < h.q.length; k++) { const t0 = h.base + k * DAG; if (t0 + DAG > d.base) break; dager.push([t0, h.q[k]]); }
+    const gyld = dager.map(x => x[1]).filter(v => v !== null && Number.isFinite(v));
+    const snitt = gyld.length ? gyld.reduce((a, v) => a + v, 0) / gyld.length : 0;
+    for (let i = dager.length - 1; i >= 0; ) {
+      const alder = (d.base - (dager[i][0] + DAG)) / DAG, len = Math.max(1, Math.floor(alder / 8));
+      let sum = 0, n = 0, j = i;
+      for (; j >= 0 && j > i - len; j--) { const v = dager[j][1]; sum += (v !== null && Number.isFinite(v)) ? v : snitt; n++; }
+      blk.push([(dager[j + 1][0] - d.base) / 1000 / H, (dager[i][0] + DAG - d.base) / 1000 / H, sum / n / 10]);
+      i = j;
+    }
+    if (dager.length) slutt = dager[0][0];
+  }
+  const fast = Math.abs(slutt - WELL.loggStart) <= DAG && WELL.opStart < slutt;
+  if (fast) blk.push([(WELL.opStart - d.base) / 1000 / H, (slutt - d.base) / 1000 / H, WELL.qFor]);
+  return { blk, fast };
 }
-// ── Selvtest (v37, v49) ──
-// Kjøres én gang ved oppstart: E1 mot tabellverdier (Abramowitz & Stegun).
-// Tilpasningen (wellFit) er testet utenfor appen mot syntetiske brønner med
-// kjent fasit og uavhengig fremoverregning: λ, Rb og T₀ innen 1–2 % (v48),
-// og λ og G_w med grunnvann (v49).
-// v49: λ fra stillstandene (stillstandLeiing, v36–v48) er fjernet. Metoden var
-// ren linjekilde uten fyllets kapasitet og ga for lav λ og for høy T₀
-// (syntetisk: sann λ 3,3 → 2,3, sann 5,5 → 2,6). Den ble ikke brukt til noe
-// i appen etter v48, og i vanlig drift kommer det ingen nye stillstandspunkt.
+let leiingCache = null;
+function stillstandLeiing(d){
+  if (!d || !Array.isArray(d.q) || !Array.isArray(d.still)) return null;
+  const nokkel = d.lastTick + ':' + d.still.length + ':' + d.q.length + ':' + d.base + ':' + (d.hist && Array.isArray(d.hist.q) ? d.hist.q.length : 0);
+  if (leiingCache && leiingCache.nokkel === nokkel) return leiingCache.res;
+  const W = WELL, H = 900, q = d.q.map(v => Number.isFinite(v) ? v / 10 : 0), pkt = [];
+  const fb = wellForBlokker(d);                   // [fra, til (kvarter fra vinduets start), W/m]
+  for (const [i, v] of d.still) {
+    let s = i; while (s > 0 && q[s - 1] <= 0) s--;
+    if (s > 0 && (i - s + 0.5) / 4 >= 1) pkt.push({ i, tf: v / 100, s });
+  }
+  const nPer = new Set(pkt.map(p => p.s)).size;
+  let res = null;
+  if (pkt.length >= 30 && nPer >= 2) {
+    const dq = []; let prev = 0;
+    for (let k = 0; k < q.length; k++) { if (q[k] !== prev) dq.push([k, q[k] - prev]); prev = q[k]; }
+    const prov = lam => {
+      const c = W.rb * W.rb / (4 * (lam / W.C) * H);
+      const pred = pkt.map(p => { let s = 0; for (const [k, v] of dq) { if (k > p.i) break; s += v * wellE1(c / (p.i + 0.5 - k)); }
+                                  const t = p.i + 0.5;
+                                  for (const [a, b, v] of fb.blk) s += v * (wellE1(c / (t - a)) - wellE1(c / (t - b)));
+                                  return -s / (4 * Math.PI * lam); });
+      const T0 = pkt.reduce((u, p, j) => u + p.tf - pred[j], 0) / pkt.length;
+      return { lam, T0, rms: Math.sqrt(pkt.reduce((u, p, j) => u + (p.tf - pred[j] - T0) ** 2, 0) / pkt.length) };
+    };
+    const alle = []; for (let l = 1.5; l <= 6.001; l += 0.1) alle.push(prov(l));
+    let best = alle.reduce((u, r) => r.rms < u.rms ? r : u);
+    for (let l = best.lam - 0.08; l <= best.lam + 0.081; l += 0.02) if (l > 1) alle.push(prov(l));
+    best = alle.reduce((u, r) => r.rms < u.rms ? r : u);
+    const inn = alle.filter(r => r.rms <= 1.1 * best.rms).map(r => r.lam);
+    res = { lam: best.lam, T0: best.T0, rms: best.rms, n: pkt.length, nPer, lo: Math.min(...inn), hi: Math.max(...inn),
+            kant: best.lam <= 1.55 || best.lam >= 5.95, forhist: fb.fast };
+  }
+  leiingCache = { nokkel, res };
+  return res;
+}
+
+// ── Selvtest (v37) ──
+// Kjøres én gang ved oppstart. Fanger feil i matematikken ved senere endringer:
+// E1 mot tabellverdier (Abramowitz & Stegun), og en syntetisk gjenoppretting
+// med kjent λ og T₀ der varme går ned i brønnen i stillstand.
 function selvtest(){
   const feil = [];
   for (const [x, v] of [[0.001, 6.33154], [0.01, 4.03793], [0.1, 1.82292], [0.3, 0.90568], [1, 0.21938], [5, 0.0011483]])
     if (Math.abs(wellE1(x) / v - 1) > 1e-4) feil.push(`E1(${x}) = ${wellE1(x).toPrecision(6)}, skal være ${v}`);
+  const W = WELL, lam = 2.8, T0 = 9.2, c = W.rb * W.rb / (4 * (lam / W.C) * 900), q = [];
+  for (let d = 0; d < 5; d++) { for (let k = 0; k < 16; k++) q.push(80); for (let k = 0; k < 24; k++) q.push(-6); }
+  const dq = []; let pr = 0; q.forEach((v, k) => { if (v !== pr) { dq.push([k, (v - pr) / 10]); pr = v; } });
+  const still = []; q.forEach((v, i) => { if (v > 0) return; let u = 0;
+    for (const [k, x] of dq) { if (k > i) break; u += x * wellE1(c / (i + 0.5 - k)); }
+    still.push([i, Math.round((T0 - u / (4 * Math.PI * lam)) * 100)]); });
+  const lagret = leiingCache; leiingCache = null;
+  const L = stillstandLeiing({ q, still, lastTick: -1 }); leiingCache = lagret;
+  if (!L || Math.abs(L.lam - lam) > 0.15 || Math.abs(L.T0 - T0) > 0.05)
+    feil.push(`gjenoppretting: λ ${L ? L.lam.toFixed(2) : '–'} (skal være ${lam}), T₀ ${L ? L.T0.toFixed(2) : '–'} (skal være ${T0})`);
+  // v48: samme med 131 døgn ulogget uttak (WELL.qFor) før vinduet – vinduet starter ved loggstart
+  { const fb = wellForBlokker({ base: W.loggStart }), still2 = [];
+    q.forEach((v, i) => { if (v > 0) return; let u = 0;
+      for (const [k, x] of dq) { if (k > i) break; u += x * wellE1(c / (i + 0.5 - k)); }
+      for (const [a, b, x] of fb.blk) u += x * (wellE1(c / (i + 0.5 - a)) - wellE1(c / (i + 0.5 - b)));
+      still2.push([i, Math.round((T0 - u / (4 * Math.PI * lam)) * 100)]); });
+    const lagret2 = leiingCache; leiingCache = null;
+    const L2 = stillstandLeiing({ q, still: still2, lastTick: -2, base: W.loggStart }); leiingCache = lagret2;
+    if (!fb.fast || !L2 || !L2.forhist || Math.abs(L2.lam - lam) > 0.15 || Math.abs(L2.T0 - T0) > 0.05)
+      feil.push(`gjenoppretting med forhistorie: λ ${L2 ? L2.lam.toFixed(2) : '–'} (skal være ${lam}), T₀ ${L2 ? L2.T0.toFixed(2) : '–'} (skal være ${T0})`); }
   if (feil.length) console.warn('Selvtest feilet:', feil);
   return feil;
 }
 let selvtestFeil = null;
 
-// ── Kapasitet: stabilt nivå mot uttak (v35, v49) ──
+// ── Kapasitet: stabilt nivå mot uttak (v35, rettet i v36) ──
 // Poster fra brønnscriptet v2.9: [min, q·10, Tf·100, endring mK/t, ṁcp, GP2,
 // timer·10, ute·10]. Det kjente fallet gjennom borehullet (Rb + varme-
 // utvekslingen mellom rørbeina ved målt flow) trekkes fra. Det som gjenstår,
 // y = Tf + q·Rb_eff, ligger på en rett linje mot uttaket: y = T_w0 − q·R_ut.
-// Grafen viser målingene og linja: hvor kald væsken blir ved et gitt uttak
-// etter 4–8 t jevn drift.
-// v49: grunnvannskonklusjonen herfra (v35–v48) er fjernet. R_ut er
-// differansen mellom to nesten like store fall, og med målt Rb ≈ 0,15 lå den
-// på 0,003 ± 0,013 K·m/W (24.10) – vannmengden R_vann = L_f/(2·ṁ·c) gikk da
-// mot uendelig (6,7 l/s). Lastnivåene er dessuten ulike kjøringer med ulik
-// forhistorie. Vannmengden regnes nå med hele modellen (wellVann).
-const KAP = { minTimer: 4, maksFall: 80, nivaa: 2, minNivaa: 3, minSpenn: 3,
+// R_ut sammenlignes med fallet varmeledning alene gir etter samme tid
+// (λ fra stillstandene). Grunnvann gjennom hullet virker PARALLELT med
+// varmeledningen: 1/R_ut = 1/R_ledn + 1/R_vann, R_vann = L_f/(2·ṁ·c).
+// Grunnvann vises bare når R_ut er klart lavere (mer enn 2σ); ellers vises
+// hvor mye strøm dataene utelukker. NB: R_ut og Rb er begge lineære i
+// uttaket, så sammenligningen avhenger direkte av Rb.
+// v48, konservativt. Med låst forhistorie ble tilpasningen pålitelig, og med
+// Rb 0,148 derfra og λ 3,3 fra stillstandene ville v47-regelen gitt «≈ 1,6 l/s».
+// Men λ fra stillstandene er for lav (linjekilde uten fyllets kapasitet –
+// syntetisk brønn: sann λ 3,3 → 2,3, sann 5,5 → 2,6; se stillstandLeiing),
+// så R_ledn ble for høy. Nå:
+//  – R_ledn fra tilpasningens λ + 2σ (statistisk og 10 % system): høyere λ
+//    gir lavere R_ledn, altså vanskeligere å konkludere med grunnvann.
+//    Tilpasningens λ er effektiv og tar alt med som virker over døgn og uker;
+//    «ekstra» betyr da strøm forbi hullet utover det. Stillstandsresultatet
+//    (leiing) er bare med som opplysning.
+//  – Rb-usikkerheten (statistisk + WELLX.sysRb) legges til fallets:
+//    R + 2·√(σR² + σRb²) < R_ledn.
+//  – Uten målt Rb (bare standardverdien) konkluderes ikke: dom 'uavklart'.
+// Bare 'ekstra' vises (overskriften). Kjent svakhet: lastnivåene er ulike
+// kjøringer med ulik forhistorie (start etter lang stillstand gir varmere
+// vegg), og T_w0 antas felles.
+const KAP = { Lf: 180, minTimer: 4, maksFall: 80, nivaa: 2, minNivaa: 3, minSpenn: 3, rhoC: 4186,
               mcpMin: 400,            // W/K – GP2 går aldri under ≈ 20 % (0,0051 l/s per % · 4061)
               RbStd: RB_STD.Rb, invRaStd: RB_STD.invRa };   // brukes bare uten pålitelig tilpasning
-function kapasitetAnalyse(poster, fit){
+function kapasitetAnalyse(poster, fit, leiing, gjeldende){
   const W = WELL;
   const alle = (poster || []).filter(Array.isArray).map(r => ({ t: r[0] * 60000, q: r[1] / 10, tf: r[2] / 100,
     fall: r[3], mcp: korrMcp(r[4], r[1] / 10), gp2: r[5], h: r[6] / 10, ute: r[7] != null ? r[7] / 10 : null }));
@@ -4013,12 +4057,12 @@ function kapasitetAnalyse(poster, fit){
   const nNivaa = new Set(stabil.map(r => Math.floor(r.q / KAP.nivaa))).size;
   const qs = stabil.map(r => r.q), spenn = qs.length ? Math.max(...qs) - Math.min(...qs) : 0;
   let rbK = null;
-  if (fit && fit.ok && wellKvalitet(fit).ok) rbK = { Rb: fit.Rb, invRa: fit.invRa, kilde: 'tilpasningen' };
-  else { const g = wellSiste(); if (g && Number.isFinite(g.Rb)) rbK = { Rb: g.Rb, invRa: g.invRa, kilde: 'siste pålitelige tilpasning' }; }
+  if (fit && fit.ok && wellKvalitet(fit).ok) rbK = { Rb: fit.Rb, invRa: fit.invRa, sRb: fit.sRb, lam: fit.lambda, sLam: fit.sLambda, kilde: 'tilpasningen' };
+  else { const g = wellSiste(); if (g && Number.isFinite(g.Rb)) rbK = { Rb: g.Rb, invRa: g.invRa, sRb: g.sRb, lam: g.lambda, sLam: g.sLambda, kilde: 'siste pålitelige tilpasning' }; }
   if (!rbK) rbK = { Rb: KAP.RbStd, invRa: KAP.invRaStd, kilde: 'standardverdi' };
   const rbEff = r => { const m = r.mcp > 0 ? r.mcp : Math.max(KAP.mcpMin, (r.q * W.L + W.pipeW) / W.dTauto);
                        return rbK.Rb + Math.pow(W.L / m, 2) * Math.max(0, rbK.invRa) / 3; };
-  const res = { alle, stabil, nNivaa, spenn, ok: false, rbK, rbEff };
+  const res = { alle, stabil, nNivaa, spenn, ok: false, rbK, rbEff, leiing };
   if (stabil.length < 4 || nNivaa < KAP.minNivaa || spenn < KAP.minSpenn) {
     res.grunn = `Samler data: ${stabil.length} stabile perioder på ${nNivaa} lastnivå.`;   // trenger ${KAP.minNivaa} nivå over 0,7 kW
     return res;
@@ -4029,9 +4073,33 @@ function kapasitetAnalyse(poster, fit){
   const b = x.reduce((a, v, k) => a + (v - xm) * (y[k] - ym), 0) / sxx, a0 = ym - b * xm;
   const s2 = y.reduce((a, v, k) => a + (v - a0 - b * x[k]) ** 2, 0) / Math.max(1, n - 2);
   Object.assign(res, { Tw0: a0, sTw0: Math.sqrt(s2 * (1 / n + xm * xm / sxx)), R: -b, sR: Math.sqrt(s2 / sxx) });
-  // Negativ R_ut: Rb·q forklarer hele fallet – linja tegnes da med R_ut = 0
-  if (!(res.R > 0)) res.R = 0;
+  // v48: med målt Rb (≈ 0,15) ligger R_ut nær null – negativ betyr da at Rb forklarer hele fallet, ikke for lite spredning
+  if (!(res.R > 0)) { res.grunn = rbK.kilde === 'standardverdi' ? 'Stabilt nivå faller ikke med uttaket ennå – for lite spredning i lastnivåene.'
+                                                                 : 'Fallet utover borehullsmotstanden er ikke målbart ennå.'; return res; }
   const hs = stabil.map(r => r.h).sort((u, v) => u - v); res.hMed = hs[Math.floor(hs.length / 2)];
+  res.dom = 'ukjent';
+  if (rbK.kilde === 'standardverdi' || !Number.isFinite(rbK.lam)) res.dom = 'uavklart';
+  else {
+    const Rc = lam => wellE1(W.rb * W.rb / (4 * (lam / W.C) * res.hMed * 3600)) / (4 * Math.PI * lam);
+    const sLam = Math.hypot(Number.isFinite(rbK.sLam) ? rbK.sLam : 0, WELLX.sysLam * rbK.lam);
+    res.lamK = rbK.lam + 2 * sLam;
+    res.Rcond = Rc(res.lamK);                                       // konservativ: lav R_ledn
+    res.RcondMid = Rc(rbK.lam);
+    res.sTot = Math.hypot(res.sR, Math.hypot(Number.isFinite(rbK.sRb) ? rbK.sRb : 0, WELLX.sysRb));
+    const Qf = (R, Rl) => { if (!(R > 0) || R >= Rl) return 0;
+                            return KAP.Lf / (2 * (1 / (1 / R - 1 / Rl)) * KAP.rhoC); };   // l/s
+    const Q = R => Qf(R, res.Rcond);
+    const lav = res.R - 2 * res.sTot;
+    res.Qmaks = lav > 0 ? Qf(lav, res.RcondMid) : null;            // mest strøm dataene tillater
+    if (res.R + 2 * res.sTot < res.Rcond) { res.dom = 'ekstra'; res.Q = Q(res.R); res.Qmin = Q(res.R + 2 * res.sTot); }
+    else res.dom = 'leiing';
+    // Følsomhet for Rb: høyere Rb gir like mye lavere R_ut. Vis hva gjeldende
+    // tilpasning (også en upålitelig) ville gitt når den avviker mye.
+    const g = gjeldende || fit;
+    if (g && Number.isFinite(g.Rb) && Math.abs(g.Rb - rbK.Rb) > 0.02) {
+      res.altRb = g.Rb; res.altR = res.R - (g.Rb - rbK.Rb); res.altQ = Q(res.altR);
+    }
+  }
   res.ok = true;
   return res;
 }
@@ -4049,9 +4117,43 @@ function kapasitetSeksjon(fit){
                             : `Fant ikke variabelen «nibe_trt_kapasitet» i Homey ved siste fulle sjekk kl. ${new Date(trtKapSjekk.t).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}. ` +
                               'Den opprettes av brønnscriptet fra v2.9. Appen ser etter den hvert 30. minutt.')
       : 'Venter på første henting.') + '</div></div>';
-  const a = kapasitetAnalyse(trtKap.p, fit), kw = q => q * WELL.L / 1000;
-  // v41: ingen forklarende tekst i appen. T_w0, R_ut ± σ og Rb-kilden ligger i kapasitetAnalyse().
-  return hode + '</div>' + kapasitetSVG(a, kw) + (a.ok ? '' : `<div class="ws-n">${a.grunn}</div>`) + '</div>';
+  const L = stillstandLeiing(trtData), a = kapasitetAnalyse(trtKap.p, fit, L, trtFit), kw = q => q * WELL.L / 1000;
+  // v41: ingen forklarende tekst i appen. Resultatene (R_ut ± 2σ, R_ledn etter hMed
+  // timer, utelukket strøm Qmaks, T_w0 mot stillstandsplatået, følsomhet for Rb via
+  // altRb/altR/altQ) ligger i kapasitetAnalyse() for senere analyse. Overskriften
+  // viser grunnvann bare når fallet er klart lavere enn varmeledning alene gir.
+  let val = '';
+  if (a.ok && a.dom === 'ekstra') val = `<span class="ws-val">≈ ${a.Q.toFixed(2)} <small>l/s</small></span>`;
+  return hode + val + '</div>' + kapasitetSVG(a, kw) + (a.ok ? '' : `<div class="ws-n">${a.grunn}</div>`) + '</div>';
+}
+function kapasitetTekstV40(a, L, platå){   // ubrukt fra v41 – beholdt som dokumentasjon av tolkningen
+  const f2 = v => v.toFixed(2), f3 = v => v.toFixed(3);
+  let val = '', tekst = '';
+  if (a.ok) {
+    const fall = `Fallet utover borehullet er ${f3(a.R)} ± ${f3(2 * a.sR)} K·m/W`;
+    const ledn = L && !L.kant ? `λ ${L.lam.toFixed(1)} fra stillstandene, ${L.lo.toFixed(1)}–${L.hi.toFixed(1)}` : '';
+    if (a.dom === 'ekstra') {
+      val = `<span class="ws-val">≈ ${f2(a.Q)} <small>l/s</small></span>`;
+      tekst = `${fall}, klart under varmeledning alene: ${f3(a.Rcond)} etter ${a.hMed.toFixed(1)} t med ${ledn}. ` +
+              `Den ekstra varmetilførselen tilsvarer grunnvann gjennom hullet på ≈ ${f2(a.Q)} l/s (${Math.round(a.Q * 3600)} l/t), ` +
+              `95 %-intervall ${f2(a.Qmin)}–${a.Qmaks != null ? f2(a.Qmaks) : '∞'} l/s. Forutsetter utløp nær bunnen. `;
+    } else if (a.dom === 'leiing') {
+      val = `<span class="ws-val" style="font-size:11px">som varmeledning</span>`;
+      tekst = `${fall}. Varmeledning alene gir ${f3(a.Rcond)} K·m/W etter ${a.hMed.toFixed(1)} t med ${ledn}. ` +
+              `Ingen tegn til grunnvann gjennom hullet` +
+              (a.Qmaks != null ? `: dataene utelukker mer enn ≈ ${f2(a.Qmaks)} l/s (${Math.round(a.Qmaks * 3600)} l/t). ` : '. ');
+    } else {
+      tekst = `${fall}. Varmeledningen fra stillstandene er ikke bestemt ennå (trenger minst 30 stillstandspunkt fra 2 stillstander), ` +
+              `så fallet kan ikke sammenlignes. `;
+    }
+    tekst += `Nivå uten uttak nå ${f2(a.Tw0)} ± ${f2(2 * a.sTw0)} °C` + (platå != null ? ` (stillstandsmålingene: ${f2(platå)} °C)` : '') +
+             (L && !L.kant ? `, ≈ ${(L.T0 - a.Tw0).toFixed(1)} K under T₀ ${f2(L.T0)} °C etter driften så langt` : '') + '. ' +
+             `Sammenligningen avhenger av Rb (${f3(a.rbK.Rb)}, ${a.rbK.kilde}): 0,01 høyere Rb gir like mye lavere fall. ` +
+             (a.altRb != null ? `Med Rb ${f3(a.altRb)} fra gjeldende tilpasning (ikke pålitelig) ville fallet vært ${f3(a.altR)}` +
+               (a.altQ > 0 ? `, som tilsvarer ≈ ${f2(a.altQ)} l/s grunnvann. ` : `, som også stemmer med varmeledning. `) : '') +
+             `${a.stabil.length} stabile perioder på ${a.nNivaa} lastnivå.`;
+  } else tekst = a.grunn;
+  return tekst;   // stabil = minst 4 t inn i kjøringen med jevnt uttak
 }
 // ── Målekontroll (v38) ──
 // Fra brønnscriptet v2.10: stillstandspunkt [i, Tf·100, BT11−BT10 (mK),
@@ -4062,20 +4164,7 @@ function kapasitetSeksjon(fit){
 // Forventet BT11−BT10: BT10 sitter ETTER GP2 (kjølemodulen, installasjonsmanualen
 // s. 12), så pumpevarmen er med i begge givarne. Mellom dem ligger bare fordamperen:
 // friksjon ≈ 6 W ved 100 % → 6 W / 1 790 W/K ≈ +0,005 K.
-// v49: vises bare mens en måling pågår (GP2 kontinuerlig): givaravviket summeres
-// ennå, eller det finnes stillstandspunkt med GP2 ≥ 95 % siste 48 t. Etter
-// låsingen 23.10.2026 (BT11 − BT10 = −0,079 K, O = −84 mK, 466 kvarter) brukes
-// korreksjonen uten å vises (giverO). Effekt i stillstand 21.10: GP2 100 % 150 W,
-// GP2 av 10 W – GP2 trekker 140 W. Varmen til kuldebæreren er 75–140 W (motor-
-// tapet går delvis til lufta); 75 W i brønnscriptet beholdes – 140 W ga 0,3 %
-// i λ og −0,06 K i T₀, og litt større avvik.
-const MK = { venta: 0.005, minKvarter: 8, minMin: 30 };
-function maalekontrollAktiv(d){
-  if (!d) return false;
-  if (d.giverStat && d.giverStat.n && !d.giverKorr) return true;
-  const n = Array.isArray(d.q) ? d.q.length : 0;
-  return Array.isArray(d.still) && d.still.some(p => Array.isArray(p) && p[4] >= 95 && p[0] >= n - 192);
-}
+const MK = { P_GP2: 75, venta: 0.005, minKvarter: 8, minMin: 30 };
 function maalekontroll(d){
   if (!d || !Array.isArray(d.still)) return null;
   const q = (d.q || []).map(v => Number.isFinite(v) ? v / 10 : 0);
@@ -4097,14 +4186,15 @@ function maalekontroll(d){
 function maalekontrollSeksjon(){
   const m = maalekontroll(trtData);
   const hode = '<div class="ws"><div class="ws-h"><span class="ws-lab">Målekontroll</span></div>';
-  if (!m || (!m.n && m.med == null && m.uten == null && !m.korr && !m.stat)) return '';
+  if (!m || (!m.n && m.med == null && m.uten == null && !m.korr && !m.stat))
+    return hode + '<div class="ws-n">Venter på brønnscriptet v2.10, som måler givaravvik og effekt i stillstand.</div></div>';
   const f = (v, d = 2) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(d);
   // v41: bare tall i appen. Forventet BT11−BT10 er +0,005 K fordi BT10 sitter etter
   // GP2; S1256 har ingen meny for å justere BT10/BT11 (bare BT12, meny 7.1.6.1).
   // Korreksjonen fordeles likt (ukjent hvilken giver som avviker): T₀ endres ikke,
   // ΔT og flow fra ΔT rettes for alle data. Låses når måleperioden er over (minst
   // 40 kvarter og 48 t uten nye). Effekten er register 2166, minst 10 min etter stopp;
-  // differansen GP2 100 % − GP2 av er GP2s faktiske effekt.
+  // differansen GP2 100 % − GP2 av er GP2s faktiske effekt (modellen antar 75 W).
   let t = '';
   if (m.n >= MK.minKvarter)
     t += `BT11 − BT10 i stillstand: ${f(m.snitt, 3)} K (${m.n} kvarter), avvik ${f(m.snitt - m.venta, 3)} K. `;
@@ -4434,14 +4524,14 @@ function wellScale(c){
   // de står i kallene i wellScales() som dokumentasjon.
 }
 
-function wellScales(fit, live, vn){
+function wellScales(fit, live){
   const ok = fit && fit.ok, W = WELLX;
   const okLow = ok && Number.isFinite(fit.RbLow) && Number.isFinite(fit.Rb);   // tåler eldre resultat uten feltene
   const lam = ok ? fit.lambda : null;
   const eLam = ok ? Math.hypot(fit.sLambda, W.sysLam * fit.lambda) : null;
-  // v49: «Grunnvannsbidrag λ/λbergart» er erstattet av vannmengden og andelen
-  // av varmen (wellVann), som regnes med hele modellen.
-  const vOk = vn && Number.isFinite(vn.lph) && Number.isFinite(vn.andel);
+  const ratio = ok ? lam / W.lamPrior : null;
+  // v48: λ fra stillstandene (stillstandLeiing) vises ikke som referanse. Den
+  // er linjekilde uten fyllets kapasitet og blir for lav – se stillstandLeiing.
   const Tb = live && live.bt10 != null && live.bt11 != null ? (live.bt10 + live.bt11) / 2 : null;
   const re = wellRe(live && live.flow, Tb);
   const wait = '–';                     // fremdriften står én gang, under illustrasjonen
@@ -4479,17 +4569,11 @@ function wellScales(fit, live, vn){
       ref: [W.Tsurf, W.Tsurf + W.gradMålt * W.zBot, 'forventet: årsmiddel 8 °C + målt gradient i hullet'],
       val: ok ? fit.T0 : null, err: ok ? Math.hypot(fit.sT0, W.sysT0) : null, wait: wait,
       note: 'Middel over den vannfylte sonen, 17–250 m. Usikkerheten domineres av givernes absolutte nøyaktighet.' }),
-    wellScale({ label: 'Grunnvann gjennom brønnen', unit: 'l/t', dec: 0, min: 0, max: 1000,
-      zones: [{ to: 100, col: '#475569', name: 'lite' }, { to: 300, col: '#0e7490', name: 'merkbart' },
-              { to: 1000, col: '#1d4ed8', name: 'mye' }],
-      val: vOk ? vn.lph : null, err: vOk ? vn.elph : null, wait: wait,
-      note: vOk ? `Med bergartens egen λ ${vn.lam[0]}–${vn.lam[1]}: ${Math.round(vn.lphLav)}–${Math.round(vn.lphHoy)} l/t. ` +
-                  'Som om grunnvannet kommer inn med T₀ og går ut med temperaturen i hullet. Kjent vannførende sprekk på 70 m.' : '' }),
-    wellScale({ label: 'Varme fra grunnvannet', unit: '%', dec: 0, min: 0, max: 100,
-      zones: [{ to: 15, col: '#475569', name: 'lite' }, { to: 40, col: '#0e7490', name: 'merkbart' },
-              { to: 100, col: '#1d4ed8', name: 'stor' }],
-      val: vOk ? vn.andel * 100 : null, err: vOk ? vn.eandel * 100 : null, wait: wait,
-      note: 'Andel av varmen tatt fra brønnen i måleperioden som kom med grunnvannet. Resten er varmeledning i fjellet.' }),
+    wellScale({ tr: 'ratio', trt: 'Grunnvannsbidrag λ / λbergart', label: 'Grunnvannsbidrag <span class="ws-sym">λ / λ<sub>bergart</sub></span>', unit: '×', dec: 2, min: 0.8, max: 2.4,
+      zones: [{ to: 1.05, col: '#475569', name: 'ledning' }, { to: 1.2, col: '#0e7490', name: 'lite' },
+              { to: 1.5, col: '#0369a1', name: 'tydelig' }, { to: 2.4, col: '#1d4ed8', name: 'sterkt' }],
+      val: ratio, wait: wait,
+      note: 'Én aktiv sprekk gir typisk ~1,1. Brønnen har én kjent vannførende sprekk, på 70 m.' }),
     wellScale({ tr: 'qMean', trt: 'Belastning, snitt', label: 'Belastning, snitt', unit: 'W/m', dec: 1, min: 0, max: 25, rev: true,
       zones: [{ to: 9, col: '#15803d', name: 'lett' }, { to: 17, col: '#0e7490', name: 'normal dim.' }, { to: 25, col: '#b45309', name: 'høy' }],
       val: ok ? fit.qMean : null, wait: wait,
@@ -4519,16 +4603,6 @@ function buildWellPanel(){
       wellBusy = false; buildWellPanel();
       if (typeof buildBrineChart === 'function') buildBrineChart();   // bruk målt Rb
     }, 30);
-  } else if (trtData && trtFit && trtFit.ok && trtFit.qPriorFast && !wellBusy && wellKvalitet(trtFit).ok &&
-             Date.now() - trtVannForsok > TRT_VANN_HVERT) {
-    // v49: grunnvannet (wellVann), høyst én gang i timen
-    wellBusy = true; trtVannForsok = Date.now();
-    setTimeout(() => {
-      try { const v = wellVann(trtToBins(trtData));
-            if (v) { trtVann = v; try { localStorage.setItem('trtVann', JSON.stringify(v)); } catch (_) {} } }
-      catch (_) {}
-      wellBusy = false; buildWellPanel();
-    }, 60);
   }
   const n = (typeof nibe_last !== 'undefined' && nibe_last) || {};
   // Dashbordets navn: brineIn = BT10, brineOt = BT11, srcPct = GP2, outAvg = BT1
@@ -4567,7 +4641,7 @@ function buildWellPanel(){
   }
   el.innerHTML = '<div style="margin:0 -.55rem">' + wellSVG(fv, live) + '</div>' +
     `<div class="wp-st">${status}</div>` +
-    `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live, fv ? trtVann : null) + kapasitetSeksjon(fv) + (maalekontrollAktiv(trtData) ? maalekontrollSeksjon() : '');
+    `<div id="wellUtv" style="margin:6px 0 4px"></div>` + wellScales(fv, live) + kapasitetSeksjon(fv) + maalekontrollSeksjon();
   wellVist = fv;                                       // trendvinduet viser verdien nå fra samme tilpasning
   el.querySelectorAll('[data-tr]').forEach(e => btt(e, e.dataset.trt || '', e.dataset.tr, ''));
   // Om modellen (vises ikke i appen): samme fysikk som en termisk responstest
@@ -4586,7 +4660,7 @@ function buildWellPanel(){
 // og er samtidig stabilitetskontrollen: et resultat som ikke setter seg,
 // er et varsel. Hvert hele døgn tilpasses på dataene fram til da, i
 // bakgrunnen, ett døgn per runde med varmstart, og lagres per datagrunnlag.
-const UTV_MODELL = 'kap-8';                  // v49: forhistorien simulert (forSim), nedkjøling fra veggen (kap-7: v48, kap-6: v31)
+const UTV_MODELL = 'kap-7';                  // v48: låst forhistorie (kap-6: v31, døgnhistorikk og lange opphold)
 const UTV_DAGER  = 30;                       // utviklingsgrafen viser siste 30 døgn                  // byttes når tilpasningen endres
 let utvCache = null, utvBusy = false;
 try { const c = localStorage.getItem('trtUtv'); if (c) utvCache = JSON.parse(c); } catch (_) {}
@@ -4711,7 +4785,7 @@ async function exJSON(url, h){
 async function exVariabler(t){
   const vars = Object.values(await exJSON(t.base + '/api/manager/logic/variable', t.h));
   const ut = {};
-  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history', 'nibe_kjolekrets', 'nibe_kjolekrets_logg', 'nibe_sone', 'nibe_trend', 'nibe_trend_naa']) {
+  for (const navn of ['nibe_trt_history', 'nibe_trt_arkiv', 'nibe_trt_minutt', 'nibe_trt_kapasitet', 'nibe_brine_history', 'nibe_cop_history', 'nibe_kjolekrets', 'nibe_kjolekrets_logg', 'nibe_sone', 'nibe_trend', 'nibe_trend_naa']) {
     const v = vars.find(x => x.name === navn);
     if (!v) { ut[navn] = null; continue; }
     try { ut[navn] = JSON.parse(v.value); } catch (_) { ut[navn] = v.value; }
@@ -4719,17 +4793,19 @@ async function exVariabler(t){
   return ut;
 }
 async function exInnsikt(t, resValg){
-  const nd = Object.values(await exJSON(t.base + '/api/manager/devices/device', t.h))
-    .find(d => d.name === NIBE_DEV);
+  const devs = Object.values(await exJSON(t.base + '/api/manager/devices/device', t.h));
+  nibeLiveInn(devs);                            // v49: Nibe Live som den gamle «Nibe S-Series»
+  const nd = devs.find(d => d.name === NIBE_DEV);
   if (!nd) throw new Error('Fant ikke «' + NIBE_DEV + '»');
   const serier = EX_SERIER.slice();
   const k26 = Object.keys(nd.capabilitiesObj || {})
     .find(k => k.startsWith('measure_temperature') && /\.i26(_|$)/.test(k));
   if (k26) serier.push(['bt50', k26]);
-  const uri = 'homey:device:' + nd.id;
   let res = resValg.split('|');                 // periodenavn i prioritert rekkefølge
   const ut = { format: 'punkter = [minutter siden 1970 UTC, verdi]', oppløsning: null, serier: {}, feil: [] };
-  for (const [navn, cap] of serier) {
+  for (const [navn, cap0] of serier) {
+    const kk = nd._kilde && nd._kilde[cap0];      // v49: enheten og capabilityen i Nibe Live
+    const uri = 'homey:device:' + (kk ? kk.id : nd.id), cap = kk ? kk.cap : cap0;
     let data = null, feil = null;
     // Homey Pro 2023 bruker «homey:device:<id>:<capability>» som logg-id, eldre bare capability.
     // Avvises periodenavnet (400), prøves neste; det som virker, brukes videre.
