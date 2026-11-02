@@ -321,6 +321,9 @@ label.ex-r>span{flex:1;min-width:0}
 .cfc:active{opacity:.75}
 .cfh{font:400 11px/1.6 var(--f);color:var(--t3);
   margin-top:.7rem;padding-top:.7rem;border-top:1px solid var(--b1)}
+.hl-r{font:400 10.5px/1.55 var(--m);color:#fca5a5;padding:.4rem 0;border-top:1px solid var(--b1)}
+.hl-r:first-child{border-top:0;padding-top:0}
+.hl-a{color:#fecaca;font-weight:500}
 .err{font:400 11px/1.6 var(--m);color:#f87171;
   padding:.6rem .95rem;display:none;
   background:rgba(248,113,113,.05);
@@ -533,7 +536,7 @@ label.ex-r>span{flex:1;min-width:0}
       <span class="vpi-l vpi-vert" id="vpiElp" style="left:5%;top:48%">–</span>
       <!-- Brine ΔT -->
       <span class="vpi-l vpi-sm" id="vpiBrineDT" style="left:82%;top:68%">–</span>
-      <!-- Kjølekrets fra pumpens REST-API (nibe_lokal.js): skjult til ferske verdier finnes -->
+      <!-- Kjølekrets fra pumpens REST-API (nibe_kjerne): skjult til ferske verdier finnes -->
       <span class="vpi-l vpi-sm" id="vpiBP8"  style="left:81.7%;top:73.7%;display:none"></span>
       <span class="vpi-l vpi-sm" id="vpiBT84" style="left:90.6%;top:83%;display:none"></span>
       <span class="vpi-l vpi-sm" id="vpiSH"   style="left:80%;top:87.5%;display:none"></span>
@@ -562,6 +565,14 @@ label.ex-r>span{flex:1;min-width:0}
       <span><span style="color:rgba(125,211,252,.6)">●</span> enkeltmåling</span>
       <span>tall = målinger per uke</span>
     </div>
+  </div>
+  <!-- Varsler (v51): pumpealarm og helse – vises bare når noe er galt -->
+  <div class="panel" id="helsePanel" style="margin-top:.7rem;display:none" role="status" aria-live="polite">
+    <div class="ph">
+      <div class="phd" id="helseDot" style="background:#f59e0b"></div>
+      <div class="pt">Varsler · alarm og helse</div>
+    </div>
+    <div id="helseListe"></div>
   </div>
   <!-- Eksport for analyse – skjult bak nedtrekksmeny som tilkoblingen (v41) -->
   <div class="cfg" style="margin-top:.7rem">
@@ -637,8 +648,15 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 49;   // v49 (24.10.2026): Nibe Live erstatter Nibe S-series – de tre enhetene settes sammen
-                          // til den gamle «Nibe S-Series» (se nibeLiveInn), og Innsikt hentes fra Nibe Live
+const APP_VERSION = 52;   // v52 (2.11.2026): tekstene viser til nibe_kjerne og nibe_styring, som har erstattet
+                          // nibe_lokal, nibe_trend og nibe_setpunkt. Variablene heter det samme – koden er uendret.
+                          // v51 (2.11.2026): panelet «Varsler» nederst – pumpealarm, kilder som står stille og
+                          // moduler som feiler (fra «nibe_status» i nibe_kjerne), og brønnscriptet. Vises bare når
+                          // noe er galt. Leser ellers de samme variablene som før.
+                          // v50 (25.10.2026): leser Nibe Live (Nibe Main, Nibe Heating og Nibe Hot Water)
+                          // direkte på enhets-ID – se NIBE_ID og NL. Driftsprioriteringen er tallkoden i
+                          // register 1028 (erVarme/erVV), spisslasten er i W. Innsikt hentes fra de samme.
+                          // v49 (24.10.2026): Nibe Live tatt i bruk
                           // v48 (21.10.2026): brønnen – forhistorien 17.5–25.9 låst til målt 3,1 W/m (drift og stillstand),
                           // λ-skala til 6, konservativ grunnvannskonklusjon (λ fra tilpasningen, ikke stillstandene);
                           // romføler nr. 2 i trendene for stue og fukt
@@ -677,39 +695,52 @@ const TANK_SENSORS = [
   {pct:0,   name:'Retur',  dev:FIBARO_DEV, cap:'measure_temperature.external3'},
 ];
 
-// Capability-navnene fra Nibe S-series – verdiene kommer fra Nibe Live (se nibeLiveInn)
+// DC-enhetene (Device Capabilities)
 const N = {
   scop   : 'devicecapabilities_number.number1', // from DC device
   scopDev:   'Nibe S1256-8kw',
   scop24Cap: 'devicecapabilities_number.number1',
-  prio   : 'measure_enum_NIBE.i1028_priority',
-  hz     : 'measure_frequency_NIBE.i1046_compressor',
-  pwr    : 'measure_power_NIBE.i2166_energy_usage',
-  supply : 'measure_temperature_NIBE.i5_heating_supply',
-  calcSupply : 'measure_temperature_NIBE.i1017_calculated_supply', // beregnet turledning klimasystem 1
-  ret    : 'measure_temperature_NIBE.i7_heating_return',
-  brineIn: 'measure_temperature_NIBE.i10_source_in',
-  brineOt: 'measure_temperature_NIBE.i11_source_out',
-  bt7    : 'measure_temperature_NIBE.i8_warmwater_top',
-  gm     : 'measure_degree_minutes_NIBE.h11_degree_minutes',
-  flow   : 'measure_water_NIBE.i40_flow_sensor',
-  bt6    : 'measure_temperature_NIBE.i9_hot_water',
-  outdoor: 'measure_temperature_NIBE.i1_outside',  // live BT1 (reg 1; reg 37 = midlet, ubrukt)
-  hpPct  : 'measure_percentage_NIBE.i1102_heating_pump',
-  srcPct : 'measure_percentage_NIBE.i1104_source_pump',
-  disch  : 'measure_temperature_NIBE.i13_discharge',
-  bt12   : 'measure_temperature_NIBE.i12_heating_supply',
-  bt15   : 'measure_temperature_NIBE.i14_liquid_line',
-  bt17   : 'measure_temperature_NIBE.i16_suction_gas',
-  compStarts: 'measure_count_NIBE.i1083_compressor_starts',
-  compHours : 'measure_hour_NIBE.i1087_compressor_usage_total',
 };
 
+// Nibe Live: pumpen er tre enheter i Homey, funnet på ID (navnene kan endres)
+const NIBE_ID = { main: '643249d6-1260-4b67-b25f-67c6ad96af44',       // Nibe Main
+                  heating: 'f6a62b10-96d7-400d-bb15-bf5c6ab74fcb',    // Nibe Heating
+                  hotwater: 'd02b33b2-1efc-4dbd-9dba-f8fccd1fd3cc' }; // Nibe Hot Water
+// Hver verdi: [enhet, capability]
+const NL = {
+  prio   : ['main',     'measure_priority_NIBE.i1028_priority_value'],   // tallkode, se PRIO_*
+  hz     : ['main',     'measure_frequency.i1046_compressor'],
+  pwr    : ['main',     'measure_watt_NIBE.i2166_energy_usage'],         // W
+  elAdd  : ['main',     'measure_watt_NIBE.i1027_additive_effect'],      // W, elkolben (register 1027)
+  supply : ['heating',  'measure_temperature.i5_heating_supply'],
+  calcSupply : ['heating', 'measure_temperature.i1017_calculated_supply'], // beregnet turledning klimasystem 1
+  ret    : ['heating',  'measure_temperature.i7_heating_return'],
+  brineIn: ['main',     'measure_temperature.i10_source_in'],
+  brineOt: ['main',     'measure_temperature.i11_source_out'],
+  bt7    : ['hotwater', 'measure_temperature.i8_warmwater_top'],
+  gm     : ['heating',  'measure_degree_minutes_NIBE.h11_degree_minutes'],
+  flow   : ['heating',  'measure_water.i40_flow_sensor'],
+  bt6    : ['hotwater', 'measure_temperature.i9_hot_water'],
+  outdoor: ['heating',  'measure_temperature.i1_outside'],        // live BT1 (register 1)
+  out37  : ['heating',  'measure_temperature.i37_outside_avg'],   // snitt utetemp (register 37)
+  bt50   : ['heating',  'measure_temperature'],                   // romgiveren BT50 (register 26), teknisk rom
+  hpPct  : ['heating',  'measure_percentage_NIBE.i1102_heating_pump'],
+  srcPct : ['main',     'measure_percentage_NIBE.i1104_source_pump'],
+  disch  : ['main',     'measure_temperature.i13_discharge'],
+  bt12   : ['heating',  'measure_temperature.i12_heating_supply'],
+  bt15   : ['main',     'measure_temperature.i14_liquid_line'],
+  bt17   : ['main',     'measure_temperature.i16_suction_gas'],
+  compStarts: ['main',  'measure_count_NIBE.i1083_compressor_starts'],
+  compHours : ['main',  'measure_hour_NIBE.i1087_compressor_usage_total'],
+};
+// Driftsprioriteringen (register 1028): 10 av · 20 tappevann · 30 varme · 40 basseng · 60 kjøling
+const PRIO_VV = 20, PRIO_VARME = 30;
+const erVarme = p => p != null && Number(p) === PRIO_VARME;
+const erVV    = p => p != null && Number(p) === PRIO_VV;
+
 // ── Spisslast (internt eltilskudd) ──────────────────────────
-// Modbus input-register 1027 = eS16TotIntEffect ("total intern eleffekt").
-// Bekreftet capability i Homey: meter_power_NIBE.i1027_additive_effect
-// (appen bruker meter_power-typen, men verdien er momentan effekt, ikke kWh).
-// Leses primært på fullt navn, med register-søk som reserve.
+// Input-register 1027 = eS16TotIntEffect ("total intern eleffekt"): i Nibe Live
+// «Elkolbens effekt» på Nibe Main (NL.elAdd), i W.
 // S1256-8 3x400V: 0 – 6,5 kW i 0,5 kW-trinn (meny 7.1.5.1 Internt eltilskudd).
 // ── Termisk effekt, målt fysisk ─────────────────────────────
 // Q = ṁ · cp · ΔT. Flowmåler BF1 (register 40) i l/min, ΔT over
@@ -743,103 +774,17 @@ function thermalEstKW(n, pwrKW){
   return Math.max(0, pwrKW - elKW)*scp + elKW;
 }
 
-const EL_CAP       = 'meter_power_NIBE.i1027_additive_effect';
-const EL_CAP_PREFIX = 'i1027';
 const EL_MAX_KW     = 6.5;   // elkolbe maks effekt
 const CPR_KW_MAX    = 8.0;   // kompressorens nominelle termiske effekt
 const TOT_KW_MAX    = CPR_KW_MAX + EL_MAX_KW;  // 14,5 kW samlet kapasitet
 
-// Normaliserer spisslast til kW uansett om appen leverer kW, rå
-// centi-kW (0–650) eller watt. Spisslasten kan aldri overstige det
-// samlede strømtrekket (register 2166) – den fysiske grensen gjør
-// tolkningen entydig.
-function elToKW(raw, totW){
-  if(!(typeof raw==='number' && isFinite(raw)) || raw<=0) return 0;
-  const limit = totW>0 ? Math.min(EL_MAX_KW, totW/1000*1.05) : EL_MAX_KW;
-  for(const f of [1, 1/100, 1/1000]){
-    const v = raw*f;
-    if(v <= limit+0.01) return v;
-  }
-  return 0;
-}
-const NIBE_DEV  = 'Nibe S-Series';
 const SCOP_DEV    = 'Nibe S1256-8kw'; // cumulative SCOP (since startup)
 const SCOP24_DEV  = 'Nibe SCOP 24t';  // rolling 24h SCOP
 const COPH_DEV    = 'Nibe COP Varme 24t';      // COP husvarme 24t
 const COPW_DEV    = 'Nibe COP Tappevann 24t';  // COP tappevann 24t
 const COPHT_DEV   = 'Nibe COP Varme Total';       // COP husvarme akkumulert
 const COPWT_DEV   = 'Nibe COP Tappevann Total';   // COP tappevann akkumulert
-const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) – nibe_lokal.js (REST), før myUplink
-
-// ── Nibe Live (v49, 24.10.2026) ──────────────────────────────
-// Nibe Live erstatter Nibe S-series og deler pumpen i tre enheter: Nibe Main,
-// Nibe Heating og Nibe Hot Water. nibeLiveInn() setter dem sammen til én
-// enhet i enhetslista, med det gamle navnet (NIBE_DEV) og de gamle
-// capability-navnene, så resten av appen er uendret. Spisslasten (1027) gjøres
-// om fra W til kW og driftsprioriteringen (1028) til engelsk tekst, som før.
-// _kilde gir enheten og capabilityen i Nibe Live – Innsikt hentes derfra.
-const NIBE_LIVE = { main: '643249d6-1260-4b67-b25f-67c6ad96af44',       // Nibe Main
-                    heating: 'f6a62b10-96d7-400d-bb15-bf5c6ab74fcb',    // Nibe Heating
-                    hotwater: 'd02b33b2-1efc-4dbd-9dba-f8fccd1fd3cc' }; // Nibe Hot Water
-const NIBE_KART = {   // gammelt navn: [enhet, capability i Nibe Live, omregning]
-  [N.supply]: ['heating', 'measure_temperature.i5_heating_supply'],
-  [N.calcSupply]: ['heating', 'measure_temperature.i1017_calculated_supply'],
-  [N.ret]: ['heating', 'measure_temperature.i7_heating_return'],
-  [N.brineIn]: ['main', 'measure_temperature.i10_source_in'],
-  [N.brineOt]: ['main', 'measure_temperature.i11_source_out'],
-  [N.bt7]: ['hotwater', 'measure_temperature.i8_warmwater_top'],
-  [N.gm]: ['heating', 'measure_degree_minutes_NIBE.h11_degree_minutes'],
-  [N.flow]: ['heating', 'measure_water.i40_flow_sensor'],
-  [N.bt6]: ['hotwater', 'measure_temperature.i9_hot_water'],
-  [N.outdoor]: ['heating', 'measure_temperature.i1_outside'],
-  'measure_temperature_NIBE.i37_outside_avg': ['heating', 'measure_temperature.i37_outside_avg'],
-  'measure_temperature_NIBE.i26_inside': ['heating', 'measure_temperature'],          // BT50, register 26
-  [N.hpPct]: ['heating', 'measure_percentage_NIBE.i1102_heating_pump'],
-  [N.srcPct]: ['main', 'measure_percentage_NIBE.i1104_source_pump'],
-  [N.disch]: ['main', 'measure_temperature.i13_discharge'],
-  [N.bt12]: ['heating', 'measure_temperature.i12_heating_supply'],
-  [N.bt15]: ['main', 'measure_temperature.i14_liquid_line'],
-  [N.bt17]: ['main', 'measure_temperature.i16_suction_gas'],
-  [N.hz]: ['main', 'measure_frequency.i1046_compressor'],
-  [N.pwr]: ['main', 'measure_watt_NIBE.i2166_energy_usage'],
-  [N.compStarts]: ['main', 'measure_count_NIBE.i1083_compressor_starts'],
-  [N.compHours]: ['main', 'measure_hour_NIBE.i1087_compressor_usage_total'],
-  [EL_CAP]: ['main', 'measure_watt_NIBE.i1027_additive_effect', w => w / 1000],   // W → kW
-};
-const PRIO_KODE = { 10: 'Off', 20: 'Hot water', 30: 'Heating', 40: 'Pool', 41: 'Pool', 50: 'Transfer', 60: 'Cooling' };
-function nibePrio(c){
-  const k = c['measure_priority_NIBE.i1028_priority_value']?.value;
-  if (typeof k === 'number' && PRIO_KODE[k]) return PRIO_KODE[k];
-  const t = String(c['measure_enum_NIBE.i1028_priority']?.value ?? '').trim().toLowerCase();
-  if (!t) return null;
-  if (/varmtvann|varmvatten|hot ?water/.test(t)) return 'Hot water';
-  if (/kjøl|kyl|cool/.test(t)) return 'Cooling';
-  if (/basseng|pool/.test(t)) return 'Pool';
-  if (/varme|värme|heat/.test(t)) return 'Heating';
-  if (/^(av|off|från)$/.test(t)) return 'Off';
-  return t;
-}
-// Legger den sammensatte enheten først i lista og tar ut den gamle
-// «Nibe S-Series» (Nibe S-series er avslått og har bare gamle verdier).
-// Finnes ingen av Nibe Live-enhetene, endres ingenting.
-function nibeLiveInn(devs){
-  const enh = {};
-  for (const [r, id] of Object.entries(NIBE_LIVE)) enh[r] = devs.find(d => d && d.id === id) || null;
-  if (!enh.main && !enh.heating && !enh.hotwater) return;
-  const co = {}, kilde = {};
-  for (const [gml, [r, ny, f]] of Object.entries(NIBE_KART)) {
-    const c = enh[r]?.capabilitiesObj?.[ny];
-    if (!c) continue;
-    co[gml] = { ...c, id: gml, value: c.value == null ? null : (f ? f(c.value) : c.value) };
-    kilde[gml] = { id: enh[r].id, cap: ny };
-  }
-  const cm = enh.main?.capabilitiesObj || {};
-  const pc = cm['measure_priority_NIBE.i1028_priority_value'] || cm['measure_enum_NIBE.i1028_priority'];
-  if (pc) co[N.prio] = { ...pc, id: N.prio, value: nibePrio(cm) };
-  for (let i = devs.length - 1; i >= 0; i--) if (devs[i] && devs[i].name === NIBE_DEV) devs.splice(i, 1);
-  devs.unshift({ id: NIBE_LIVE.main, name: NIBE_DEV, capabilitiesObj: co, _kilde: kilde,
-                 available: Object.values(enh).every(d => d && d.available !== false) });
-}
+const BT5_DEV     = 'Nibe BT5';      // Hot water start (BT5) – nibe_kjerne (REST), før myUplink
 
 const REF = 25, KWH = 0.5815;
 const HIST_EVERY = 20; // SCOP-grafen får nytt punkt hvert 20. fetch (20×15s = 5 min)
@@ -912,7 +857,7 @@ const dc = (c,a) => { const m=c.match(/\d+/g).map(Number); return `rgb(${Math.ma
 //
 // Kilder per time, i prioritert rekkefølge:
 //   1. «nibe_trend» (ferdige timer) og «nibe_trend_naa» (inneværende time)
-//      fra nibe_trend.js. Har alle verdiene, også de som må regnes hvert
+//      fra nibe_kjerne. Har alle verdiene, også de som må regnes hvert
 //      minutt: termisk effekt, kapasitet, driftsandeler, dusjtid og
 //      brineflow fra energibalansen.
 //   2. Homey Innsikt, timesnitt («last7Days»), for timer scriptet ikke har –
@@ -923,13 +868,13 @@ const dc = (c,a) => { const m=c.match(/\d+/g).map(Number); return `rgb(${Math.ma
 //      40 °C per sjikt, ≈ 1 min). Brønnhodet vises rått i disse timene (se
 //      trBronn). Innsikt krever «Vis logger» (homey.insights.readonly) på API-nøkkelen. Svarer Homey
 //      401/403, prøves den ikke igjen på 30 min, og grafen bruker bare 1.
-//   Kjølekretsen: loggen «nibe_kjolekrets_logg» fra nibe_lokal.js (punkt hvert
+//   Kjølekretsen: loggen «nibe_kjolekrets_logg» fra nibe_kjerne (punkt hvert
 //   10. min mens kompressoren går), hentet først når et kjølekretsvindu åpnes.
 //   Med det gamle nibe_myuplink.js lå loggen inne i «nibe_kjolekrets» – den
 //   brukes da. Snitt per time av punktene, med samme plausibilitetskrav som
 //   i appen (kjoleVerdier).
 //   Romsonen (stue, ønsket, fukt): bare fra nibe_trend v1.1, som leser
-//   «nibe_sone» (nibe_lokal.js) hvert minutt.
+//   «nibe_sone» (nibe_kjerne) hvert minutt.
 //   Brønnens egenskaper (λ, Rb, T₀ …): døgnestimatene fra utviklingsgrafen
 //   (utvCache). De regnes én gang per døgn med data – ett punkt per døgn.
 //
@@ -998,8 +943,8 @@ const TRS = {
   bt12: trM('bt12', 1, '°C'), bt15: trM('bt15', 1, '°C'), disch: trM('disch', 1, '°C'), bt17: trM('bt17', 1, '°C'),
   flow: trM('flow', 1, 'l/m'), hpPct: trM('hpPct', 0, '%'), srcPct: trM('srcPct', 0, '%'),
   gm: trM('gm', 0, 'GM'), hz: trM('hz', 1, 'Hz'), pwr: trM('pwr', 0, 'W'),
-  // Innsikt har appens rå verdi (W i Nibe Live, kW i Nibe S-series) – normaliseres som i doFetch
-  elAdd:     { inn: ['elAdd','pwr'], f: r => r.elAdd == null ? null : (r.kilde === 'I' ? elToKW(r.elAdd, r.pwr ?? 0) : r.elAdd), d: 2, enh: 'kW' },
+  // Innsikt har Nibe Lives verdi i W; nibe_trend og live-verdien er i kW
+  elAdd:     { inn: ['elAdd'], f: r => r.elAdd == null ? null : (r.kilde === 'I' ? Math.max(0, r.elAdd) / 1000 : r.elAdd), d: 2, enh: 'kW' },
   compStarts: { ...trM('compStarts', 0, 'stk'), type: 'teller' },
   compHours:  { ...trM('compHours', 0, 't'), type: 'teller' },
   scopDC: trCop('scopDC'), scop24: trCop('scop24'), copHeat: trCop('copHeat'),
@@ -1033,7 +978,7 @@ const TRS = {
   romRH: { d: 0, enh: '%', sone: true, linjer: [
            { navn: 'Stue', f: r => r.romRH },
            { navnF: rom2Navn, f: r => r.romRH2, valgfri: true }] },
-  // Kjølekretsen – loggen «nibe_kjolekrets_logg» (nibe_lokal.js)
+  // Kjølekretsen – loggen «nibe_kjolekrets_logg» (nibe_kjerne)
   bp8d: { kilde: 'kjole', d: 1, enh: '°C' }, bt84: { kilde: 'kjole', d: 1, enh: '°C' },
   sh:   { kilde: 'kjole', d: 1, enh: 'K' },  bp9d: { kilde: 'kjole', d: 1, enh: '°C' },
   // Brønnens egenskaper – døgnestimat e = [λ, σλ, Rb, σRb, T₀, σT₀, Rb ved lav last, uttak, nedkjøling nå]
@@ -1051,7 +996,7 @@ const TRS = {
     { navn: 'upåvirket', f: ug },
     { navn: 'ved hullet nå', f: e => { const u = ug(e); return u == null || e[8] == null ? null : u - e[8]; }, stiplet: true }] };
 });
-// Fysisk mulig område for rå verdier fra Innsikt (som i nibe_trend.js) –
+// Fysisk mulig område for rå verdier fra Innsikt (som i nibe_kjerne) –
 // en frakoblet giver gir −3276,8 og skal ikke bli et timesnitt
 const TR_OMR = { t100: [-20,110], t75: [-20,110], t50: [-20,110], t25: [-20,110], t0: [-20,110],
   supply: [-20,110], ret: [-20,110], calcSupply: [-20,110], brineIn: [-30,40], brineOt: [-30,40],
@@ -1163,9 +1108,9 @@ function trTegn(){
 }
 function trTomTekst(D, def){
   if (D.oppl === 'k') return 'Ingen målinger i drift siste 7 døgn';
-  if (def && def.sone && D.logg) return 'Ingen timesverdier ennå – krever nibe_lokal og nibe_trend 1.1 i Homey';
+  if (def && def.sone && D.logg) return 'Ingen timesverdier ennå – krever nibe_kjerne i Homey';
   if (D.oppl === 'd') return 'Ingen pålitelige døgnestimat siste 7 døgn';
-  return D.logg ? 'Ingen timesverdier for denne verdien ennå' : 'Venter på timesverdier fra nibe_trend i Homey';
+  return D.logg ? 'Ingen timesverdier for denne verdien ennå' : 'Venter på timesverdier fra nibe_kjerne i Homey';
 }
 function trFeilTekst(e){
   if (e && e.tilk) return 'Koble til Homey under ⚙ Tilkobling';
@@ -1193,14 +1138,14 @@ function trStatTekst(D, def){
   const forste = Math.min(...ls.map(x => x.pts[0].t));
   if (D.oppl === 'd') s += ` · ${l.pts.length} døgnestimat`;
   else if (forste > D.t0 + 3 * 3600000) s += ' · fra ' + trFra(forste);
-  if (D.logg && D.loggSist && D.t1 - D.loggSist > 20 * 60000) s = '⚠️ nibe_trend sist kjørt ' + trFra(D.loggSist) + ' · ' + s;
+  if (D.logg && D.loggSist && D.t1 - D.loggSist > 20 * 60000) s = '⚠️ nibe_kjerne (trend) sist kjørt ' + trFra(D.loggSist) + ' · ' + s;
   return s;
 }
 // Verdien slik appen viser den nå
 function trLiveRec(){
   const n = nibe_last || {}, T = temps_last || [];
   const pwrKW = n.pwr == null ? null : n.pwr / 1000;
-  const pL = String(n.prio ?? '').toLowerCase(), prioOk = n.prio != null;
+  const prioOk = n.prio != null;
   const r = { kilde: 'live', t: Date.now(),
     t100: T[0], t75: T[1], t50: T[2], t25: T[3], t0: T[4],
     supply: n.supply, ret: n.ret, calcSupply: n.calcSupply, brineIn: n.brineIn, brineOt: n.brineOt,
@@ -1211,8 +1156,8 @@ function trLiveRec(){
     scopDC: n.scopDC, scop24: n.scop24, copHeat: n.copHeat, copHw: n.copHw, copHeatT: n.copHeatT, copHwT: n.copHwT };
   r.pTerm = pwrKW == null ? null : (pwrKW > 0.2 ? (thermalKW(n) ?? thermalEstKW(n, pwrKW)) : 0);
   r.komp  = n.hz == null ? null : (n.hz >= 1 ? 1 : 0);
-  r.varme = (pwrKW == null || !prioOk) ? null : (pwrKW > 0.2 && pL.includes('heat') && !pL.includes('water') ? 1 : 0);
-  r.vv    = (pwrKW == null || !prioOk) ? null : (pwrKW > 0.2 && (pL.includes('water') || pL.includes('hot')) ? 1 : 0);
+  r.varme = (pwrKW == null || !prioOk) ? null : (pwrKW > 0.2 && erVarme(n.prio) ? 1 : 0);
+  r.vv    = (pwrKW == null || !prioOk) ? null : (pwrKW > 0.2 && erVV(n.prio) ? 1 : 0);
   r.dusj  = showerMinutes({ bt7: n.bt7, bt6: n.bt6, bt5: n.bt5 });
   r.flowW = wellFlowLps(n) ?? wellFlowEst(n);
   const s = soneVerdier();
@@ -1291,17 +1236,17 @@ function trLoggTimer(L, nu){
   }
   return m;
 }
-// Innsikt: enhet og capability for hver rå verdi ([navn, capability, prefiks?])
+// Innsikt: enhet og capability for hver rå verdi – [enhetsnavn, capability], eller
+// [enhet i Nibe Live, capability] (se NL)
 const TR_INSK = {
   t100: [FIBARO_DEV, TANK_SENSORS[0].cap], t75: [FIBARO_DEV, TANK_SENSORS[1].cap], t50: [FIBARO_DEV, TANK_SENSORS[2].cap],
   t25: [FIBARO_DEV, TANK_SENSORS[3].cap], t0: [FIBARO_DEV, TANK_SENSORS[4].cap],
-  supply: [NIBE_DEV, N.supply], ret: [NIBE_DEV, N.ret], calcSupply: [NIBE_DEV, N.calcSupply],
-  brineIn: [NIBE_DEV, N.brineIn], brineOt: [NIBE_DEV, N.brineOt], bt7: [NIBE_DEV, N.bt7], bt6: [NIBE_DEV, N.bt6],
-  gm: [NIBE_DEV, N.gm], flow: [NIBE_DEV, N.flow], outAvg: [NIBE_DEV, N.outdoor],
-  out37: [NIBE_DEV, 'measure_temperature_NIBE.i37', true],
-  hpPct: [NIBE_DEV, N.hpPct], srcPct: [NIBE_DEV, N.srcPct], disch: [NIBE_DEV, N.disch],
-  bt12: [NIBE_DEV, N.bt12], bt15: [NIBE_DEV, N.bt15], bt17: [NIBE_DEV, N.bt17], hz: [NIBE_DEV, N.hz],
-  pwr: [NIBE_DEV, N.pwr], elAdd: [NIBE_DEV, EL_CAP], compStarts: [NIBE_DEV, N.compStarts], compHours: [NIBE_DEV, N.compHours],
+  supply: NL.supply, ret: NL.ret, calcSupply: NL.calcSupply,
+  brineIn: NL.brineIn, brineOt: NL.brineOt, bt7: NL.bt7, bt6: NL.bt6,
+  gm: NL.gm, flow: NL.flow, outAvg: NL.outdoor, out37: NL.out37,
+  hpPct: NL.hpPct, srcPct: NL.srcPct, disch: NL.disch,
+  bt12: NL.bt12, bt15: NL.bt15, bt17: NL.bt17, hz: NL.hz,
+  pwr: NL.pwr, elAdd: NL.elAdd, compStarts: NL.compStarts, compHours: NL.compHours,
   bt5: [BT5_DEV, DC_NUM], scopDC: [SCOP_DEV, DC_NUM], scop24: [SCOP24_DEV, DC_NUM], copHeat: [COPH_DEV, DC_NUM],
   copHw: [COPW_DEV, DC_NUM], copHeatT: [COPHT_DEV, DC_NUM], copHwT: [COPWT_DEV, DC_NUM],
 };
@@ -1309,13 +1254,15 @@ function trKilde(k){
   if (k === 'trom') return trRom;
   const s = TR_INSK[k];
   if (!s || !trEnheter) return null;
-  const kand = trEnheter.filter(d => d.name === s[0]);
+  if (NIBE_ID[s[0]]) {
+    // Nibe Live: enheten på ID. Capabilityene er faste, så Innsikt hentes også når
+    // appen står (da er capabilityene borte fra enhetslista, men loggene finnes)
+    const d = trEnheter.find(x => x.id === NIBE_ID[s[0]]);
+    return d ? { id: d.id, cap: s[1] } : null;
+  }
+  const kand = trEnheter.filter(x => x.name === s[0]);
   const d = kand.find(x => x.caps.length > 10) || kand[0];
-  if (!d) return null;
-  let cap = s[2] ? d.caps.find(c => c.startsWith(s[1])) : (d.caps.includes(s[1]) ? s[1] : null);
-  if (!cap && k === 'elAdd') cap = d.caps.find(c => c.includes('.' + EL_CAP_PREFIX + '_') || c.endsWith('.' + EL_CAP_PREFIX));
-  if (cap && d.kilde && d.kilde[cap]) return d.kilde[cap];          // v49: Nibe Live-enheten
-  return cap ? { id: d.id, cap } : null;
+  return d && d.caps.includes(s[1]) ? { id: d.id, cap: s[1] } : null;
 }
 const trIns = {};
 let trInsNekt = 0;
@@ -1431,7 +1378,7 @@ async function trData(id, medIns){
                .filter(p => p.v != null && Number.isFinite(p.v) && p.t >= t0) }))
       .filter(l => !(l.valgfri && !l.pts.length)) };
 }
-// Kjølekretsens logg: egen variabel fra nibe_lokal.js, hentet først når et
+// Kjølekretsens logg: egen variabel fra nibe_kjerne, hentet først når et
 // kjølekretsvindu åpnes og gjenbrukt i 5 min (≈ 40 kB – skal ikke lastes
 // ned hvert minutt). Med det gamle nibe_myuplink.js lå loggen inne i
 // «nibe_kjolekrets»; den brukes da.
@@ -1665,12 +1612,10 @@ function buildSvg(temps, nibe) {
   const returT = temps[4] ?? 25;
   const turVP  = nibe.supply;
   const pwr    = (nibe.pwr ?? 0) / 1000; // W→kW
-  const prio   = nibe.prio ?? '';
 
-  // Mode: direct from priority field (case-insensitive, flexible match)
-  const pL = String(prio).toLowerCase();
-  const isHeat = pwr > 0.2 && pL.includes('heat') && !pL.includes('water');
-  const isDHW  = pwr > 0.2 && (pL.includes('water') || pL.includes('hot'));
+  // Modus fra driftsprioriteringen (register 1028, tallkode)
+  const isHeat = pwr > 0.2 && erVarme(nibe.prio);
+  const isDHW  = pwr > 0.2 && erVV(nibe.prio);
 
   // Tank fill
   const vpHeat = isHeat && turVP != null && turVP > (returT + 3);
@@ -2187,11 +2132,10 @@ function renderPanels(temps, nibe) {
   document.getElementById('vCopHeatT').textContent = visCop(nibe.copHeatT);
   document.getElementById('vCopHwT').textContent   = visCop(nibe.copHwT);
 
-  // Mode from priority (direct from Modbus!)
+  // Modus fra driftsprioriteringen (register 1028, tallkode)
   const pwr=(nibe.pwr??0)/1000;
-  const prio=String(nibe.prio??'').toLowerCase();
-  const isHeat=pwr>0.2 && prio.includes('heat') && !prio.includes('water');
-  const isDHW =pwr>0.2 && (prio.includes('water')||prio.includes('hot'));
+  const isHeat=pwr>0.2 && erVarme(nibe.prio);
+  const isDHW =pwr>0.2 && erVV(nibe.prio);
   document.getElementById('vMod').textContent =
     isHeat?'Varmeproduksjon':isDHW?'Tappevannsproduksjon':pwr>0.2?'Drift':'Avslått';
 
@@ -2361,7 +2305,7 @@ function showerMinutes({ bt7, bt5, bt6 }) {
 function buildDHW(nibe) {
   const bt7 = nibe.bt7;     // topp (BT7)
   const bt6 = nibe.bt6;     // oppvarming/midt (BT6)
-  const bt5 = nibe.bt5;     // bunn/start (BT5 via nibe_lokal.js)
+  const bt5 = nibe.bt5;     // bunn/start (BT5 via nibe_kjerne)
 
   const temps = [bt7, bt6, bt5].filter(v => v != null);
   const snitt = temps.length ? r1(temps.reduce((a,b)=>a+b,0)/temps.length) : null;
@@ -2614,10 +2558,10 @@ function buildVPInternal(nibe) {
 
 
   // Plassering (installasjonsmanualen s. 12): BT84 sit rett etter fordamparen,
-  // BT17 lenger fram på suggassrøyret mot kompressoren. Homey-appen
-  // (net.sparud.nibe_s 2.2.0) les BT17 (register 16), men ikkje BT84 (2129),
+  // BT17 lenger fram på suggassrøyret mot kompressoren. Nibe Live
+  // les BT17 (register 16), men ikkje BT84 (2129),
   // lågtrykket BP8 (2308, bar) eller BP8-duggpunktet (2127, R454B omrekna av
-  // NIBE). De kommer fra pumpens lokale REST-API via nibe_lokal.js (se kjoleVerdier).
+  // NIBE). De kommer fra pumpens lokale REST-API via nibe_kjerne (se kjoleVerdier).
   // BT17 kan derfor vere varmare enn BT10: gassen tek opp varme etter
   // fordamparen. Ved 25 Hz er ṁ·cp for dampen berre ≈ 10 W/K (≈ 9 g/s R454B),
   // så 15–40 W frå kabinett og kompressor gir 1,5–4 K. Som duggpunkt frå
@@ -2641,7 +2585,7 @@ function buildVPInternal(nibe) {
   // Elpatron (internt eltilskudd, register 1027) – viste fast «0,00 kW» før v44
   el('vpiElp').textContent = nibe.elAdd != null ? (nibe.elAdd / 1000).toFixed(2) + ' kW' : '–';
 
-  // Kjølekrets fra REST (nibe_lokal.js): bare når kompressoren går og verdiene er ferske
+  // Kjølekrets fra REST (nibe_kjerne): bare når kompressoren går og verdiene er ferske
   const kv = kjoleVerdier(nibe);
   const vis = (id, txt) => { const e = el(id); if (!e) return; e.textContent = txt || ''; e.style.display = txt ? '' : 'none'; };
   vis('vpiBP8',  kv && kv.bp8d != null ? 'fordamping ' + fmt(kv.bp8d) + ' °C' : '');
@@ -2854,7 +2798,6 @@ async function doFetch() {
     if(res.status===403) throw new Error('403 – Mangler rettigheter');
     if(!res.ok) throw new Error('HTTP '+res.status);
     const devs=Object.values(await res.json());
-    nibeLiveInn(devs);   // v49: Nibe Live som den gamle «Nibe S-Series»
 
     // Helper: get value from any capability
     const gv=(devName, capKey)=>{
@@ -2864,49 +2807,21 @@ async function doFetch() {
       return(c&&c.value!=null&&c.value!==undefined)?c.value:null;
     };
     const gvN=(devName,capKey)=>{const v=gv(devName,capKey);return(v!=null&&isFinite(v))?Number(v):null;};
-
-    // Finn capability-verdi der nøkkelen STARTER med gitt prefiks.
-    // Brukes for register 37 (snitt utetemp), sifra suffikset i
-    // capability-navnet kan variere mellom app-versjoner.
-    const gvPrefix=(devName,capPrefix)=>{
-      const d=devs.find(x=>x.name===devName);
-      if(!d||!d.capabilitiesObj) return null;
-      const key=Object.keys(d.capabilitiesObj).find(k=>k.startsWith(capPrefix));
-      if(!key) return null;
-      const v=d.capabilitiesObj[key]?.value;
+    // Nibe Live: verdien til [enhet, capability] (se NL)
+    const nlN=([rolle, capKey])=>{
+      const d=devs.find(x=>x.id===NIBE_ID[rolle]);
+      const v=d&&d.capabilitiesObj?.[capKey]?.value;
       return(v!=null&&isFinite(v))?Number(v):null;
     };
 
-    // Finn capability-verdi der nøkkelen INNEHOLDER gitt registerdel,
-    // f.eks. '.i1027' i 'meter_power_NIBE.i1027_additive_effect'. Robust når
-    // verken namespace eller suffiks er kjent på forhånd.
-    const gvReg=(devName,regPart)=>{
-      const d=devs.find(x=>x.name===devName);
-      if(!d||!d.capabilitiesObj) return null;
-      const key=Object.keys(d.capabilitiesObj)
-        .find(k=>k.includes('.'+regPart+'_') || k.endsWith('.'+regPart));
-      if(!key) return null;
-      const v=d.capabilitiesObj[key]?.value;
-      return(v!=null&&isFinite(v))?Number(v):null;
-    };
-
-    // Romtemperatur i teknisk rom: BT50 (register 26 i S-serien) står der.
-    // Ellers capability med «room»/«bt50», så enhet med «teknisk» i navnet.
+    // Romtemperatur i teknisk rom: romgiveren BT50 (register 26) står der og er
+    // innetemperaturen på «Nibe Heating». Ellers en enhet med «teknisk» i navnet.
     const findRoom=()=>{
       const ok=t=>t!=null&&isFinite(t)&&t>=5&&t<=40;
-      const nd=devs.find(x=>x.name===NIBE_DEV);
-      const co=(nd&&nd.capabilitiesObj)||{};
-      const k26=Object.keys(co).find(k=>k.startsWith('measure_temperature')&&/\.i26(_|$)/.test(k));
-      if(k26&&ok(co[k26].value)){ const kk=nd._kilde&&nd._kilde[k26];
-        return {t:Number(co[k26].value), src:'BT50', id:kk?kk.id:nd.id, cap:kk?kk.cap:k26}; }
-      for(const k of Object.keys(co)){
-        const c=co[k]||{};
-        if(!k.startsWith('measure_temperature')) continue;
-        if(!/room|romtemp|bt50/i.test(k+' '+(c.title||''))) continue;
-        if(ok(c.value)) return {t:Number(c.value), src:'NIBE '+(c.title||k), id:nd.id, cap:k};
-      }
+      const t50=nlN(NL.bt50);
+      if(ok(t50)) return {t:t50, src:'BT50', id:NIBE_ID[NL.bt50[0]], cap:NL.bt50[1]};
       for(const d of devs){
-        if(d===nd||!/teknisk/i.test(d.name||'')) continue;
+        if(!/teknisk/i.test(d.name||'')) continue;
         const c=d.capabilitiesObj&&d.capabilitiesObj.measure_temperature;
         if(c&&ok(c.value)) return {t:Number(c.value), src:d.name, id:d.id, cap:'measure_temperature'};
       }
@@ -2914,13 +2829,13 @@ async function doFetch() {
     };
     const rom=findRoom();
     // Til trendvinduet: hvilke enheter og capabilityer som finnes (for Innsikt)
-    trEnheter=devs.map(d=>({id:d.id, name:d.name, caps:Object.keys(d.capabilitiesObj||{}), kilde:d._kilde||null}));
+    trEnheter=devs.map(d=>({id:d.id, name:d.name, caps:Object.keys(d.capabilitiesObj||{})}));
     trRom=rom&&rom.id?{id:rom.id, cap:rom.cap}:null;
 
     // Tank sensors (via Device Capabilities)
     const temps=TANK_SENSORS.map(s=>gvN(s.dev,s.cap));
 
-    // NIBE-data (Nibe Live, satt sammen til «Nibe S-Series» av nibeLiveInn)
+    // NIBE-data: Nibe Live (se NL) og DC-enhetene
     const nibe={
       trom   : rom ? rom.t : null, tromSrc: rom ? rom.src : null,
       scopDC : gvN(SCOP_DEV,   N.scop),      // cumulative SCOP since startup
@@ -2929,36 +2844,30 @@ async function doFetch() {
       copHw  : gvN(COPW_DEV,   N.scop24Cap), // COP tappevann 24t
       copHeatT: gvN(COPHT_DEV, N.scop24Cap), // COP husvarme akkumulert
       copHwT  : gvN(COPWT_DEV, N.scop24Cap), // COP tappevann akkumulert
-      prio   : gv(NIBE_DEV,  N.prio),
-      hz     : gvN(NIBE_DEV, N.hz),
-      pwr    : gvN(NIBE_DEV, N.pwr),
-      supply : gvN(NIBE_DEV, N.supply),
-      calcSupply : gvN(NIBE_DEV, N.calcSupply),
-      ret    : gvN(NIBE_DEV, N.ret),
-      brineIn: gvN(NIBE_DEV, N.brineIn),
-      brineOt: gvN(NIBE_DEV, N.brineOt),
-      bt7    : gvN(NIBE_DEV, N.bt7),
-      bt6    : gvN(NIBE_DEV, N.bt6),
+      prio   : nlN(NL.prio),                 // driftsprioritering, tallkode (se erVarme/erVV)
+      hz     : nlN(NL.hz),
+      pwr    : nlN(NL.pwr),
+      supply : nlN(NL.supply),
+      calcSupply : nlN(NL.calcSupply),
+      ret    : nlN(NL.ret),
+      brineIn: nlN(NL.brineIn),
+      brineOt: nlN(NL.brineOt),
+      bt7    : nlN(NL.bt7),
+      bt6    : nlN(NL.bt6),
       bt5    : gvN(BT5_DEV, 'devicecapabilities_number.number1'),  // BT5 from DC
-      gm     : gvN(NIBE_DEV, N.gm),
-      flow   : gvN(NIBE_DEV, N.flow),
-      outAvg : gvN(NIBE_DEV, N.outdoor),  // live BT1 – i1_outside (ikke midlet i37)
-      outAvg37: gvPrefix(NIBE_DEV, 'measure_temperature_NIBE.i37'),  // snitt utetemp, register 37
-      // Spisslast, register 1027. Pinnet capability-navn, med register-
-      // søk som reserve. Normaliseres til W via elToKW (se konstanter).
-      elAdd  : (()=>{
-        const raw = gvN(NIBE_DEV, EL_CAP) ?? gvReg(NIBE_DEV, EL_CAP_PREFIX);
-        if (raw == null) return null;
-        return elToKW(raw, gvN(NIBE_DEV, N.pwr) ?? 0) * 1000;
-      })(),
-      hpPct  : gvN(NIBE_DEV, N.hpPct),
-      srcPct : gvN(NIBE_DEV, N.srcPct),
-      compStarts: gvN(NIBE_DEV, N.compStarts),
-      compHours : gvN(NIBE_DEV, N.compHours),
-      disch  : gvN(NIBE_DEV, N.disch),
-      bt12   : gvN(NIBE_DEV, N.bt12),
-      bt15   : gvN(NIBE_DEV, N.bt15),
-      bt17   : gvN(NIBE_DEV, N.bt17),
+      gm     : nlN(NL.gm),
+      flow   : nlN(NL.flow),
+      outAvg : nlN(NL.outdoor),  // live BT1 (ikke midlet, se outAvg37)
+      outAvg37: nlN(NL.out37),   // snitt utetemp, register 37
+      elAdd  : (()=>{ const w=nlN(NL.elAdd); return w==null?null:Math.max(0,w); })(),   // spisslast i W
+      hpPct  : nlN(NL.hpPct),
+      srcPct : nlN(NL.srcPct),
+      compStarts: nlN(NL.compStarts),
+      compHours : nlN(NL.compHours),
+      disch  : nlN(NL.disch),
+      bt12   : nlN(NL.bt12),
+      bt15   : nlN(NL.bt15),
+      bt17   : nlN(NL.bt17),
     };
 
     render(temps, nibe, true);
@@ -2966,6 +2875,7 @@ async function doFetch() {
     fetchTrt(base, key).catch(()=>{});
     fetchKjole(base, key).catch(()=>{});
     fetchSone(base, key).catch(()=>{});
+    fetchHelse(base, key).catch(()=>{});
     _failCount=0;
     _savCounter=(_savCounter+1)%4;
     if(_savCounter===0) savH();
@@ -3102,7 +3012,7 @@ async function hentVarListe(base, key){
 }
 
 // ── Kjølekrets (v43, kilde fra v45: pumpens lokale REST-API) ──
-// nibe_lokal.js leser BT84, BP8 og BP9 fra pumpen og skriver
+// nibe_kjerne leser BT84, BP8 og BP9 fra pumpen og skriver
 // «nibe_kjolekrets» hvert minutt: { v:1, t, src:'rest', komp:{on,fra}, kilde,
 // p: { bt84|bp8d|bp8p|bp9d|bp9p: [verdi, tid målt, tid lest] } }. Med REST er
 // målt = lest. Det gamle nibe_myuplink.js skrev samme format (målt = tiden i
@@ -3151,15 +3061,15 @@ async function fetchKjole(base, key){
 }
 
 // ── Romsonen (v45, v46) ──
-// nibe_lokal.js skriver «nibe_sone» hvert minutt: { v:1, t, sp, spMin, spMax,
+// nibe_kjerne skriver «nibe_sone» hvert minutt: { v:1, t, sp, spMin, spMax,
 // romT, romRH, sist } – ønsket temperatur i sone 1 (holding-register 2505) og
-// THS10-giveren i stua. nibe_setpunkt.js legger til spT når settpunktet endres.
+// THS10-giveren i stua. nibe_styring legger til spT når settpunktet endres.
 // Dashbordet viser bare: settpunktet endres i MerTappevann, som ligger lokalt.
 // Denne appen ligger på GitHub og brukes utenfra – den skal aldri kunne skrive
 // til pumpen, og API-nøkkelen skal ikke ha HomeyScript-tilgang.
 //
 // v46: flisene viser siste gyldige verdi, ikke «–». THS10 mister av og til
-// kontakten med pumpen (Wi-Fi), en runde i nibe_lokal kan feile, og ved
+// kontakten med pumpen (Wi-Fi), en runde i nibe_kjerne kan feile, og ved
 // åpning var lagret data ofte over 5 min gammel – da forsvant både stua,
 // fukten og settpunktet til neste henting. Kilder, nyeste måling vinner:
 //   – nåverdiene i nibe_sone (målt t, settpunktet spT når det er nyere)
@@ -3230,6 +3140,78 @@ function buildSone(){
   el.title = T ? 'Stua målt ' + soneTid(T.t) : '';
   rh.title = RH ? 'Målt ' + soneTid(RH.t) : '';
 }
+// ── Varsler: pumpealarm og helse (v51) ──
+// nibe_kjerne skriver «nibe_status» hvert minutt: { v:1, t, ver, ms, modus,
+// mod: { trend|cop|lokal: { modus, ok, ms, svar } },
+// kilder: { rest|nibeLive|tank|cop|trend|bronn: { t, min, ok, feil } },
+// alarm: { aktiv, tekst }, varsler: [aktive problemer, f.eks. 'kilde_rest'] }.
+// «varsler» følger tersklene i nibe_kjerne (en kilde som har stått stille lenger
+// enn sin grense, en modul som har feilet i over 10 min), så panelet viser det
+// samme som varslene i Homey. Brønnens egenskaper (trt i nibe_bronn) er ikke med
+// der og sjekkes her, med samme grense som i brønnpanelet. Alt vises som tekst
+// (textContent), aldri som HTML.
+const STATUS_VAR = 'nibe_status', HELSE_EVERY = 60000, HELSE_GAMMEL = 5 * 60000;
+const HELSE_KILDE = { rest: 'Pumpens REST-API', nibeLive: 'Nibe Live', tank: 'Tanken',
+                      cop: 'COP-historikken', trend: 'Timesverdiene', bronn: 'Brønnmålingene (Brine)' };
+let helseData = null, helseFeil = null, helseLast = 0;
+async function fetchHelse(base, key){
+  if (Date.now() - helseLast < HELSE_EVERY) return;
+  helseLast = Date.now();
+  try {
+    const v = (await hentVarer(base, key, [STATUS_VAR])).find(x => x && x.name === STATUS_VAR);
+    if (!v || !v.value) { helseData = null; helseFeil = 'Fant ikke «' + STATUS_VAR + '» i Homey – kjører nibe_kjerne?'; }
+    else {
+      const p = JSON.parse(v.value);
+      if (p && p.v === 1) { helseData = p; helseFeil = null; }
+    }
+  } catch (_) { /* nettfeil vises allerede øverst; prøv igjen neste runde */ }
+  visHelse();
+}
+const helseTid = ms => {
+  const m = Math.max(1, Math.round(ms / 60000));
+  return m < 120 ? m + ' min' : m < 2880 ? (m / 60).toFixed(1).replace('.', ',') + ' t' : (m / 1440).toFixed(1).replace('.', ',') + ' døgn';
+};
+// [alvor, tekst] – alvor 'alarm' (pumpen) eller 'feil' (data eller script)
+function helseProblemer(nu){
+  const ut = [], d = helseData;
+  if (helseFeil) ut.push(['feil', helseFeil]);
+  if (d) {
+    if (d.alarm && d.alarm.aktiv === true)
+      ut.push(['alarm', 'Pumpen melder alarm' + (d.alarm.tekst ? ': ' + d.alarm.tekst : '')]);
+    if (Number.isFinite(d.t) && nu - d.t > HELSE_GAMMEL)
+      ut.push(['feil', 'nibe_kjerne har ikke rapportert på ' + helseTid(nu - d.t) + ' – sjekk flowen «Kjør nibe_kjerne pr. 1 min»']);
+    else for (const n of (Array.isArray(d.varsler) ? d.varsler : [])) {
+      const i = String(n).indexOf('_'), type = String(n).slice(0, i), navn = String(n).slice(i + 1);
+      if (type === 'kilde') {
+        const k = (d.kilder || {})[navn] || {};
+        ut.push(['feil', (HELSE_KILDE[navn] || navn) + ': ingen nye data' +
+                 (Number.isFinite(k.min) ? ' på ' + helseTid(k.min * 60000) : '') + (k.feil ? ' (' + k.feil + ')' : '')]);
+      } else if (type === 'modul') {
+        const m = (d.mod || {})[navn] || {};
+        ut.push(['feil', 'Modulen «' + navn + '» i nibe_kjerne feiler' + (m.svar ? ': ' + m.svar : '')]);
+      }
+    }
+  }
+  if (trtHentet && trtData && Number.isFinite(trtData.lastTick) && nu - trtData.lastTick > 30 * 60000)
+    ut.push(['feil', 'Brønnens egenskaper (nibe_bronn) har ikke lagret på ' + helseTid(nu - trtData.lastTick) + ' – sjekk flowen «Kjør nibe_bronn pr. 1 min»']);
+  return ut;
+}
+function visHelse(){
+  const p = document.getElementById('helsePanel'), l = document.getElementById('helseListe');
+  if (!p || !l) return;
+  const pr = helseProblemer(Date.now());
+  l.textContent = '';
+  for (const [alvor, tekst] of pr) {
+    const r = document.createElement('div');
+    r.className = 'hl-r' + (alvor === 'alarm' ? ' hl-a' : '');
+    r.textContent = (alvor === 'alarm' ? '🔔 ' : '⚠️ ') + tekst;
+    l.appendChild(r);
+  }
+  const dot = document.getElementById('helseDot');
+  if (dot) dot.style.background = pr.some(x => x[0] === 'alarm') ? 'var(--red)' : '#f59e0b';
+  p.style.display = pr.length ? '' : 'none';
+}
+
 async function fetchSone(base, key){
   if (Date.now() - soneLast < SONE_EVERY) return;
   soneLast = Date.now();
@@ -4763,13 +4745,14 @@ function wellUtvSVG(){
 // «Hent data» og «Kopier» er to trykk med vilje: iOS blokkerer kopiering
 // som skjer etter en ventetid, men godtar den når teksten alt er klar.
 let eksportTekst = null;
-const EX_SERIER = [
-  ['hz',     'measure_frequency_NIBE.i1046_compressor'],
-  ['gp2',    'measure_percentage_NIBE.i1104_source_pump'],
-  ['effekt', 'measure_power_NIBE.i2166_energy_usage'],
-  ['bt10',   'measure_temperature_NIBE.i10_source_in'],
-  ['bt11',   'measure_temperature_NIBE.i11_source_out'],
-  ['ute',    'measure_temperature_NIBE.i1_outside'],
+const EX_SERIER = [   // [navn, Nibe Live-verdi (se NL)]
+  ['hz',     NL.hz],
+  ['gp2',    NL.srcPct],
+  ['effekt', NL.pwr],
+  ['bt10',   NL.brineIn],
+  ['bt11',   NL.brineOt],
+  ['ute',    NL.outdoor],
+  ['bt50',   NL.bt50],
 ];
 function exTilkobling(){
   const hid = document.getElementById('hid').value.trim(), key = document.getElementById('hkey').value.trim();
@@ -4794,18 +4777,14 @@ async function exVariabler(t){
 }
 async function exInnsikt(t, resValg){
   const devs = Object.values(await exJSON(t.base + '/api/manager/devices/device', t.h));
-  nibeLiveInn(devs);                            // v49: Nibe Live som den gamle «Nibe S-Series»
-  const nd = devs.find(d => d.name === NIBE_DEV);
-  if (!nd) throw new Error('Fant ikke «' + NIBE_DEV + '»');
-  const serier = EX_SERIER.slice();
-  const k26 = Object.keys(nd.capabilitiesObj || {})
-    .find(k => k.startsWith('measure_temperature') && /\.i26(_|$)/.test(k));
-  if (k26) serier.push(['bt50', k26]);
+  if (!Object.values(NIBE_ID).some(id => devs.some(d => d.id === id)))
+    throw new Error('Fant ikke Nibe Live-enhetene (Nibe Main, Nibe Heating og Nibe Hot Water)');
   let res = resValg.split('|');                 // periodenavn i prioritert rekkefølge
   const ut = { format: 'punkter = [minutter siden 1970 UTC, verdi]', oppløsning: null, serier: {}, feil: [] };
-  for (const [navn, cap0] of serier) {
-    const kk = nd._kilde && nd._kilde[cap0];      // v49: enheten og capabilityen i Nibe Live
-    const uri = 'homey:device:' + (kk ? kk.id : nd.id), cap = kk ? kk.cap : cap0;
+  for (const [navn, [rolle, cap]] of EX_SERIER) {
+    const d = devs.find(x => x.id === NIBE_ID[rolle]);   // Innsikt finnes også når appen står
+    if (!d) { ut.feil.push(navn + ': fant ikke enheten for ' + cap); continue; }
+    const uri = 'homey:device:' + d.id;
     let data = null, feil = null;
     // Homey Pro 2023 bruker «homey:device:<id>:<capability>» som logg-id, eldre bare capability.
     // Avvises periodenavnet (400), prøves neste; det som virker, brukes videre.
@@ -4895,7 +4874,7 @@ function eksportLastNed(){
 lodCfg(); lodH(); buildScopRangeBtns(); buildSCOPChart(scopH7); buildBrineChart();
 render(
   [58.4,49.2,40.1,33.7,29.3],
-  {scopDC:5.21,scop24:5.48,copHeat:5.62,copHw:3.94,copHeatT:5.48,copHwT:3.81,prio:'Heating',hz:42.5,pwr:1100,
+  {scopDC:5.21,scop24:5.48,copHeat:5.62,copHw:3.94,copHeatT:5.48,copHwT:3.81,prio:30,hz:42.5,pwr:1100,
    supply:55,ret:32.5,calcSupply:52,brineIn:8.2,brineOt:2.1,outAvg:-3.5,outAvg37:-1.8,
    bt7:51,bt6:42,bt5:46,disch:78,bt12:40.3,bt15:26,bt17:9,gm:-248,elAdd:0,flow:12.3,hpPct:45,srcPct:28,compStarts:45,compHours:160},
   false
