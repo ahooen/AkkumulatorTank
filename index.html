@@ -53,7 +53,8 @@ body{font-family:var(--f);color:var(--t1);
   gap:8px;padding:.5rem 1rem}
 .hdr-s{font:500 10px/1 var(--m);color:var(--t3);letter-spacing:.05em;
   transition:color .3s}
-.hdr-s.live{color:#22c55e}.hdr-s.err{color:#f87171}
+.hdr-s.live{color:#22c55e}.hdr-s.err{color:#f87171}.hdr-s.gammel{color:#f59e0b}
+.wrap.foreldet{opacity:.55;transition:opacity .3s}
 
 
 
@@ -648,7 +649,14 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 52;   // v52 (2.11.2026): tekstene viser til nibe_kjerne og nibe_styring, som har erstattet
+const APP_VERSION = 53;   // v53 (5.11.2026): henter de tre Nibe Live-enhetene hver for seg rett etter at Nibe Live
+                          // har lest pumpa (≈ 0,5 s etter, ≈ 1,2 hentinger per lesing, se lagTakt), tanken og DC-enhetene
+                          // hvert 60. s og hele enhetslista hvert 30. min – ≈ 19 MB/t i stedet for ≈ 57 MB/t, og ingenting
+                          // når siden er skjult. Statusen viser klokkeslett med sekunder og hvor gamle verdiene er.
+                          // Én tidtaker: feil gir ny henting om 15, 30 og så hvert 60. s.
+                          // Kapasitet · stabilt nivå: kurven vises også når fallet utover borehullsmotstanden ikke er
+                          // målbart (R_ut ≤ 0), da med R_ut = 0. Før forsvant den hver gang R_ut vippet under null.
+                          // v52 (2.11.2026): tekstene viser til nibe_kjerne og nibe_styring, som har erstattet
                           // nibe_lokal, nibe_trend og nibe_setpunkt. Variablene heter det samme – koden er uendret.
                           // v51 (2.11.2026): panelet «Varsler» nederst – pumpealarm, kilder som står stille og
                           // moduler som feiler (fra «nibe_status» i nibe_kjerne), og brønnscriptet. Vises bare når
@@ -679,7 +687,7 @@ const APP_VERSION = 52;   // v52 (2.11.2026): tekstene viser til nibe_kjerne og 
 //   DHW TANK        buildDHW()  tappevannstank
 //   KJØLEKRETS      buildVPInternal()  kjøle-overlay
 //   SCOP CHART      buildSCOPChart()  7-dagers historikk
-//   HENTING         doFetch()  Homey API + refresh-loop
+//   HENTING         doFetch()  Homey API, henting per enhet i takt med Nibe Live
 // ══════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════
@@ -2777,7 +2785,160 @@ function buildSCOPChart(all){
   el.innerHTML=s;
 }
 
+// ── Henting (v53): bare det som endrer seg ofte, i takt med Nibe Live ──
+// Nibe Live leser pumpa omtrent hvert 15. s og skriver verdiene på de tre enhetene.
+// De hentes hver for seg (≈ 54 kB) i stedet for hele enhetslista (≈ 234 kB), rett
+// etter at Nibe Live har lest pumpa (se lagTakt). Tanken og DC-enhetene (DC skrives
+// én gang i minuttet av nibe_kjerne) hentes hvert 60. s, og hele lista (navn → ID,
+// enhetene trendvinduet trenger) hvert 30. min eller når en enhet er borte.
+const RASK_MS   = 15000;        // pollInterval i Nibe Live (perioden læres innen ±20 % av dette)
+const TREG_MS   = 60000;        // tanken og DC-enhetene
+const LISTE_MS  = 30 * 60000;   // hele enhetslista
+const STILLE_MS = 60000;        // ingen nye verdier fra Nibe Live så lenge: gul status
+const BORTE_MS  = 45000;        // hentingen har feilet og verdiene er eldre enn dette: nedtonet
+const TREG_NAVN = [FIBARO_DEV, SCOP_DEV, SCOP24_DEV, COPH_DEV, COPW_DEV, COPHT_DEV, COPWT_DEV, BT5_DEV];
+let devCache = new Map(), devListeT = 0, tregT = 0;   // id → enhet, i rekkefølgen fra hele lista
+let nlNyT = 0, okT = 0, _feil = false;                 // når nye verdier kom fra Nibe Live, og siste vellykkede henting (mobilklokka)
+let _neste = null, _nesteSjekk = false, _henter = false;
+const nlLU = new Map();                                // «enhet/capability» → lastUpdated sist sett
+const tidMs = x => x == null ? 0 : (typeof x === 'number' ? x : (Date.parse(x) || 0));
+// Nyeste lastUpdated blant Nibe Live-verdiene som er nye siden forrige henting (0 = ingen).
+// Hver verdi sammenlignes med seg selv, så det virker selv om Homey-klokka skulle bli stilt.
+// En capability som er ny (etter en oppdatering av Nibe Live) teller ikke som en ny lesing.
+function nyeNL(){
+  const forste = !nlLU.size;
+  let m = 0;
+  for (const id of Object.values(NIBE_ID)) {
+    const c = devCache.get(id)?.capabilitiesObj;
+    if (c) for (const k in c) {
+      const t = tidMs(c[k]?.lastUpdated), n = id + '/' + k, f = nlLU.get(n);
+      if (t && t !== f) { nlLU.set(n, t); if ((forste || f !== undefined) && t > m) m = t; }
+    }
+  }
+  return m;
+}
+// Tanken, DC-enhetene og romgiveren når den ikke er BT50 – funnet på navn i hele lista
+function tregIder(){
+  const alle = [...devCache.values()], ider = [];
+  for (const n of TREG_NAVN) { const d = alle.find(x => x.name === n); if (d && !ider.includes(d.id)) ider.push(d.id); }
+  if (trRom && trRom.id && !Object.values(NIBE_ID).includes(trRom.id) && !ider.includes(trRom.id)) ider.push(trRom.id);
+  return ider;
+}
+async function hentEnheter(base, key, bareRaske){
+  const H = {headers:{'Authorization':'Bearer '+key}};
+  const sjekk = r => {
+    if (r.status === 401) throw new Error('401 – API Key ugyldig');
+    if (r.status === 403) throw new Error('403 – Mangler rettigheter');
+  };
+  const naa = Date.now();
+  if (!devCache.size || naa - devListeT > LISTE_MS) {
+    const r = await fetch(`${base}/api/manager/devices/device`, H);
+    sjekk(r); if (!r.ok) throw new Error('HTTP ' + r.status);
+    devCache = new Map(Object.values(await r.json()).map(d => [d.id, d]));
+    devListeT = tregT = naa;
+    return;
+  }
+  const treg = !bareRaske && naa - tregT >= TREG_MS;
+  const ider = Object.values(NIBE_ID).concat(treg ? tregIder() : []);
+  const svar = await Promise.all(ider.map(async id => {
+    const r = await fetch(`${base}/api/manager/devices/device/${id}`, H);
+    sjekk(r);
+    if (r.status === 404) return null;            // borte (slettet eller paret på nytt): hele lista neste runde
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  }));
+  for (const d of svar) { if (d && d.id) devCache.set(d.id, d); else devListeT = 0; }
+  if (treg) tregT = naa;
+}
+// Takt: hent rett etter at Nibe Live har lest pumpa.
+// Nibe Live leser pumpa omtrent hvert 15. s, og Homey stempler hver verdi som endres
+// med lastUpdated (Homey-klokka). For en henting som starter ts (mobilklokka) og får
+// med seg en takt stemplet L, er g = ts − L. Hentinger som starter senere enn L + g*
+// får med seg takten (g* = klokkeforskjellen minus tiden forespørselen bruker fram til
+// Homey, så klokkene trenger ikke stemme). Hver gang nye verdier kommer, vet vi:
+//   g* ≤ ts − L for hentingen som fikk dem                → hi
+//   g* > ts − L for hentingen før, som ikke fikk dem med → lo
+// Neste henting legges på neste takt + hi + margin, der margin er hvor mye takten
+// varierer. Er (lo, hi] bredere enn 0,3 s, prøves et punkt lenger fram, og lo glemmes
+// etter 20 runder uten bekreftelse, så grensene holdes ferske. Motsier en måling en gammel
+// grense, gjelder den nye. Kom det ikke noe nytt: én sjekk litt senere, så neste takt.
+function lagTakt(P0){
+  const SMAL = 300, SJEKK = 700, MIN_VENT = 250, FERSK = 20;
+  let P = P0, dL = [], margin = 300, L = 0, B = 0, lo = -Infinity, hi = Infinity, d = SMAL;
+  let forrige = 0, tomme = 0, sjekk = false, loAlder = 0, start = true;
+  return {
+    // ts: når hentingen startet (mobilklokka), Lny: nyeste lastUpdated blant verdiene som
+    // er nye siden forrige henting (0 = ingen), naa: nå. Svar: ms til neste henting og
+    // om den bare er en kort sjekk.
+    etter(ts, Lny, naa){
+      const fts = forrige; forrige = ts;
+      if (Lny) {
+        const dt = Lny - L;
+        if (L && dt > 0.8 * P0 && dt < 1.2 * P0) {
+          dL.push(dt); if (dL.length > 15) dL.shift();
+          const s = dL.slice().sort((a, b) => a - b);
+          P = s[s.length >> 1];
+          if (s.length >= 5) margin = Math.min(1000, Math.max(100, s[Math.floor(s.length * 0.9)] - P + 50));
+        }
+        const gH = ts - Lny, gF = fts ? fts - Lny : -Infinity;
+        if (gH <= lo) lo = -Infinity;                 // fikk takten tidligere enn lo tilsa
+        if (gF >= hi) hi = Infinity;                  // gikk glipp av den senere enn hi tilsa
+        hi = Math.min(hi, gH);
+        if (gF > lo) { lo = gF; loAlder = 0; }
+        L = Lny; tomme = 0;
+      } else tomme++;
+      if (!L) return { vent: P, sjekk: false };       // ingen verdier fra Nibe Live ennå
+      if (!Lny && !sjekk && tomme === 1) {             // ingenting nytt: én sjekk til i runden
+        sjekk = true;
+        const t = Math.min(ts + 4000, Math.max(B + hi + margin, ts + SJEKK));
+        return { vent: Math.max(MIN_VENT, t - naa), sjekk: true };
+      }
+      sjekk = false;
+      if (++loAlder > FERSK) lo = -Infinity;          // lo må bekreftes jevnlig (klokka kan drive)
+      // Let etter kanten bare rett etter nye verdier (bommer vi, er det rom for én sjekk).
+      // Ellers rett etter takten, med større margin jo flere takter siden sist.
+      const leter = tomme === 0 && hi - lo > SMAL;
+      let k = 1, g;
+      if (leter) {
+        // ved start: prøv rett etter takten (klokkene går som regel likt), ellers halver
+        g = lo > -Infinity ? Math.max((lo + hi) / 2, hi - d) : start ? Math.min(hi - d, 0) : hi - d;
+        d *= 2;
+      }
+      if (hi - lo <= SMAL) d = SMAL;
+      if (lo > -Infinity) start = false;
+      for (; k < 50; k++) {
+        if (!leter) g = hi + margin * Math.sqrt(k);
+        if (L + k * P + g >= naa + MIN_VENT) break;
+      }
+      B = L + k * P;
+      return { vent: B + g - naa, sjekk: false };
+    }
+  };
+}
+const takt = lagTakt(RASK_MS);
+function planlegg(ms, sjekk){
+  clearTimeout(_neste);
+  _nesteSjekk = !!sjekk;
+  _neste = setTimeout(() => { _neste = null; if (!document.hidden) doFetch(); }, Math.max(250, ms));
+}
+// «Live · 22:41:07 · 3 s»: når nye verdier kom fra Nibe Live, og hvor lenge siden
+function visStatus(){
+  if (_feil || !nlNyT) return;
+  const naa = Date.now(), s = Math.max(0, Math.floor((naa - nlNyT) / 1000));
+  const kl = new Date(nlNyT).toLocaleTimeString('nb-NO', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  setStatus('Live · ' + kl + ' · ' + s + ' s', naa - nlNyT > STILLE_MS ? 'gammel' : 'live');
+}
+setInterval(() => {
+  if (document.hidden) return;
+  visStatus();
+  const w = document.querySelector('.wrap');
+  if (w) w.classList.toggle('foreldet', _feil && !!okT && Date.now() - okT > BORTE_MS);
+}, 1000);
+
 async function doFetch() {
+  if (_henter) return;
+  const sjekk = _nesteSjekk; _nesteSjekk = false;   // bare en kort sjekk etter Nibe Live-verdiene
+  clearTimeout(_neste); _neste = null;
   savCfg();
   const hid=document.getElementById('hid').value.trim();
   const key=document.getElementById('hkey').value.trim();
@@ -2791,13 +2952,11 @@ async function doFetch() {
     return;
   }
   const base=hid.includes('.')?`https://${hid}`:`https://${hid}.connect.athom.com`;
+  _henter=true;
   try {
-    const res=await fetch(`${base}/api/manager/devices/device`,
-      {headers:{'Authorization':'Bearer '+key}});
-    if(res.status===401) throw new Error('401 – API Key ugyldig');
-    if(res.status===403) throw new Error('403 – Mangler rettigheter');
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const devs=Object.values(await res.json());
+    const ts = Date.now();
+    await hentEnheter(base, key, sjekk);
+    const devs=[...devCache.values()];
 
     // Helper: get value from any capability
     const gv=(devName, capKey)=>{
@@ -2870,31 +3029,37 @@ async function doFetch() {
       bt17   : nlN(NL.bt17),
     };
 
-    render(temps, nibe, true);
-    fetchBrine(base, key).catch(()=>{});
-    fetchTrt(base, key).catch(()=>{});
-    fetchKjole(base, key).catch(()=>{});
-    fetchSone(base, key).catch(()=>{});
-    fetchHelse(base, key).catch(()=>{});
-    _failCount=0;
-    _savCounter=(_savCounter+1)%4;
-    if(_savCounter===0) savH();
-
-    setStatus('Live · '+new Date().toLocaleTimeString('nb-NO',
-      {hour:'2-digit',minute:'2-digit'})+''  ,'live');
-    // Lukk tilkoblingsskuffen automatisk ved vellykket tilkobling
-    document.getElementById('cfb').classList.remove('open');
-    document.getElementById('cft').classList.remove('open');
+    const Lny = nyeNL(), naa = Date.now();
+    if (Lny) nlNyT = naa;
+    const t = takt.etter(ts, Lny, naa);
+    okT = naa; _failCount = 0; _feil = false;
+    if(Lny||!sjekk) render(temps, nibe, true);
+    if(!sjekk){
+      fetchBrine(base, key).catch(()=>{});
+      fetchTrt(base, key).catch(()=>{});
+      fetchKjole(base, key).catch(()=>{});
+      fetchSone(base, key).catch(()=>{});
+      fetchHelse(base, key).catch(()=>{});
+      _savCounter=(_savCounter+1)%4;
+      if(_savCounter===0) savH();
+      // Lukk tilkoblingsskuffen automatisk ved vellykket tilkobling
+      document.getElementById('cfb').classList.remove('open');
+      document.getElementById('cft').classList.remove('open');
+    }
+    visStatus();
+    if(!document.hidden) planlegg(t.vent, t.sjekk);
 
   } catch(e) {
+    _feil=true;
     setStatus('Tilkoblingsfeil','err');
     errEl.style.display='block';
     errEl.textContent='';
     const _b=document.createElement('strong');_b.textContent='Feil: ';
     errEl.appendChild(_b);errEl.appendChild(document.createTextNode(e.message));
     _failCount=Math.min(_failCount+1,3);
-    const backoff=30000*Math.pow(2,_failCount-1);
-    setTimeout(()=>{if(!document.hidden)doFetch();},backoff);
+    if(!document.hidden) planlegg(15000*Math.pow(2,_failCount-1));
+  } finally {
+    _henter=false;
   }
 }
 
@@ -2907,13 +3072,12 @@ function tEx(){
   b.classList.toggle('open');t.classList.toggle('open');
 }
 
-// ── Auto-refresh & Page Visibility ──
-let _refreshTimer=null, _wasHidden=false;
-function startAutoRefresh(){if(_refreshTimer)return;_refreshTimer=setInterval(()=>{if(!document.hidden)doFetch();},15000);}
-function stopAutoRefresh(){if(_refreshTimer){clearInterval(_refreshTimer);_refreshTimer=null;}}
+// ── Henting i bakgrunnen & Page Visibility ──
+// Én tidtaker (planlegg) styrer hentingen. Skjult side: ingenting hentes.
+// Synlig igjen: henter med en gang, og takten fortsetter derfra.
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){_wasHidden=true;stopAutoRefresh();}
-  else if(_wasHidden){_wasHidden=false;doFetch();startAutoRefresh();}
+  if(document.hidden){clearTimeout(_neste);_neste=null;_nesteSjekk=false;}
+  else doFetch();
 },{passive:true});
 window.addEventListener('pagehide',()=>savH(),{passive:true});
 document.addEventListener('visibilitychange',()=>{if(document.hidden)savH();},{passive:true});
@@ -4054,10 +4218,17 @@ function kapasitetAnalyse(poster, fit, leiing, gjeldende){
   const sxx = x.reduce((a, v) => a + (v - xm) ** 2, 0);
   const b = x.reduce((a, v, k) => a + (v - xm) * (y[k] - ym), 0) / sxx, a0 = ym - b * xm;
   const s2 = y.reduce((a, v, k) => a + (v - a0 - b * x[k]) ** 2, 0) / Math.max(1, n - 2);
-  Object.assign(res, { Tw0: a0, sTw0: Math.sqrt(s2 * (1 / n + xm * xm / sxx)), R: -b, sR: Math.sqrt(s2 / sxx) });
+  Object.assign(res, { Tw0: a0, sTw0: Math.sqrt(s2 * (1 / n + xm * xm / sxx)), R: -b, sR: Math.sqrt(s2 / sxx), Rkurve: -b, kurve: true });
   // v48: med målt Rb (≈ 0,15) ligger R_ut nær null – negativ betyr da at Rb forklarer hele fallet, ikke for lite spredning
-  if (!(res.R > 0)) { res.grunn = rbK.kilde === 'standardverdi' ? 'Stabilt nivå faller ikke med uttaket ennå – for lite spredning i lastnivåene.'
-                                                                 : 'Fallet utover borehullsmotstanden er ikke målbart ennå.'; return res; }
+  // v53: kurven tegnes likevel, med R_ut = 0 – det fysisk mulige nærmest tilpasningen. Da forklarer
+  // borehullsmotstanden hele fallet, og nivået uten uttak er snittet av y. Før forsvant kurven hver
+  // gang R_ut vippet under null (5.11: −0,001 ± 0,012 K·m/W).
+  if (!(res.R > 0)) {
+    res.Rkurve = 0; res.Tw0 = ym; res.sTw0 = Math.sqrt(y.reduce((a, v) => a + (v - ym) ** 2, 0) / Math.max(1, n - 1) / n);
+    res.grunn = rbK.kilde === 'standardverdi' ? 'Stabilt nivå faller ikke med uttaket ennå – for lite spredning i lastnivåene.'
+                                              : 'Fallet utover borehullsmotstanden er ikke målbart ennå.';
+    return res;
+  }
   const hs = stabil.map(r => r.h).sort((u, v) => u - v); res.hMed = hs[Math.floor(hs.length / 2)];
   res.dom = 'ukjent';
   if (rbK.kilde === 'standardverdi' || !Number.isFinite(rbK.lam)) res.dom = 'uavklart';
@@ -4087,7 +4258,7 @@ function kapasitetAnalyse(poster, fit, leiing, gjeldende){
 }
 // Stabilt nivå etter ≈ hMed timer for et gitt uttak (W/m), med flow fra at Auto holder ΔT ≈ 4,1 K
 function kapasitetNivaa(a, q, R){
-  return a.Tw0 - q * (a.rbEff({ q: q, mcp: 0 }) + (R ?? a.R));
+  return a.Tw0 - q * (a.rbEff({ q: q, mcp: 0 }) + (R ?? a.Rkurve));
 }
 function kapasitetSeksjon(fit){
   if (selvtestFeil === null) selvtestFeil = selvtest();
@@ -4202,8 +4373,8 @@ function kapasitetSVG(a, kw){
   if (!a.alle.length) return '';
   const xs = a.alle.map(r => kw(r.q)), ys = a.alle.map(r => r.tf);
   const xmax = Math.max(4, Math.ceil(Math.max(...xs) + 0.5));
-  const ybot = Math.min(...ys, a.ok ? kapasitetNivaa(a, xmax * 1000 / WELL.L) : 99) - 0.3;
-  const ytop = Math.max(...ys, a.ok ? a.Tw0 : -99) + 0.3;
+  const ybot = Math.min(...ys, a.kurve ? kapasitetNivaa(a, xmax * 1000 / WELL.L) : 99) - 0.3;
+  const ytop = Math.max(...ys, a.kurve ? a.Tw0 : -99) + 0.3;
   const X = v => PL + v / xmax * (Wd - PL - PR), Y = v => PT + (ytop - v) / (ytop - ybot) * (Hd - PT - PB);
   let s = `<svg viewBox="0 0 ${Wd} ${Hd}" style="width:100%;height:auto;display:block;margin:4px 0">`;
   for (let k = 0; k <= xmax; k++) s += `<line x1="${X(k)}" y1="${PT}" x2="${X(k)}" y2="${Hd - PB}" stroke="rgba(255,255,255,.06)"/>` +
@@ -4211,12 +4382,12 @@ function kapasitetSVG(a, kw){
   s += `<text x="${Wd - PR}" y="${Hd - 2}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>uttak fra brønnen, kW</text>`;
   for (let v = Math.ceil(ybot * 2) / 2; v <= ytop; v += 0.5) s += `<line x1="${PL}" y1="${Y(v)}" x2="${Wd - PR}" y2="${Y(v)}" stroke="rgba(255,255,255,.06)"/>` +
     `<text x="${PL - 4}" y="${Y(v) + 3}" text-anchor="end" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>${v.toFixed(1)}</text>`;
-  if (a.ok) {
+  if (a.kurve) {
     s += `<line x1="${PL}" y1="${Y(a.Tw0)}" x2="${Wd - PR}" y2="${Y(a.Tw0)}" stroke="#7dd3fc" stroke-dasharray="3,3" stroke-opacity=".5"/>` +
          `<text x="${Wd - PR}" y="${Y(a.Tw0) - 3}" text-anchor="end" font-size="8" fill="#7dd3fc" ${mono}>brønnvann uten uttak</text>`;
     const kurve = R => { let d = ''; for (let k = 0; k <= 40; k++) { const p = 1 + k / 40 * (xmax - 1), q = p * 1000 / WELL.L;
                            d += (k ? 'L' : 'M') + X(p).toFixed(1) + ' ' + Y(kapasitetNivaa(a, q, R)).toFixed(1); } return d; };
-    s += `<path d="${kurve(a.R)}" fill="none" stroke="#fdba74" stroke-width="1.5" stroke-opacity=".8"/>`;
+    s += `<path d="${kurve(a.Rkurve)}" fill="none" stroke="#fdba74" stroke-width="1.5" stroke-opacity=".8"/>`;
   }
   for (const r of a.alle) { const st = a.stabil.includes(r);
     s += `<circle cx="${X(kw(r.q))}" cy="${Y(r.tf)}" r="3.2" fill="${st ? '#7dd3fc' : 'none'}" stroke="#7dd3fc" stroke-opacity="${st ? 1 : .45}"/>`; }
@@ -4880,7 +5051,6 @@ render(
   false
 );
 setStatus('Demo · Fyll inn tilkobling');
-startAutoRefresh();
 setTimeout(doFetch,400);
 
 // Vis versjonsnummer i innstillinger-skuffen
