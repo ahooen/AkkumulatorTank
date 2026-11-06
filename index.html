@@ -650,9 +650,11 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 54;   // v54 (6.11.2026): flisen «Inne · ønsket» viser romtemperaturen pumpa selv oppgir – snittet av
-                          // romfølerne (Nibe Live «Innetemperatur»), som «Tempsone» i NIBE-appen – med stue og kjøkken under.
-                          // Før viste den bare stua, som ofte ligger ≈ 1 K over snittet pumpa regulerer etter.
+const APP_VERSION = 55;   // v55 (6.11.2026): teksten sier ikke lenger at pumpa regulerer etter dette tallet – BT50 i
+                          // boden står på visning (Kristian). Linja i trenden heter «Tempsone», som i NIBE-appen.
+                          // v54 (6.11.2026): flisen «Inne · ønsket» viser Tempsone, samme tall som NIBE-appen –
+                          // snittet av alle romfølerne (Nibe Live «Innetemperatur») – med stue og kjøkken under.
+                          // Før viste den bare stua, som ligger ≈ 1 K over.
                           // v53 (5.11.2026): henter de tre Nibe Live-enhetene hver for seg rett etter at Nibe Live
                           // har lest pumpa (≈ 0,5 s etter, ≈ 1,2 hentinger per lesing, se lagTakt), tanken og DC-enhetene
                           // hvert 60. s og hele enhetslista hvert 30. min – ≈ 19 MB/t i stedet for ≈ 57 MB/t, og ingenting
@@ -735,7 +737,7 @@ const NL = {
   bt6    : ['hotwater', 'measure_temperature.i9_hot_water'],
   outdoor: ['heating',  'measure_temperature.i1_outside'],        // live BT1 (register 1)
   out37  : ['heating',  'measure_temperature.i37_outside_avg'],   // snitt utetemp (register 37)
-  bt50   : ['heating',  'measure_temperature'],                   // romsnittet klimasystem 1 (register 116): stue, kjøkken og teknisk bod (v54)
+  bt50   : ['heating',  'measure_temperature'],                   // Tempsone: snittet av alle romfølerne i klimasystem 1 (register 116), også BT50 i boden
   hpPct  : ['heating',  'measure_percentage_NIBE.i1102_heating_pump'],
   srcPct : ['main',     'measure_percentage_NIBE.i1104_source_pump'],
   disch  : ['main',     'measure_temperature.i13_discharge'],
@@ -983,12 +985,12 @@ const TRS = {
   // v48: romføler nr. 2 (nibe_lokal/nibe_trend 1.2) som egen linje, med navnet
   // den har i pumpen. Valgfri: uten timesverdier vises den ikke (heller ikke i
   // forklaringen). Står sist, så de andre linjene beholder fargene sine.
-  // v54: pumpas romsnitt (det flisen viser) som siste linje
+  // v54: Tempsone (det flisen viser) som siste linje
   stue:  { d: 1, enh: '°C', sone: true, linjer: [
            { navn: 'Stue', f: r => r.romT },
            { navn: 'Ønsket', f: r => r.soneSp, stiplet: true },
            { navnF: rom2Navn, f: r => r.romT2, valgfri: true },
-           { navn: 'Snitt (pumpa)', f: r => r.trom, valgfri: true }] },
+           { navn: 'Tempsone', f: r => r.trom, valgfri: true }] },
   romRH: { d: 0, enh: '%', sone: true, linjer: [
            { navn: 'Stue', f: r => r.romRH },
            { navnF: rom2Navn, f: r => r.romRH2, valgfri: true }] },
@@ -2979,9 +2981,9 @@ async function doFetch() {
       return(v!=null&&isFinite(v))?Number(v):null;
     };
 
-    // «Teknisk rom» i brønnmodellen: innetemperaturen på «Nibe Heating». Målt 6.11
-    // (v54): det er pumpas romsnitt (register 116, «Room average temp. clim. system 1»)
-    // av stue, kjøkken og teknisk bod, ikke BT50 alene – ≈ 0,7–1 K over teknisk bod.
+    // «Teknisk rom» i brønnmodellen: innetemperaturen på «Nibe Heating». Målt 6.11:
+    // det er Tempsone (register 116, «Room average temp. clim. system 1»), snittet av
+    // stue, kjøkken og BT50 i boden – ikke BT50 alene, og ≈ 0,7–1 K over boden.
     // Feilen i brønnmodellen er liten (4 m rør inne). Ellers en enhet med «teknisk» i navnet.
     const findRoom=()=>{
       const ok=t=>t!=null&&isFinite(t)&&t>=5&&t<=40;
@@ -3300,11 +3302,12 @@ function soneTid(t){
   const kl = d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
   return d.toDateString() === i.toDateString() ? 'kl. ' + kl : d.toLocaleDateString('nb-NO', { day: 'numeric', month: 'numeric' }) + ' kl. ' + kl;
 }
-// v54: hovedverdien er romtemperaturen pumpa selv oppgir – Nibe Live «Innetemperatur»
-// (register 116, «Room average temp. clim. system 1»), som er «Tempsone» i NIBE-appen.
-// Den er snittet av stue, kjøkken og teknisk bod: 75 timer 3.–5.11 passer et snitt av
-// stua, kjøkkenet og en tredje føler på ≈ 23,8 °C (rms 0,09 K), og 6.11 kl. 21 var
-// det 24,5 °C med stue 25,6, kjøkken 24,7 og teknisk bod 23,5. Stua og kjøkkenet står under.
+// v54: hovedverdien er Tempsone, samme tall som i NIBE-appen (begge viste 24,5 °C 6.11
+// kl. 21.15): Nibe Live «Innetemperatur», register 116 «Room average temp. clim. system 1».
+// Det er snittet av alle romfølerne, også BT50 i boden, selv om den står på visning og ikke
+// styrer: 75 timer 3.–5.11 passer et snitt av stue, kjøkken og en tredje føler på ≈ 23,8 °C
+// (rms 0,09 K), og 6.11 kl. 21 var det 24,5 °C med stue 25,6, kjøkken 24,7 og boden 23,5.
+// Hvilket tall Smart room comfort regulerer etter, er ikke dokumentert. Stua og kjøkkenet står under.
 function buildSone(){
   const el = document.getElementById('vStue'), rh = document.getElementById('vRomRH');
   if (!el || !rh) return;
@@ -3323,7 +3326,7 @@ function buildSone(){
     (SP ? `<span style="opacity:.45;font-size:.8em;margin-left:.25em">(${SP.v.toFixed(1)}°)</span>` : '') +
     (under.length ? `<div class="msub">${under.join(' · ')}</div>` : '');
   rh.innerHTML = RH ? `<span${ned(RH)}>${Math.round(RH.v)}<span class="mu">%</span></span>` : '–';
-  el.title = snitt != null ? 'Snittet pumpa regulerer etter (stue, kjøkken og teknisk bod)' + (T ? ' – stua målt ' + soneTid(T.t) : '')
+  el.title = snitt != null ? 'Tempsone, som i NIBE-appen: snittet av alle romfølerne (stue, kjøkken og boden)' + (T ? ' – stua målt ' + soneTid(T.t) : '')
            : T ? 'Stua målt ' + soneTid(T.t) : '';
   rh.title = RH ? 'Målt ' + soneTid(RH.t) : '';
 }
