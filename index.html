@@ -650,7 +650,9 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 55;   // v55 (6.11.2026): teksten sier ikke lenger at pumpa regulerer etter dette tallet – BT50 i
+const APP_VERSION = 56;   // v56 (9.11.2026): Tempsone-linja i romtemperaturgrafen er rosa. Før fikk den samme blå som
+                          // Stue, fordi fargelista TR_FARGE har tre farger og den fjerde linja begynte forfra.
+                          // v55 (6.11.2026): teksten sier ikke lenger at pumpa regulerer etter dette tallet – BT50 i
                           // boden står på visning (Kristian). Linja i trenden heter «Tempsone», som i NIBE-appen.
                           // v54 (6.11.2026): flisen «Inne · ønsket» viser Tempsone, samme tall som NIBE-appen –
                           // snittet av alle romfølerne (Nibe Live «Innetemperatur») – med stue og kjøkken under.
@@ -990,7 +992,7 @@ const TRS = {
            { navn: 'Stue', f: r => r.romT },
            { navn: 'Ønsket', f: r => r.soneSp, stiplet: true },
            { navnF: rom2Navn, f: r => r.romT2, valgfri: true },
-           { navn: 'Tempsone', f: r => r.trom, valgfri: true }] },
+           { navn: 'Tempsone', f: r => r.trom, valgfri: true, farge: '#f472b6' }] },   // v56: egen farge (rosa)
   romRH: { d: 0, enh: '%', sone: true, linjer: [
            { navn: 'Stue', f: r => r.romRH },
            { navnF: rom2Navn, f: r => r.romRH2, valgfri: true }] },
