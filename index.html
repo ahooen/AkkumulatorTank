@@ -650,7 +650,11 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 56;   // v56 (9.11.2026): Tempsone-linja i romtemperaturgrafen er rosa. Før fikk den samme blå som
+const APP_VERSION = 57;   // v57 (11.11.2026): BT50 i teknisk rom står i en egen sone i pumpen. Tempsone (flisa
+                          // «Inne · ønsket» og den rosa linja) er snittet av stue og kjøkken, som sone 1 i NIBE-appen.
+                          // «Teknisk rom» i brønndelen er BT50 (register 26) fra nibe_sone (nibe_kjerne 1.2). Nibe Lives
+                          // «Innetemperatur» er register 116, snittet for hele klimasystemet, og brukes ikke lenger.
+                          // v56 (9.11.2026): Tempsone-linja i romtemperaturgrafen er rosa. Før fikk den samme blå som
                           // Stue, fordi fargelista TR_FARGE har tre farger og den fjerde linja begynte forfra.
                           // v55 (6.11.2026): teksten sier ikke lenger at pumpa regulerer etter dette tallet – BT50 i
                           // boden står på visning (Kristian). Linja i trenden heter «Tempsone», som i NIBE-appen.
@@ -739,7 +743,8 @@ const NL = {
   bt6    : ['hotwater', 'measure_temperature.i9_hot_water'],
   outdoor: ['heating',  'measure_temperature.i1_outside'],        // live BT1 (register 1)
   out37  : ['heating',  'measure_temperature.i37_outside_avg'],   // snitt utetemp (register 37)
-  bt50   : ['heating',  'measure_temperature'],                   // Tempsone: snittet av alle romfølerne i klimasystem 1 (register 116), også BT50 i boden
+  innetemp: ['heating', 'measure_temperature'],                   // «Innetemperatur»: register 116, snittet for hele klimasystemet (alle romfølerne,
+                                                                  // også BT50). v57: brukes bare i eksporten – ikke Tempsone, ikke teknisk rom
   hpPct  : ['heating',  'measure_percentage_NIBE.i1102_heating_pump'],
   srcPct : ['main',     'measure_percentage_NIBE.i1104_source_pump'],
   disch  : ['main',     'measure_temperature.i13_discharge'],
@@ -987,12 +992,14 @@ const TRS = {
   // v48: romføler nr. 2 (nibe_lokal/nibe_trend 1.2) som egen linje, med navnet
   // den har i pumpen. Valgfri: uten timesverdier vises den ikke (heller ikke i
   // forklaringen). Står sist, så de andre linjene beholder fargene sine.
-  // v54: Tempsone (det flisen viser) som siste linje
+  // v54: Tempsone (det flisen viser) som siste linje. v57: snittet av stue og
+  // kjøkken (sone 1), regnet fra timesverdiene – også bakover i tid
   stue:  { d: 1, enh: '°C', sone: true, linjer: [
            { navn: 'Stue', f: r => r.romT },
            { navn: 'Ønsket', f: r => r.soneSp, stiplet: true },
            { navnF: rom2Navn, f: r => r.romT2, valgfri: true },
-           { navn: 'Tempsone', f: r => r.trom, valgfri: true, farge: '#f472b6' }] },   // v56: egen farge (rosa)
+           { navn: 'Tempsone', f: r => Number.isFinite(r.romT) && Number.isFinite(r.romT2) ? (r.romT + r.romT2) / 2 : null,
+             valgfri: true, farge: '#f472b6' }] },   // v56: egen farge (rosa)
   romRH: { d: 0, enh: '%', sone: true, linjer: [
            { navn: 'Stue', f: r => r.romRH },
            { navnF: rom2Navn, f: r => r.romRH2, valgfri: true }] },
@@ -2983,25 +2990,16 @@ async function doFetch() {
       return(v!=null&&isFinite(v))?Number(v):null;
     };
 
-    // «Teknisk rom» i brønnmodellen: innetemperaturen på «Nibe Heating». Målt 6.11:
-    // det er Tempsone (register 116, «Room average temp. clim. system 1»), snittet av
-    // stue, kjøkken og BT50 i boden – ikke BT50 alene, og ≈ 0,7–1 K over boden.
-    // Feilen i brønnmodellen er liten (4 m rør inne). Ellers en enhet med «teknisk» i navnet.
-    const findRoom=()=>{
-      const ok=t=>t!=null&&isFinite(t)&&t>=5&&t<=40;
-      const t50=nlN(NL.bt50);
-      if(ok(t50)) return {t:t50, src:'BT50', id:NIBE_ID[NL.bt50[0]], cap:NL.bt50[1]};
-      for(const d of devs){
-        if(!/teknisk/i.test(d.name||'')) continue;
-        const c=d.capabilitiesObj&&d.capabilitiesObj.measure_temperature;
-        if(c&&ok(c.value)) return {t:Number(c.value), src:d.name, id:d.id, cap:'measure_temperature'};
-      }
-      return null;
-    };
-    const rom=findRoom();
+    // «Teknisk rom» i brønnmodellen: BT50 (register 26), som står i teknisk rom.
+    // nibe_kjerne 1.2 leser den fra pumpen og legger den i nibe_sone («bt50»). Er
+    // målingen over 15 min gammel, brukes WELLX.pipe.Trom. v57: før var det Nibe Lives
+    // «Innetemperatur» – register 116, snittet for hele klimasystemet (stue, kjøkken og
+    // BT50) – og ikke rommet. Feilen var liten (4 m rør inne), men tallet viste feil rom.
+    const tr50=tromNaa();
+    const rom=tr50!=null?{t:tr50, src:'BT50'}:null;
     // Til trendvinduet: hvilke enheter og capabilityer som finnes (for Innsikt)
     trEnheter=devs.map(d=>({id:d.id, name:d.name, caps:Object.keys(d.capabilitiesObj||{})}));
-    trRom=rom&&rom.id?{id:rom.id, cap:rom.cap}:null;
+    trRom=null;                                      // v57: BT50 har ingen Innsikt-logg i Homey – bare nibe_trend
 
     // Tank sensors (via Device Capabilities)
     const temps=TANK_SENSORS.map(s=>gvN(s.dev,s.cap));
@@ -3256,7 +3254,8 @@ async function fetchKjole(base, key){
 // måletidspunktet i verktøytipset. Settpunktet står alltid nedtonet.
 // Trendloggen (nibe_trend) bruker bare nåverdiene – ingen gjentatte verdier.
 const SONE_VAR = 'nibe_sone', SONE_EVERY = 60000, SONE_GAMMEL = 15 * 60000;
-const SONE_OMR = { sp: [5, 35], romT: [0, 45], romRH: [0, 100], romT2: [0, 45], romRH2: [0, 100] };   // romT2/romRH2: føler nr. 2 (v48)
+const SONE_OMR = { sp: [5, 35], romT: [0, 45], romRH: [0, 100], romT2: [0, 45], romRH2: [0, 100],   // romT2/romRH2: føler nr. 2 (v48)
+                   bt50: [0, 45] };                                                                  // BT50 i teknisk rom (v57, nibe_kjerne 1.2)
 let soneData = null, soneLast = 0, soneSist = {};
 try { const c = localStorage.getItem('soneCache'); if (c) { const p = JSON.parse(c); if (p && p.v === 1) soneData = p; } } catch(_) {}
 try { const c = JSON.parse(localStorage.getItem('soneSist') || 'null'); if (c && typeof c === 'object') soneSist = c; } catch(_) {}
@@ -3286,6 +3285,11 @@ function soneVis(k, nu){
   if (!Array.isArray(g) || !soneOk(k, g[0]) || !Number.isFinite(g[1])) return null;
   return { v: g[0], t: g[1], gammel: (nu ?? Date.now()) - g[1] > SONE_GAMMEL };
 }
+// v57: temperaturen i teknisk rom (BT50) – null når målingen er over 15 min gammel
+function tromNaa(nu){
+  const b = soneVis('bt50', nu);
+  return b && !b.gammel ? b.v : null;
+}
 // Nåverdien slik flisene viser den (trendvinduets «nå»)
 function soneVerdier(nu){
   const T = soneVis('romT', nu), RH = soneVis('romRH', nu), SP = soneVis('sp', nu);
@@ -3304,32 +3308,35 @@ function soneTid(t){
   const kl = d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
   return d.toDateString() === i.toDateString() ? 'kl. ' + kl : d.toLocaleDateString('nb-NO', { day: 'numeric', month: 'numeric' }) + ' kl. ' + kl;
 }
-// v54: hovedverdien er Tempsone, samme tall som i NIBE-appen (begge viste 24,5 °C 6.11
-// kl. 21.15): Nibe Live «Innetemperatur», register 116 «Room average temp. clim. system 1».
-// Det er snittet av alle romfølerne, også BT50 i boden, selv om den står på visning og ikke
-// styrer: 75 timer 3.–5.11 passer et snitt av stue, kjøkken og en tredje føler på ≈ 23,8 °C
-// (rms 0,09 K), og 6.11 kl. 21 var det 24,5 °C med stue 25,6, kjøkken 24,7 og boden 23,5.
-// Hvilket tall Smart room comfort regulerer etter, er ikke dokumentert. Stua og kjøkkenet står under.
+// v57: hovedverdien er Tempsone, samme tall som sone 1 i NIBE-appen: snittet av stue og
+// kjøkken. BT50 i teknisk rom står i en egen sone fra 11.11 og er ikke med. Pumpas REST-API
+// har ikke sonetemperaturen, så snittet regnes her. Stua og kjøkkenet står under.
+// (v54–v56 viste Nibe Lives «Innetemperatur», register 116, som er snittet for hele
+// klimasystemet. Den regnet med BT50 også etter at den fikk egen sone.)
 function buildSone(){
   const el = document.getElementById('vStue'), rh = document.getElementById('vRomRH');
   if (!el || !rh) return;
   const nu = Date.now(), T = soneVis('romT', nu), RH = soneVis('romRH', nu), SP = soneVis('sp', nu), T2 = soneVis('romT2', nu);
   const ned = x => x && x.gammel ? ' style="opacity:.5"' : '';
-  const snitt = nibe_last && nibe_last.tromSrc === 'BT50' && Number.isFinite(nibe_last.trom) ? nibe_last.trom : null;
+  // Snittet regnes i tideler (som pumpa viser følerne), avrundet opp på 0,05
+  const snitt = T && T2 ? Math.round((Math.round(T.v * 10) + Math.round(T2.v * 10)) / 2) / 10 : null;
+  const snittGml = snitt != null && (T.gammel || T2.gammel);
   const navn1 = (soneData && soneData.navn && typeof soneData.navn.romT === 'string' && soneData.navn.romT.trim()) ? soneData.navn.romT.trim().slice(0, 24) : 'Stue';
   const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   // Som utetemperaturen: målt verdi, med ønsket verdi nedtonet i parentes bak.
-  // Uten pumpas snitt (Nibe Live borte) vises stua som før.
-  const hoved = snitt != null ? `${snitt.toFixed(1)}<span class="mu">°C</span>`
-              : T ? `<span${ned(T)}>${T.v.toFixed(1)}<span class="mu">°C</span></span>` : '–';
-  const under = snitt == null ? [] : [[navn1, T], [rom2Navn(), T2]].filter(([, x]) => x)
-    .map(([n, x]) => `<span${ned(x)}>${esc(n)} ${x.v.toFixed(1)}</span>`);
+  // Har bare én av følerne verdi, vises den, med navnet under.
+  const enRom = snitt == null ? (T ? [navn1, T] : T2 ? [rom2Navn(), T2] : null) : null;
+  const hoved = snitt != null ? `<span${snittGml ? ' style="opacity:.5"' : ''}>${snitt.toFixed(1)}<span class="mu">°C</span></span>`
+              : enRom ? `<span${ned(enRom[1])}>${enRom[1].v.toFixed(1)}<span class="mu">°C</span></span>` : '–';
+  const under = snitt != null ? [[navn1, T], [rom2Navn(), T2]].map(([n, x]) => `<span${ned(x)}>${esc(n)} ${x.v.toFixed(1)}</span>`)
+              : enRom ? [`<span${ned(enRom[1])}>${esc(enRom[0])}</span>`] : [];
   el.innerHTML = hoved +
     (SP ? `<span style="opacity:.45;font-size:.8em;margin-left:.25em">(${SP.v.toFixed(1)}°)</span>` : '') +
     (under.length ? `<div class="msub">${under.join(' · ')}</div>` : '');
   rh.innerHTML = RH ? `<span${ned(RH)}>${Math.round(RH.v)}<span class="mu">%</span></span>` : '–';
-  el.title = snitt != null ? 'Tempsone, som i NIBE-appen: snittet av alle romfølerne (stue, kjøkken og boden)' + (T ? ' – stua målt ' + soneTid(T.t) : '')
-           : T ? 'Stua målt ' + soneTid(T.t) : '';
+  el.title = snitt != null ? 'Tempsone, som sone 1 i NIBE-appen: snittet av ' + navn1.toLowerCase() + ' og ' + rom2Navn().toLowerCase() +
+                              ' – målt ' + soneTid(Math.min(T.t, T2.t))
+           : enRom ? enRom[0] + ' målt ' + soneTid(enRom[1].t) : '';
   rh.title = RH ? 'Målt ' + soneTid(RH.t) : '';
 }
 // ── Varsler: pumpealarm og helse (v51) ──
@@ -3415,6 +3422,12 @@ async function fetchSone(base, key){
     }
   } catch (_) {}
   try { buildSone(); } catch (_) {}
+  // v57: teknisk rom (BT50) kommer herfra – brønndelen oppdateres med en gang
+  const tr50 = tromNaa();
+  if (nibe_last && tr50 !== nibe_last.trom) {
+    nibe_last.trom = tr50; nibe_last.tromSrc = tr50 != null ? 'BT50' : null;
+    try { buildWellPanel(); } catch (_) {}
+  }
 }
 
 // Frittstående: feil her skal aldri velte resten av dashbordet
@@ -4951,7 +4964,7 @@ const EX_SERIER = [   // [navn, Nibe Live-verdi (se NL)]
   ['bt10',   NL.brineIn],
   ['bt11',   NL.brineOt],
   ['ute',    NL.outdoor],
-  ['bt50',   NL.bt50],
+  ['innetemp', NL.innetemp],      // register 116 (v57: het «bt50» før)
 ];
 function exTilkobling(){
   const hid = document.getElementById('hid').value.trim(), key = document.getElementById('hkey').value.trim();
