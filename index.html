@@ -650,7 +650,10 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 58;   // v58 (14.11.2026): brønntilpasningen. Strømningsleddet er c·q·L/(2·ṁcp) i stedet for Hellströms
+const APP_VERSION = 59;   // v59 (14.11.2026): uttaket før brønnloggingen (17.5–25.9) er fordelt per måned etter pumpas
+                          // energilogg (WELL.forMnd) i stedet for 3,1 W/m jevnt. Eksport 12.11: λ 4,48 → 4,35 og
+                          // T₀ 8,97 → 9,00. Utviklingsgrafen regnes om (modell «kap-10»).
+                          // v58 (14.11.2026): brønntilpasningen. Strømningsleddet er c·q·L/(2·ṁcp) i stedet for Hellströms
                           // (L/ṁcp)²/(3·Ra), og driftspunkt tas bare med når uttaket har vært jevnt i fem kvarter – se
                           // wellFit. Flisene viser samlet motstand fra fjellvegg til væske ved høy og lav flow (wellRv)
                           // i stedet for Rb og «effektiv Rb ved lav last»; rådet om fast delta er tatt bort. λ får
@@ -3661,10 +3664,19 @@ const WELL = {
   // foretrekker mer uttak sent (september): da blir λ fra dem ≈ 0,1–0,3 lavere.
   loggStart: Date.UTC(2026, 8, 25, 10, 15),
   qFor: 3.1,              // W/m, snitt 17.5–25.9
-  // v58: uttaket før loggingen fordelt i tid, [[fra ms, til ms, W/m], …] fra energiloggen per måned.
-  // null = jevnt qFor. Samme sum med annen fordeling flytter λ ≈ ± 0,15 (eksport 12.11: etter gradtall
-  // 4,39, nesten alt i september 4,16, mest i mai–juni 4,73 – jevnt 4,48).
-  forMnd: null,
+  // v59: uttaket før loggingen fordelt per måned, [[fra ms, til ms, W/m], …]. null = jevnt qFor.
+  // Fra pumpas energilogg (meny 3.3 «Total energi», bilde 14.11.2026), tilført minus forbrukt:
+  // mai (17.–31.) 417, juni 516, juli 305, august 566 og september 808 kWh. Søylene er lest av bildet
+  // (± 3 %; oktober traff kjent verdi innen 0,5 %). Fra september er trukket det brønnloggen målte
+  // 25.–30.9 (116 kWh + rørvarme). Tallene er så skalert til snittet qFor (3,1 W/m), som kommer fra
+  // pumpas tellere: avlesningen ga 3,40 W/m før rørvarmen er trukket fra, tellerne 3,33.
+  // Månedsskiftene er norsk tid. Jevnt 3,1 W/m ga λ 4,48 og T₀ 8,97 (eksport 12.11); dette gir 4,35
+  // og 9,00. Avlesningsfeilen flytter λ under 0,03.
+  forMnd: [[Date.UTC(2026, 4, 17),     Date.UTC(2026, 4, 31, 22), 4.6],          // 17.–31. mai
+           [Date.UTC(2026, 4, 31, 22), Date.UTC(2026, 5, 30, 22), 2.85],         // juni
+           [Date.UTC(2026, 5, 30, 22), Date.UTC(2026, 6, 31, 22), 1.6],          // juli
+           [Date.UTC(2026, 6, 31, 22), Date.UTC(2026, 7, 31, 22), 3.0],          // august
+           [Date.UTC(2026, 7, 31, 22), Date.UTC(2026, 8, 25, 10, 15), 4.55]],    // 1.–25. september
   // v58: driftspunkt brukes bare når uttaket dette og de fire foregående kvarterene (jevnN) ligger innen
   // ± jevnTol av snittet. Anslått ṁcp (punkt uten måling) har gulv mcpGulv. Flisene viser motstanden
   // ved to faste flow: mcpLav ≈ GP2 25 % og mcpHoy ≈ GP2 60 %.
@@ -4166,7 +4178,8 @@ const TREFF = { blokker: 7, minDager: 14, testDager: 7, hvert: 24, minPunkt: 200
 let trtTreff = null, treffBusy = false;
 try { const c = JSON.parse(localStorage.getItem('trtTreff') || 'null'); if (c && c.v === 1) trtTreff = c; } catch (_) {}
 function treffNokkel(){
-  return trtData && Array.isArray(trtData.q) ? trtData.base + ':' + Math.floor(trtData.q.length / TREFF.hvert) : null;
+  // modellnavnet er med, så en endret modell regnes på nytt
+  return trtData && Array.isArray(trtData.q) ? (typeof UTV_MODELL !== 'undefined' ? UTV_MODELL : '') + ':' + trtData.base + ':' + Math.floor(trtData.q.length / TREFF.hvert) : null;
 }
 // Usikkerheten i λ som vises: den største av krumningen og «én uke ut»
 function wellSLam(f){
@@ -4834,7 +4847,7 @@ function buildWellPanel(){
 // og er samtidig stabilitetskontrollen: et resultat som ikke setter seg,
 // er et varsel. Hvert hele døgn tilpasses på dataene fram til da, i
 // bakgrunnen, ett døgn per runde med varmstart, og lagres per datagrunnlag.
-const UTV_MODELL = 'kap-9';                  // v58: ny form på strømningsleddet, jevnt uttak (kap-8: brønn-v49, kap-7: v48 låst forhistorie)
+const UTV_MODELL = 'kap-10';                 // v59: forhistorien per måned (kap-9: v58 ny form og jevnt uttak, kap-8: brønn-v49, kap-7: v48)
 const UTV_DAGER  = 30;                       // utviklingsgrafen viser siste 30 døgn                  // byttes når tilpasningen endres
 let utvCache = null, utvBusy = false;
 try { const c = localStorage.getItem('trtUtv'); if (c) utvCache = JSON.parse(c); } catch (_) {}
