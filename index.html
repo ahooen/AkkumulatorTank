@@ -246,6 +246,16 @@ body{font-family:var(--f);color:var(--t1);
 
 /* ── EXTRA METRICS ROW ── */
 .emu{font:400 8px/1 var(--m);color:var(--t3)}
+/* ── ANLEGG ΔT (v60) ── */
+.dt-top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px}
+.dt-top .sr-w{margin-top:0}
+.dt-v{font:500 18px/1 var(--m);color:var(--t1);margin-top:6px}
+.dt-v small{font-size:9px;color:var(--t3);margin-left:3px}
+.dt-les{font:400 9px/1.4 var(--m);color:var(--t2);margin:9px 0 4px;min-height:13px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+#dtChart{touch-action:pan-y;-webkit-user-select:none;user-select:none}
+#dtChart.gml{opacity:.55}
+.dt-lg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font:400 8.5px/1.4 var(--m);color:var(--t3)}
 
 /* ── TRENDVINDU (langt trykk på en verdi) ── */
 .tm{position:fixed;inset:0;z-index:1000;display:none;
@@ -568,6 +578,25 @@ label.ex-r>span{flex:1;min-width:0}
       <span>tall = målinger per uke</span>
     </div>
   </div>
+  <!-- Anlegg (v60): ΔT mellom tur fra varmepumpa og retur inn på akkumulatortanken – se buildDt() -->
+  <div class="panel" style="margin-top:.7rem">
+    <div class="ph">
+      <div class="phd" style="background:#ea580c"></div>
+      <div class="pt">Anlegg · ΔT tur VP – retur tank</div>
+    </div>
+    <div class="dt-top">
+      <div><div class="ws-lab" id="dtLab">ΔT i varmedrift · snitt</div><div class="dt-v" id="dtV">–</div></div>
+      <div class="sr-w" id="dtValg"></div>
+    </div>
+    <div class="dt-les" id="dtLes" aria-live="polite"></div>
+    <div id="dtChart"></div>
+    <div class="dt-lg">
+      <span><span style="color:#ea580c">━</span> tur VP (BT2)</span>
+      <span><span style="color:#3b82f6">━</span> retur tank</span>
+      <span><span style="color:#0d9488">━</span> ΔT · glidende snitt <span id="dtVin">6</span> t</span>
+      <span><span style="color:rgba(13,148,136,.75)">●</span> timesverdi</span>
+    </div>
+  </div>
   <!-- Varsler (v51): pumpealarm og helse – vises bare når noe er galt -->
   <div class="panel" id="helsePanel" style="margin-top:.7rem;display:none" role="status" aria-live="polite">
     <div class="ph">
@@ -650,7 +679,10 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 59;   // v59 (14.11.2026): uttaket før brønnloggingen (17.5–25.9) er fordelt per måned etter pumpas
+const APP_VERSION = 60;   // v60 (18.11.2026): ny graf nederst, «Anlegg · ΔT tur VP – retur tank»: tur fra varmepumpa (BT2)
+                          // minus retur inn på akkumulatortanken (tankføleren «Retur») i timer med ren varmedrift, med
+                          // glidende snitt og valg mellom 1, 3 og 7 døgn. Timesverdiene fra nibe_trend – se buildDt().
+                          // v59 (14.11.2026): uttaket før brønnloggingen (17.5–25.9) er fordelt per måned etter pumpas
                           // energilogg (WELL.forMnd) i stedet for 3,1 W/m jevnt. Eksport 12.11: λ 4,48 → 4,35 og
                           // T₀ 8,97 → 9,00. Utviklingsgrafen regnes om (modell «kap-10»).
                           // v58 (14.11.2026): brønntilpasningen. Strømningsleddet er c·q·L/(2·ṁcp) i stedet for Hellströms
@@ -712,6 +744,7 @@ const APP_VERSION = 59;   // v59 (14.11.2026): uttaket før brønnloggingen (17.
 //   DHW TANK        buildDHW()  tappevannstank
 //   KJØLEKRETS      buildVPInternal()  kjøle-overlay
 //   SCOP CHART      buildSCOPChart()  7-dagers historikk
+//   ANLEGG ΔT       buildDt()  tur VP − retur tank, timesverdier 1/3/7 døgn
 //   HENTING         doFetch()  Homey API, henting per enhet i takt med Nibe Live
 // ══════════════════════════════════════════════════════════════
 
@@ -2822,6 +2855,246 @@ function buildSCOPChart(all){
   el.innerHTML=s;
 }
 
+// ═══════════════════════════════════════════
+// ANLEGG ΔT – buildDt(): tur fra varmepumpa minus retur inn på akkumulatortanken (v60)
+// ═══════════════════════════════════════════
+// Hvor mye varmepumpa løfter vannet over returen som kommer tilbake fra gulvvarmen:
+// tur ut fra varmepumpa (BT2, Nibe Live «supply», register 5) minus retur inn på
+// akkumulatortanken (tankføleren «Retur», Fibaro external3, t0 i nibe_trend).
+//
+// Kilde: timesverdiene i nibe_trend fra nibe_kjerne (snitt av prøvene hvert minutt), hentet
+// med trHentLogg – samme henting og buffer som trendvinduene. Timen som pågår, er ikke med.
+//
+// Bare timer i ren varmedrift teller: varme minst DT_VARME av timen, ikke noe tappevann, og
+// minst 45 minutter med prøver. Ellers er timesnittet en blanding: i tappevann går turen til
+// beredaren (BT2 45–55 °C), og når kompressoren står, nærmer tur og retur seg hverandre.
+//
+// Glidende snitt på tur og retur hver for seg, sentrert og tidsvektet over vinduet (endene
+// halv vekt når vinduet er et partall timer), så ΔT = snitt(tur) − snitt(retur). Vinduet
+// følger perioden: 3 t for 1 døgn, 6 t for 3 døgn og 24 t for 7 døgn (døgnsnitt – da vises
+// trenden fra døgn til døgn, mens punktene viser hver time). Et punkt tegnes når minst en
+// tredel av vinduet har varmedrift; ellers brudd i linja. Mot høyre kant blir vinduet kortere.
+// Snittet over perioden: alle timer i varmedrift med lik vekt.
+//
+// Eksport 12.11 (7 døgn til 12.11 kl. 20, ute 5,4 °C): 112 av 168 timer i varmedrift, ΔT 5,2 K
+// i snitt. GP1 gikk fast på 32 % (12,4 l/min, ṁcp ≈ 860 W/K) i varmedrift, så ΔT følger effekten:
+// 2,8 K under 2,5 kW og 9,0 K over 7 kW, mens returen lå nesten fast på 27,0–27,3 °C.
+// Toppen av tanken (gulvturen) lå 1,2–3,8 K under BT2, mest ved høy effekt: gulvkretsen går med
+// ≈ 1,6–1,7 × flowen gjennom varmepumpa, så returvann blandes inn i tanken (målelogg 18.11).
+// Følerne: tankføleren «Tur VP» viser 0,95 ± 0,11 K under BT2 (samme vann), og «Retur»
+// 0,32 ± 0,25 K under BT3 (returen til varmepumpa). Fargene er validert mot panelflaten
+// #0b1828 (lyshet, kontrast og fargeblindhet, alle par).
+const DT_VALG = [
+  { k: '1', lbl: '1 D', dager: 1, vindu: 3 },
+  { k: '3', lbl: '3 D', dager: 3, vindu: 6 },
+  { k: '7', lbl: '7 D', dager: 7, vindu: 24 },
+];
+const DT_EVERY = 10 * 60000;          // nye timer kommer én gang i timen; nibe_trend er ≈ 30 kB
+const DT_VARME = 0.9;                 // andel av timen i varmedrift
+const DT_FARGE = { tur: '#ea580c', ret: '#3b82f6', dt: '#0d9488' };
+let dtValg = '3', dtLogg = null, dtLast = 0, dtErr = null, dtHentet = 0, dtBredde = 0;
+try { const v = localStorage.getItem('dtValg'); if (DT_VALG.some(x => x.k === v)) dtValg = v; } catch (_) {}
+try { const c = JSON.parse(localStorage.getItem('dtCache') || 'null'); if (c && c.hist && Array.isArray(c.hist.keys) && Array.isArray(c.hist.rader)) dtLogg = c; } catch (_) {}
+
+function buildDtValg(){
+  const w = document.getElementById('dtValg');
+  if (!w) return;
+  w.innerHTML = DT_VALG.map(v => `<button type="button" class="sr-b${v.k === dtValg ? ' on' : ''}" data-v="${v.k}">${v.lbl}</button>`).join('');
+  w.querySelectorAll('.sr-b').forEach(b => b.addEventListener('click', () => {
+    dtValg = b.dataset.v;
+    try { localStorage.setItem('dtValg', dtValg); } catch (_) {}
+    buildDtValg(); buildDt();
+  }));
+}
+
+// Timer i ren varmedrift: [timeindeks (UTC), tur, retur], sortert
+function dtTimer(L, nu){
+  const ut = [];
+  for (const [h, r] of trLoggTimer(L, nu)) {
+    if (r.del) continue;                                          // timen som pågår
+    if (!(r.varme >= DT_VARME) || r.vv > 0 || r._m < 45) continue;
+    if (!Number.isFinite(r.supply) || !Number.isFinite(r.t0)) continue;
+    ut.push([h, r.supply, r.t0]);
+  }
+  return ut.sort((a, b) => a[0] - b[0]);
+}
+
+// Sentrert glidende snitt over W timer for timene h0…h1: { h, tur, ret }
+function dtGlidende(timer, h0, h1, W){
+  const idx = new Map(timer.map((x, i) => [x[0], i])), halv = W / 2, ut = [];
+  for (let h = h0; h <= h1; h++) {
+    let sw = 0, st = 0, sr = 0;
+    for (let k = Math.ceil(h - halv); k <= Math.floor(h + halv); k++) {
+      const i = idx.get(k);
+      if (i === undefined) continue;
+      const w = Math.abs(k - h) === halv ? 0.5 : 1;
+      sw += w; st += w * timer[i][1]; sr += w * timer[i][2];
+    }
+    if (sw >= W / 3) ut.push({ h, tur: st / sw, ret: sr / sw });
+  }
+  return ut;
+}
+
+// Ny bredde (snudd mobil, endret vindu): tegn på nytt når bredden faktisk er en annen
+{ let rt = null;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => {
+    const el = document.getElementById('dtChart');
+    if (el && dtBredde && Math.abs(Math.max(330, Math.min(760, Math.round(el.clientWidth || 360))) - dtBredde) > 8) buildDt();
+  }, 200); }); }
+
+// Frittstående: feil her skal aldri velte resten av dashbordet
+async function fetchDt(base, key){
+  if (Date.now() - dtLast < (dtErr ? 2 * 60000 : DT_EVERY)) return;
+  dtLast = Date.now();
+  try {
+    const L = await trHentLogg({ base, key });
+    if (L && L.hist) {
+      dtLogg = { hist: L.hist, naa: L.naa }; dtErr = null; dtHentet = Date.now();
+      try { localStorage.setItem('dtCache', JSON.stringify(dtLogg)); } catch (_) {}
+    } else dtErr = L && L.funnet ? 'Uventet format i ' + TR_VAR : 'Venter på timesverdiene fra nibe_kjerne (' + TR_VAR + ')';
+  } catch (e) {
+    dtErr = (e.status === 401 || e.status === 403) ? 'API-nøkkelen mangler tilgangen «Vis variabler»' : 'Fikk ikke hentet timesverdiene';
+  }
+  buildDt();
+}
+
+// Akse med litt luft rundt dataene og merker på runde tall innenfor. Aksen strekkes ikke ut til
+// neste merke (trTicks gjør det), så temperaturfeltet ikke får et tomt bånd på 5 K.
+function dtSkala(lo, hi, maksMerker, fraNull){
+  const pad = Math.max(0.4, (hi - lo) * 0.08), a = fraNull ? 0 : lo - pad, b = hi + pad;
+  let steg = 50;
+  for (const st of [0.5, 1, 2, 2.5, 5, 10, 20, 50]) if ((b - a) / st <= maksMerker) { steg = st; break; }
+  const t = [];
+  for (let k = Math.ceil(a / steg - 1e-9); k * steg <= b + 1e-9 && t.length < 20; k++) t.push(+(k * steg).toFixed(6));
+  return { lo: a, hi: b, t, dec: steg % 1 ? 1 : 0 };
+}
+const dtTidTekst = h => { const d = new Date(h * 3600000); return `${TR_DAG[d.getDay()]} ${d.getDate()}. kl. ${trTo(d.getHours())}`; };
+
+function buildDt(){
+  const el = document.getElementById('dtChart'), lesEl = document.getElementById('dtLes'), vEl = document.getElementById('dtV');
+  if (!el || !lesEl || !vEl) return;
+  const v = DT_VALG.find(x => x.k === dtValg) || DT_VALG[1];
+  const vin = document.getElementById('dtVin'); if (vin) vin.textContent = v.vindu;
+  const lab = document.getElementById('dtLab'); if (lab) lab.textContent = `ΔT i varmedrift · snitt ${v.dager} døgn`;
+  el.classList.toggle('gml', !!dtErr && !!dtLogg);
+  const nu = Date.now(), h1 = Math.floor(nu / 3600000) - 1, h0 = h1 - v.dager * 24 + 1;
+  const timer = dtLogg ? dtTimer(dtLogg, nu) : [];
+  const iPer = timer.filter(x => x[0] >= h0 && x[0] <= h1);
+  const ma = dtGlidende(timer, h0, h1, v.vindu);
+  const melding = t => { el.innerHTML = `<div class="wp-st" style="padding:18px 0">${t}</div>`; vEl.innerHTML = '–'; lesEl.textContent = ''; };
+  if (!dtLogg) return melding(dtErr || 'Venter på timesverdiene');
+  if (!iPer.length || !ma.length) return melding(`Ingen timer i ren varmedrift siste ${v.dager === 1 ? 'døgn' : v.dager + ' døgn'}`);
+
+  // Snitt over perioden
+  const sn = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const sTur = sn(iPer.map(x => x[1])), sRet = sn(iPer.map(x => x[2]));
+  vEl.innerHTML = `${(sTur - sRet).toFixed(1)}<small>K</small>`;
+  const standard = `snitt tur ${sTur.toFixed(1)} · retur ${sRet.toFixed(1)} °C · ${iPer.length} av ${v.dager * 24} t i varmedrift`;
+  lesEl.textContent = standard;
+
+  // Geometri: temperaturer øverst, ΔT under – samme tidsakse, hver sin skala. Bredden følger
+  // panelet (330–760), så teksten holder samme størrelse på PC som på mobil; høyden er fast.
+  const W = Math.max(330, Math.min(760, Math.round(el.clientWidth || 360))), PL = 30, PR = 8, pW = W - PL - PR;
+  dtBredde = W;
+  const T1 = 10, TH = 96, D1 = T1 + TH + 18, DH = 58, H = D1 + DH + 20;
+  const t0 = h0 * 3600000, t1 = (h1 + 1) * 3600000;
+  const px = t => PL + (t - t0) / (t1 - t0) * pW, tc = h => h * 3600000 + 1800000;
+  const tv = ma.flatMap(p => [p.tur, p.ret]);
+  const tkT = dtSkala(Math.min(...tv), Math.max(...tv), 4.5, false);
+  const dtMaks = Math.max(...ma.map(p => p.tur - p.ret), ...iPer.map(x => x[1] - x[2]), 1);
+  const tkD = trTicks(0, dtMaks, 3);                       // ΔT fra null til et rundt tall over største verdi
+  const pyT = x => T1 + (1 - (x - tkT.lo) / (tkT.hi - tkT.lo)) * TH;
+  const pyD = x => D1 + (1 - (x - tkD.lo) / (tkD.hi - tkD.lo)) * DH;
+  const f1 = x => x.toFixed(1), mono = 'font-family="DM Mono,monospace"';
+  let g = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block" role="img" `
+        + `aria-label="ΔT tur VP minus retur tank, glidende snitt ${v.vindu} timer, siste ${v.dager} døgn. Snitt ${(sTur - sRet).toFixed(1)} K.">`;
+  // Rutenett og y-akser (hårstreker)
+  const akse = (tk, py, y0, y1, dec) => {
+    for (const x of tk.t) {
+      const y = f1(py(x));
+      g += `<line x1="${PL}" y1="${y}" x2="${W - PR}" y2="${y}" stroke="rgba(255,255,255,.06)"/>`;
+      g += `<text x="${PL - 5}" y="${(+y + 3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="rgba(255,255,255,.42)" ${mono}>${trFmt(x, dec)}</text>`;
+    }
+    g += `<line x1="${PL}" y1="${y0}" x2="${PL}" y2="${y1}" stroke="rgba(255,255,255,.14)"/>`;
+  };
+  akse(tkT, pyT, T1, T1 + TH, tkT.dec);
+  akse(tkD, pyD, D1, D1 + DH, tkD.dec);
+  g += `<line x1="${PL}" y1="${D1 + DH}" x2="${W - PR}" y2="${D1 + DH}" stroke="rgba(255,255,255,.14)"/>`;
+  g += `<text x="${PL + 4}" y="${T1 + 8}" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>°C</text>`;
+  g += `<text x="${PL + 4}" y="${D1 + 8}" font-size="8" fill="rgba(255,255,255,.4)" ${mono}>ΔT, K</text>`;
+
+  // Tidsakse: midnatt som hårstrek; 1 døgn: hver 6. time, ellers ukedag og dato midt i døgnet
+  const mid = [];
+  { const m = new Date(t0); m.setHours(24, 0, 0, 0); while (m.getTime() < t1) { mid.push(m.getTime()); m.setDate(m.getDate() + 1); } }
+  for (const t of mid) for (const [y0, y1] of [[T1, T1 + TH], [D1, D1 + DH + 3]])
+    g += `<line x1="${f1(px(t))}" y1="${y0}" x2="${f1(px(t))}" y2="${y1}" stroke="rgba(255,255,255,.12)"/>`;
+  const etikett = (x, tekst) => { g += `<text x="${f1(x)}" y="${H - 5}" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,.45)" ${mono}>${tekst}</text>`; };
+  if (v.dager === 1) {
+    const m = new Date(t0); m.setMinutes(0, 0, 0);
+    while (m.getHours() % 6) m.setHours(m.getHours() + 1);
+    for (; m.getTime() <= t1; m.setHours(m.getHours() + 6)) {
+      const x = px(m.getTime());
+      if (x < PL + 8 || x > W - PR - 6) continue;
+      etikett(x, m.getHours() === 0 ? TR_DAG[m.getDay()] : trTo(m.getHours()));
+    }
+  } else {
+    const gr = [t0, ...mid, t1];
+    for (let i = 0; i < gr.length - 1; i++) {
+      const xa = px(gr[i]), xb = px(gr[i + 1]), d = new Date((gr[i] + gr[i + 1]) / 2);
+      const tekst = xb - xa >= 40 ? `${TR_DAG[d.getDay()]} ${d.getDate()}.` : TR_DAG[d.getDay()];
+      if (xb - xa >= tekst.length * 5.2 + 4) etikett((xa + xb) / 2, tekst);
+    }
+  }
+
+  // Sammenhengende biter av det glidende snittet (brudd der vinduet har for lite varmedrift)
+  const biter = [];
+  ma.forEach((p, i) => { if (!i || p.h - ma[i - 1].h > 1) biter.push([]); biter[biter.length - 1].push(p); });
+  const linje = (pts, farge, b) => `<polyline points="${pts}" fill="none" stroke="${farge}" stroke-width="${b}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  for (const b of biter) {
+    if (b.length === 1) {
+      const p = b[0], x = f1(px(tc(p.h)));
+      g += `<circle cx="${x}" cy="${f1(pyT(p.tur))}" r="2.2" fill="${DT_FARGE.tur}"/><circle cx="${x}" cy="${f1(pyT(p.ret))}" r="2.2" fill="${DT_FARGE.ret}"/>`;
+      g += `<circle cx="${x}" cy="${f1(pyD(p.tur - p.ret))}" r="2.2" fill="${DT_FARGE.dt}"/>`;
+      continue;
+    }
+    const tur = b.map(p => `${f1(px(tc(p.h)))},${f1(pyT(p.tur))}`), ret = b.map(p => `${f1(px(tc(p.h)))},${f1(pyT(p.ret))}`);
+    // Flaten mellom tur og retur er ΔT – samme farge som ΔT-linja, svakt
+    g += `<polygon points="${tur.join(' ')} ${ret.slice().reverse().join(' ')}" fill="${DT_FARGE.dt}" fill-opacity=".10"/>`;
+    g += linje(ret.join(' '), DT_FARGE.ret, 2) + linje(tur.join(' '), DT_FARGE.tur, 2);
+  }
+  // Timesverdiene av ΔT som punkter, så det glidende snittet over
+  for (const x of iPer) g += `<circle cx="${f1(px(tc(x[0])))}" cy="${f1(pyD(x[1] - x[2]))}" r="1.6" fill="${DT_FARGE.dt}" fill-opacity=".45"/>`;
+  for (const b of biter) if (b.length > 1)
+    g += linje(b.map(p => `${f1(px(tc(p.h)))},${f1(pyD(p.tur - p.ret))}`).join(' '), DT_FARGE.dt, 2);
+
+  // Markør som følger pekeren: hårstrek gjennom begge feltene og punkt på hver linje
+  g += `<g id="dtK" style="display:none" pointer-events="none"><line id="dtKl" y1="${T1}" y2="${D1 + DH}" stroke="rgba(255,255,255,.5)"/>`;
+  for (const [id, farge] of [['dtKt', DT_FARGE.tur], ['dtKr', DT_FARGE.ret], ['dtKd', DT_FARGE.dt]])
+    g += `<circle id="${id}" r="4" fill="${farge}" stroke="#0b1828" stroke-width="2"/>`;
+  g += `</g><rect x="${PL}" y="${T1}" width="${pW}" height="${D1 + DH - T1}" fill="transparent"/></svg>`;
+  el.innerHTML = g;
+
+  // Berøring eller mus: nærmeste time med glidende snitt
+  const svg = el.querySelector('svg'), K = svg.querySelector('#dtK');
+  const sett = (id, cx, cy) => { const c = svg.querySelector('#' + id); c.setAttribute('cx', f1(cx)); c.setAttribute('cy', f1(cy)); };
+  const vis = ev => {
+    const r = svg.getBoundingClientRect();
+    if (!r.width) return;
+    const x = (ev.clientX - r.left) / r.width * W, t = t0 + (x - PL) / pW * (t1 - t0);
+    let p = ma[0];
+    for (const q of ma) if (Math.abs(tc(q.h) - t) < Math.abs(tc(p.h) - t)) p = q;
+    const cx = px(tc(p.h));
+    svg.querySelector('#dtKl').setAttribute('x1', f1(cx)); svg.querySelector('#dtKl').setAttribute('x2', f1(cx));
+    sett('dtKt', cx, pyT(p.tur)); sett('dtKr', cx, pyT(p.ret)); sett('dtKd', cx, pyD(p.tur - p.ret));
+    K.style.display = '';
+    lesEl.textContent = `${dtTidTekst(p.h)} · tur ${p.tur.toFixed(1)} · retur ${p.ret.toFixed(1)} °C · ΔT ${(p.tur - p.ret).toFixed(1)} K`;
+  };
+  const skjul = () => { K.style.display = 'none'; lesEl.textContent = standard; };
+  svg.addEventListener('pointerdown', e => { try { svg.setPointerCapture(e.pointerId); } catch (_) {} vis(e); });
+  svg.addEventListener('pointermove', e => { if (e.pointerType === 'mouse' || e.buttons) vis(e); });
+  svg.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') skjul(); });
+}
+
 // ── Henting (v53): bare det som endrer seg ofte, i takt med Nibe Live ──
 // Nibe Live leser pumpa omtrent hvert 15. s og skriver verdiene på de tre enhetene.
 // De hentes hver for seg (≈ 54 kB) i stedet for hele enhetslista (≈ 234 kB), rett
@@ -3070,6 +3343,7 @@ async function doFetch() {
       fetchKjole(base, key).catch(()=>{});
       fetchSone(base, key).catch(()=>{});
       fetchHelse(base, key).catch(()=>{});
+      fetchDt(base, key).catch(()=>{});
       _savCounter=(_savCounter+1)%4;
       if(_savCounter===0) savH();
       // Lukk tilkoblingsskuffen automatisk ved vellykket tilkobling
@@ -5077,7 +5351,7 @@ function eksportLastNed(){
 }
 
 // ── Startup ──
-lodCfg(); lodH(); buildScopRangeBtns(); buildSCOPChart(scopH7); buildBrineChart();
+lodCfg(); lodH(); buildScopRangeBtns(); buildSCOPChart(scopH7); buildBrineChart(); buildDtValg(); buildDt();
 render(
   [58.4,49.2,40.1,33.7,29.3],
   {scopDC:5.21,scop24:5.48,copHeat:5.62,copHw:3.94,copHeatT:5.48,copHwT:3.81,prio:30,hz:42.5,pwr:1100,
