@@ -595,6 +595,7 @@ label.ex-r>span{flex:1;min-width:0}
       <span><span style="color:#3b82f6">━</span> retur tank</span>
       <span><span style="color:#0d9488">━</span> ΔT · glidende snitt <span id="dtVin">6</span> t</span>
       <span><span style="color:rgba(13,148,136,.75)">●</span> timesverdi</span>
+      <span><span style="color:rgba(255,255,255,.55)">┄</span> fylt inn der timene mangler</span>
     </div>
   </div>
   <!-- Varsler (v51): pumpealarm og helse – vises bare når noe er galt -->
@@ -679,7 +680,10 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 60;   // v60 (18.11.2026): ny graf nederst, «Anlegg · ΔT tur VP – retur tank»: tur fra varmepumpa (BT2)
+const APP_VERSION = 61;   // v61 (22.11.2026): ΔT-grafen fyller hull med en stiplet rett linje mellom siste kjente punkt
+                          // før og første etter (lineær interpolasjon), i stedet for brudd. Markøren viser «fylt inn» der.
+                          // Snittet og timespunktene regnes fortsatt bare av målte timer i varmedrift.
+                          // v60 (18.11.2026): ny graf nederst, «Anlegg · ΔT tur VP – retur tank»: tur fra varmepumpa (BT2)
                           // minus retur inn på akkumulatortanken (tankføleren «Retur») i timer med ren varmedrift, med
                           // glidende snitt og valg mellom 1, 3 og 7 døgn. Timesverdiene fra nibe_trend – se buildDt().
                           // v59 (14.11.2026): uttaket før brønnloggingen (17.5–25.9) er fordelt per måned etter pumpas
@@ -2873,8 +2877,10 @@ function buildSCOPChart(all){
 // halv vekt når vinduet er et partall timer), så ΔT = snitt(tur) − snitt(retur). Vinduet
 // følger perioden: 3 t for 1 døgn, 6 t for 3 døgn og 24 t for 7 døgn (døgnsnitt – da vises
 // trenden fra døgn til døgn, mens punktene viser hver time). Et punkt tegnes når minst en
-// tredel av vinduet har varmedrift; ellers brudd i linja. Mot høyre kant blir vinduet kortere.
-// Snittet over perioden: alle timer i varmedrift med lik vekt.
+// tredel av vinduet har varmedrift. Mellom to slike punkt med hull imellom (tappevann, stopp
+// eller manglende prøver) trekkes en stiplet rett linje, altså lineær interpolasjon (v61).
+// Linja forlenges ikke forbi første eller siste kjente punkt. Mot høyre kant blir vinduet kortere.
+// Snittet over perioden og timespunktene regnes bare av målte timer i varmedrift, med lik vekt.
 //
 // Eksport 12.11 (7 døgn til 12.11 kl. 20, ute 5,4 °C): 112 av 168 timer i varmedrift, ΔT 5,2 K
 // i snitt. GP1 gikk fast på 32 % (12,4 l/min, ṁcp ≈ 860 W/K) i varmedrift, så ΔT følger effekten:
@@ -3046,10 +3052,27 @@ function buildDt(){
     }
   }
 
-  // Sammenhengende biter av det glidende snittet (brudd der vinduet har for lite varmedrift)
+  // Sammenhengende biter av det glidende snittet. Der vinduet har for lite varmedrift, fylles
+  // hullet med en stiplet rett linje mellom siste punkt før og første punkt etter (v61).
   const biter = [];
   ma.forEach((p, i) => { if (!i || p.h - ma[i - 1].h > 1) biter.push([]); biter[biter.length - 1].push(p); });
-  const linje = (pts, farge, b) => `<polyline points="${pts}" fill="none" stroke="${farge}" stroke-width="${b}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const linje = (pts, farge, b, strek) => `<polyline points="${pts}" fill="none" stroke="${farge}" stroke-width="${b}" stroke-linejoin="round" stroke-linecap="round"${strek ? ` stroke-dasharray="${strek}"` : ''}/>`;
+  const pkt = (p, y) => `${f1(px(tc(p.h)))},${f1(y)}`;
+  const alle = [];                                         // hver time fra første til siste punkt, til markøren
+  biter.forEach((b, i) => {
+    if (i) {
+      const a = biter[i - 1][biter[i - 1].length - 1], c = b[0];
+      for (let h = a.h + 1; h < c.h; h++) {
+        const f = (h - a.h) / (c.h - a.h);
+        alle.push({ h, tur: a.tur + f * (c.tur - a.tur), ret: a.ret + f * (c.ret - a.ret), fylt: true });
+      }
+      g += `<polygon points="${pkt(a, pyT(a.tur))} ${pkt(c, pyT(c.tur))} ${pkt(c, pyT(c.ret))} ${pkt(a, pyT(a.ret))}" fill="${DT_FARGE.dt}" fill-opacity=".05"/>`;
+      g += linje(`${pkt(a, pyT(a.ret))} ${pkt(c, pyT(c.ret))}`, DT_FARGE.ret, 1.5, '3 3');
+      g += linje(`${pkt(a, pyT(a.tur))} ${pkt(c, pyT(c.tur))}`, DT_FARGE.tur, 1.5, '3 3');
+      g += linje(`${pkt(a, pyD(a.tur - a.ret))} ${pkt(c, pyD(c.tur - c.ret))}`, DT_FARGE.dt, 1.5, '3 3');
+    }
+    alle.push(...b);
+  });
   for (const b of biter) {
     if (b.length === 1) {
       const p = b[0], x = f1(px(tc(p.h)));
@@ -3081,13 +3104,14 @@ function buildDt(){
     const r = svg.getBoundingClientRect();
     if (!r.width) return;
     const x = (ev.clientX - r.left) / r.width * W, t = t0 + (x - PL) / pW * (t1 - t0);
-    let p = ma[0];
-    for (const q of ma) if (Math.abs(tc(q.h) - t) < Math.abs(tc(p.h) - t)) p = q;
+    let p = alle[0];
+    for (const q of alle) if (Math.abs(tc(q.h) - t) < Math.abs(tc(p.h) - t)) p = q;
     const cx = px(tc(p.h));
     svg.querySelector('#dtKl').setAttribute('x1', f1(cx)); svg.querySelector('#dtKl').setAttribute('x2', f1(cx));
     sett('dtKt', cx, pyT(p.tur)); sett('dtKr', cx, pyT(p.ret)); sett('dtKd', cx, pyD(p.tur - p.ret));
     K.style.display = '';
-    lesEl.textContent = `${dtTidTekst(p.h)} · tur ${p.tur.toFixed(1)} · retur ${p.ret.toFixed(1)} °C · ΔT ${(p.tur - p.ret).toFixed(1)} K`;
+    lesEl.textContent = p.fylt ? `${dtTidTekst(p.h)} · fylt inn · ΔT ${(p.tur - p.ret).toFixed(1)} K`       // kort nok for mobil
+                           : `${dtTidTekst(p.h)} · tur ${p.tur.toFixed(1)} · retur ${p.ret.toFixed(1)} °C · ΔT ${(p.tur - p.ret).toFixed(1)} K`;
   };
   const skjul = () => { K.style.display = 'none'; lesEl.textContent = standard; };
   svg.addEventListener('pointerdown', e => { try { svg.setPointerCapture(e.pointerId); } catch (_) {} vis(e); });
