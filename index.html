@@ -680,7 +680,16 @@ label.ex-r>span{flex:1;min-width:0}
 // ── App-versjon ──
 // Øk dette tallet hver gang du laster opp en ny versjon til GitHub.
 // Vises under ⚙ Tilkobling, så du kan se om mobilen kjører nyeste fil.
-const APP_VERSION = 61;   // v61 (22.11.2026): ΔT-grafen fyller hull med en stiplet rett linje mellom siste kjente punkt
+const APP_VERSION = 62;   // v62 (26.11.2026): brønnmodellen har fått et ledd for kald brønn (WELL.kald). Når vannet i hullet
+                          // er under 5,5 °C, øker motstanden til væsken med k·(5,5 − T_fyll): grunnvannet sirkulerer dårligere
+                          // nær 4 °C, og HXi-35 blir tyktflytende. Uten leddet var prognosen 0,22–0,27 K for varm ved 20–30 W/m,
+                          // også rett etter ny tilpasning. Eksport 26.11: avvik 91 → 69 mK; prognose fra 18.11, 22.11 og 25.11
+                          // −0,06 til −0,11 K ved 20–30 W/m og rms 0,105–0,125 K (v61: −0,22 til −0,27 og 0,22–0,26).
+                          // λ 4,36 → 4,59, T₀ 9,00 → 8,97 °C. Leddet er med i prognosen, kapasitetskurven og T_vegg, og har
+                          // egen flis. UTV_MODELL kap-11, så λ-historikken og prognosen regnes på nytt.
+                          // Homey-ID og API-nøkkel lagres bare når begge feltene er fylt ut og hentingen virker. Før ble
+                          // feltene lagret ved hver henting, også tomme, så et tomt felt kunne slette den lagrede nøkkelen.
+                          // v61 (22.11.2026): ΔT-grafen fyller hull med en stiplet rett linje mellom siste kjente punkt
                           // før og første etter (lineær interpolasjon), i stedet for brudd. Markøren viser «fylt inn» der.
                           // Snittet og timespunktene regnes fortsatt bare av målte timer i varmedrift.
                           // v60 (18.11.2026): ny graf nederst, «Anlegg · ΔT tur VP – retur tank»: tur fra varmepumpa (BT2)
@@ -2706,7 +2715,9 @@ function buildVPInternal(nibe) {
 // ═══════════════════════════════════════════
 const sv  = (k,v)=>{try{localStorage.setItem(k,v)}catch(_){}};
 const lv  = k=>{try{return localStorage.getItem(k)}catch(_){return null}};
-const savCfg=()=>{sv('hid',document.getElementById('hid').value.trim());sv('hkey',document.getElementById('hkey').value.trim())};
+// v62: lagres bare når begge feltene er fylt ut, og bare etter en vellykket henting (doFetch). Før ble feltene lagret
+// ved hver henting, også tomme, så et tomt felt kunne overskrive den lagrede nøkkelen.
+const savCfg=()=>{const i=document.getElementById('hid').value.trim(),k=document.getElementById('hkey').value.trim();if(i&&k){sv('hid',i);sv('hkey',k);}};
 const lodCfg=()=>{const i=lv('hid'),k=lv('hkey');if(i)document.getElementById('hid').value=i;if(k)document.getElementById('hkey').value=k};
 
 let _lastSts='', _lastStsT='', _failCount=0, _savCounter=0;
@@ -3273,7 +3284,6 @@ async function doFetch() {
   if (_henter) return;
   const sjekk = _nesteSjekk; _nesteSjekk = false;   // bare en kort sjekk etter Nibe Live-verdiene
   clearTimeout(_neste); _neste = null;
-  savCfg();
   const hid=document.getElementById('hid').value.trim();
   const key=document.getElementById('hkey').value.trim();
   const errEl=document.getElementById('err');
@@ -3290,6 +3300,7 @@ async function doFetch() {
   try {
     const ts = Date.now();
     await hentEnheter(base, key, sjekk);
+    savCfg();                                       // v62: tilkoblingen virker – nå lagres feltene
     const devs=[...devCache.values()];
 
     // Helper: get value from any capability
@@ -3449,11 +3460,12 @@ function brineRb(){
 // uttak er fordamperens (med rørvarmen), så ṁcp = q·L/ΔT eksakt, og
 // rørvarmen trekkes fra før motstandsleddene. Uten ΔT (uker før v1.6)
 // brukes at Auto holder ΔT ≈ 4,1 K.
-function brineVeggKorr(q, dT){
+function brineVeggKorr(q, dT, tf){
   if (Number.isFinite(dT)) dT += giverO();               // givarkorreksjon (v39)
   const RB = brineRb(), L = WELL.L, qbh = q - WELL.pipeW / L;
   const mcp = q * L / (dT >= 1 ? dT : WELL.dTauto);
-  return qbh * wellRv(RB.k, mcp);
+  // v62: med væskens middeltemperatur (tf) tas også den ekstra motstanden i kald brønn med
+  return qbh * (wellRv(RB.k, mcp) + wellKaldFraVaeske(RB.k, tf, qbh, mcp));
 }
 const BRINE_EVERY = 5*60000;        // hent maks hvert 5. minutt
 let brineData = null, brineErr = null, brineLast = 0;
@@ -3783,7 +3795,7 @@ function brineSVG(d, err){
   const note = t => `<p style="font-size:10px;color:rgba(255,255,255,.34);font-family:'DM Mono',monospace;text-align:center;padding:14px 10px 6px;line-height:1.55">${t}</p>`;
   const DAY = 86400000;
   const RB = brineRb();
-  const wallOf = c => (c[0] + c[1]) / 2 + brineVeggKorr(c[2], c[0] - c[1]);
+  const wallOf = c => (c[0] + c[1]) / 2 + brineVeggKorr(c[2], c[0] - c[1], (c[0] + c[1]) / 2);
   // Uker fra v1.4 har median uttak (w[6]) og kan korrigeres til målt Rb.
   // Eldre uker (90-min-referanse, uten w[6]) utelates – de ville gitt et sprang.
   const weeks = (d && Array.isArray(d.weeks)) ? d.weeks.filter(w => Array.isArray(w) && isFinite(w[2]) && isFinite(w[6])) : [];
@@ -3797,7 +3809,7 @@ function brineSVG(d, err){
 
   const W = 380, H = 196, PL = 30, PR = 8, PT = 26, PB = 34;
   const pW = W - PL - PR, pH = H - PT - PB;
-  const dRb = w => brineVeggKorr(w[6], w.length > 7 ? w[7] : NaN) - w[6] * BRINE_RB;   // fra scriptets q·0,09 til full korreksjon
+  const dRb = w => brineVeggKorr(w[6], w.length > 7 ? w[7] : NaN, w[2] - w[6] * BRINE_RB) - w[6] * BRINE_RB;   // fra scriptets q·0,09 til full korreksjon (v62: væsken = scriptets T_vegg − q·0,09)
   const wk = weeks.map(w => ({ ws: w[0], t: w[0] + 3.5 * DAY, n: w[1],
                                med: w[2] + dRb(w), p25: w[3] + dRb(w), p75: w[4] + dRb(w), raw: w[5] }));
 
@@ -3991,6 +4003,12 @@ const WELL = {
   maxGapFill: 6,          // timer – kortere hull interpoleres
   maxGapDays: 7,          // døgn – hull opp til dette fylles med snittlasten rundt
   gapSkipHours: 24,       // timer uten målepunkt etter et langt hull (ukjent last i hullet)
+  // v62: kald brønn. Når vannet i hullet (fyllet) er under kald.T, øker motstanden fra fyllet til væsken med
+  // k·(kald.T − T_fyll), der k (K·m/W per K) løses sammen med T₀, R1 og c. Grunnvann sirkulerer dårligere nær
+  // 4 °C, der tettheten er størst, og HXi-35 blir tyktflytende. T_fyll regnes fra modellen med T₀ = kald.Tref
+  // (stillstandene gir 8,96–9,01 °C). Terskelen er valgt fra en profil 4,5–6,5 °C på eksportene 18.11, 25.11
+  // og 26.11: 5,5 °C ga lavest prognosefeil (tester/bronn_v62_prof.js). Endres T₀ mer enn ≈ 0,3 K, oppdater Tref.
+  kald: { T: 5.5, Tref: 9.0 },
 };
 
 // Eksponentialintegralet E1. Rekke for x<1, rasjonal tilnærming
@@ -4171,7 +4189,7 @@ function wellFit(d, forrige, valg){
     const p = forbered(s.bins, s.base, hist);
     if (p && p.days >= 1 && p.vi.length >= 4) segs.push(p);
   }
-  const K = segs.length, P = 4 + 2 * (K - 1);
+  const K = segs.length, kK = 4 + 2 * (K - 1), P = kK + 1;     // v62: siste kolonne er leddet for kald brønn
   const kQ = s => s === 0 ? 1 : 4 + 2 * (s - 1), kR = s => s === 0 ? 2 : 5 + 2 * (s - 1);
   const { N, qA, row, start, prior, days, q } = hoved, vi = hoved.vi;
 
@@ -4224,6 +4242,9 @@ function wellFit(d, forrige, valg){
     }
     return { D, g, xk };
   }
+  // v62: regressoren for kald brønn, −q·max(0, kald.T − T_fyll). T_fyll = kald.Tref + fyllets respons (dFyll ≤ 0).
+  // Null i stillstand. Er det aldri kaldt nok, er kolonnen tom og koeffisienten 0 (se XtX under).
+  const kaldX = (b, dFyll) => b[6] ? 0 : -b[2] * Math.max(0, W.kald.T - (W.kald.Tref + dFyll));
   function prosjekter(lam, R2){
     if (!(lam > 0.5 && lam < 8 && R2 > 0.001 && R2 < 0.4)) return null;
     const fl = 4 * Math.PI * lam;
@@ -4252,8 +4273,10 @@ function wellFit(d, forrige, valg){
         const sc = b[6] ? 0 : -b[2] * W.L / (2 * mcp);
         const x = new Array(P).fill(0);
         const fq = sg.fastQ;                       // låst forhistorie (v48) er et kjent ledd
+        const pr = fq == null ? 0 : forLaast(sg, xk, tj) / fl;
         x[0] = 1; x[kQ(s)] = fq == null ? -Pr / fl : 0; x[kR(s)] = -b[2]; x[3] = sc;
-        y.push(b[3] - D[j] + Hk + (fq == null ? 0 : forLaast(sg, xk, tj) / fl));   // Tf − fyllets respons + kjent historikk = T₀ + ulogget forhistorie − R1·q − c·q·L/(2·ṁcp)
+        x[kK] = kaldX(b, D[j] - Hk - pr);         // v62: kald brønn
+        y.push(b[3] - D[j] + Hk + pr);   // Tf − fyllets respons + kjent historikk = T₀ + ulogget forhistorie − R1·q − c·q·L/(2·ṁcp) − k·q·max(0, T − T_fyll)
         X.push(x); meta.push([s, j]);
       }
     });
@@ -4261,7 +4284,7 @@ function wellFit(d, forrige, valg){
     X.forEach((r, n) => { for (let a = 0; a < P; a++) { if (!r[a]) continue; Xty[a] += r[a] * y[n];
       for (let c = 0; c < P; c++) XtX[a][c] += r[a] * r[c]; } });
     if (!X.some(r => r[3] !== 0)) XtX[3][3] += 1e-9;   // bare stillstand: intet kortslutningsledd
-    for (let a = 4; a < P; a++) XtX[a][a] += 1e-9;      // arkivperioder med lite drift
+    for (let a = 4; a < P; a++) XtX[a][a] += 1e-9;      // arkivperioder med lite drift, og kald brønn når det aldri er kaldt nok
     segs.forEach((sg, s) => { if (sg.fastQ != null) XtX[kQ(s)][kQ(s)] += 1; });   // låst: tom kolonne, β = 0
     const beta = wellSolve(XtX, Xty);
     if (!beta) return null;
@@ -4358,8 +4381,9 @@ function wellFit(d, forrige, valg){
       const Hk = best.H ? best.H(tj) / fl : 0;
       const mcp = b[5] > 0 ? b[5] : Math.max(W.mcpGulv, (b[2] * W.L + W.pipeW) / W.dTauto);
       const sc = b[6] ? 0 : -b[2] * W.L / (2 * mcp);
-      const linj = beta[0] + (fq == null ? -Pr / fl * beta[1] : 0) - b[2] * beta[2] + sc * beta[3];
-      test.push([start + j, b[3], linj + Dh[j] - Hk - (fq == null ? 0 : forLaast(hoved, xkLast, tj) / fl), b[6] ? 1 : 0]);
+      const pr = fq == null ? 0 : forLaast(hoved, xkLast, tj) / fl;
+      const linj = beta[0] + (fq == null ? -Pr / fl * beta[1] : 0) - b[2] * beta[2] + sc * beta[3] + beta[kK] * kaldX(b, Dh[j] - Hk - pr);
+      test.push([start + j, b[3], linj + Dh[j] - Hk - pr, b[6] ? 1 : 0]);
     } }
   // v58: samlet motstand fra fjellvegg til væske ved flow m (W/K), og usikkerheten (uten samvariasjon)
   const rv = m => beta[2] + R2fit + beta[3] * W.L / (2 * m);
@@ -4372,6 +4396,8 @@ function wellFit(d, forrige, valg){
     // v58: Rb er den faste delen (R1 + R2) og c koeffisienten i strømningsleddet. Motstanden
     // ved en gitt flow er Rb + c·L/(2·ṁcp) – wellRv(). RvLav og RvHoy: ved W.mcpLav og W.mcpHoy.
     form: 'lin', Rb: beta[2] + R2fit, R1: beta[2], R2: R2fit, c: beta[3], sC: se[3],
+    // v62: kald brønn – ekstra motstand fyll → væske kaldK·max(0, kaldT − T_fyll), se wellKaldFraVaeske()
+    kaldK: beta[kK], sKaldK: se[kK], kaldT: W.kald.T,
     nMcp: nMcp,
     RvLav: rv(W.mcpLav), sRvLav: sRv(W.mcpLav), RvHoy: rv(W.mcpHoy), sRvHoy: sRv(W.mcpHoy),
     sRb: Math.sqrt(se[2] * se[2] + (Number.isFinite(R2SE) ? R2SE * R2SE : 0)),
@@ -4566,13 +4592,16 @@ function kapasitetAnalyse(poster, fit){
   if (fit && fit.ok && wellKvalitet(fit).ok) rbK = { k: fit, kilde: 'tilpasningen' };
   else { const g = wellSiste(); if (g && Number.isFinite(g.Rb)) rbK = { k: g, kilde: 'siste pålitelige tilpasning' }; }
   if (!rbK) rbK = { k: RB_STD, kilde: 'standardverdi' };
-  const rbEff = r => wellRv(rbK.k, r.mcp > 0 ? r.mcp : Math.max(KAP.mcpMin, (r.q * W.L + W.pipeW) / W.dTauto));
-  const res = { alle, stabil, nNivaa, spenn, ok: false, rbK, rbEff };
+  const mcpAv = r => r.mcp > 0 ? r.mcp : Math.max(KAP.mcpMin, (r.q * W.L + W.pipeW) / W.dTauto);
+  const rbEff = r => wellRv(rbK.k, mcpAv(r));
+  // v62: ekstra motstand i kald brønn, fra væskens temperatur i den stabile perioden
+  const rbKald = r => wellKaldFraVaeske(rbK.k, r.tf, r.q, mcpAv(r));
+  const res = { alle, stabil, nNivaa, spenn, ok: false, rbK, rbEff, rbKald };
   if (stabil.length < 4 || nNivaa < KAP.minNivaa || spenn < KAP.minSpenn) {
     res.grunn = `Samler data: ${stabil.length} stabile perioder på ${nNivaa} lastnivå.`;   // trenger ${KAP.minNivaa} nivå over 0,7 kW
     return res;
   }
-  const x = stabil.map(r => r.q), y = stabil.map(r => r.tf + r.q * rbEff(r)), n = x.length;
+  const x = stabil.map(r => r.q), y = stabil.map(r => r.tf + r.q * (rbEff(r) + rbKald(r))), n = x.length;
   const xm = x.reduce((a, v) => a + v, 0) / n, ym = y.reduce((a, v) => a + v, 0) / n;
   const sxx = x.reduce((a, v) => a + (v - xm) ** 2, 0);
   const b = x.reduce((a, v, k) => a + (v - xm) * (y[k] - ym), 0) / sxx, a0 = ym - b * xm;
@@ -4591,7 +4620,11 @@ function kapasitetAnalyse(poster, fit){
 }
 // Stabilt nivå etter ≈ hMed timer for et gitt uttak (W/m), med flow fra at Auto holder ΔT ≈ 4,1 K
 function kapasitetNivaa(a, q, R){
-  return a.Tw0 - q * (a.rbEff({ q: q, mcp: 0 }) + (R ?? a.Rkurve));
+  // v62: veggen faller med R_ut, og fyllet ligger q·R2 under veggen. Under kald.T kommer den ekstra motstanden
+  // fra fyllet til væsken i tillegg (wellKaldDR).
+  const k = a.rbK && a.rbK.k, Tvegg = a.Tw0 - q * (R ?? a.Rkurve);
+  const dR = wellKaldDR(k, Tvegg - q * (k && Number.isFinite(k.R2) ? k.R2 : 0));
+  return Tvegg - q * (a.rbEff({ q: q, mcp: 0 }) + dR);
 }
 function kapasitetSeksjon(fit){
   if (selvtestFeil === null) selvtestFeil = selvtest();
@@ -4785,6 +4818,20 @@ function wellRv(k, mcp){
   if (!k || !Number.isFinite(k.Rb)) return NaN;
   if (k.form === 'lin') return k.Rb + (k.c > 0 && mcp > 0 ? k.c * WELL.L / (2 * mcp) : 0);
   return k.Rb + (k.invRa > 0 && mcp > 0 ? Math.pow(WELL.L / mcp, 2) * k.invRa / 3 : 0);
+}
+// v62: ekstra motstand fra fyllet til væsken når brønnen er kald, kaldK·max(0, kaldT − T_fyll) (se WELL.kald).
+// Fra fyllets temperatur direkte, eller fra væskens middeltemperatur tf ved uttak q og flow ṁcp:
+// T_fyll = tf + q·(R1 + c·L/(2·ṁcp) + ΔR), løst eksakt siden ΔR avhenger av T_fyll.
+// Gir 0 for standardverdien og for eldre resultat uten leddet.
+function wellKaldDR(k, Tfyll){
+  return k && k.kaldK > 0 && Number.isFinite(k.kaldT) && Number.isFinite(Tfyll) ? k.kaldK * Math.max(0, k.kaldT - Tfyll) : 0;
+}
+function wellKaldFraVaeske(k, tf, q, mcp){
+  if (!k || !(k.kaldK > 0) || !Number.isFinite(k.kaldT) || !Number.isFinite(tf) || !(q > 0)) return 0;
+  const A = tf + q * ((Number.isFinite(k.R1) ? k.R1 : 0) + (k.c > 0 && mcp > 0 ? k.c * WELL.L / (2 * mcp) : 0));
+  if (A >= k.kaldT) return 0;
+  const Tfyll = (A + q * k.kaldK * k.kaldT) / (1 + q * k.kaldK);
+  return k.kaldK * (k.kaldT - Tfyll);
 }
 // Plausibilitetskontroll av brønnanalysen. En tilpasning kan se pen ut og
 // likevel være fysisk umulig. Feiler ett av kriteriene, vises ingen verdier:
@@ -5030,6 +5077,13 @@ function wellScales(fit, live){
       zones: [{ to: 0.20, col: '#15803d', name: 'lav' }, { to: 0.40, col: '#0e7490', name: 'middels' }, { to: 0.60, col: '#b45309', name: 'høy' }],
       val: rLav, err: ok ? Math.hypot(fit.sRvLav ?? fit.sRbLow ?? 0, W.sysRb) : null, wait: wait,
       note: `Ved ṁcp ${WELL.mcpLav} W/K (GP2 ≈ 25 %). Flow målt i ${ok ? fit.nMcp ?? 0 : 0} punkt.` }),
+    // v62: det kald brønn legger til når vannet i hullet er 4 °C: kaldK·(kaldT − 4). Kommer i tillegg til motstanden over.
+    wellScale({ label: 'Motstand · kald brønn, 4 °C i hullet', unit: 'K·m/W', dec: 3, min: 0, max: 0.06, rev: true,
+      zones: [{ to: 0.01, col: '#15803d', name: 'liten' }, { to: 0.03, col: '#0e7490', name: 'merkbar' }, { to: 0.06, col: '#b45309', name: 'stor' }],
+      val: ok && Number.isFinite(fit.kaldK) ? fit.kaldK * Math.max(0, fit.kaldT - 4) : null,
+      // ± 0,005 systematisk: terskel 5–6,5 °C og eksportene 18.–26.11 gir 0,016–0,025
+      err: ok && Number.isFinite(fit.sKaldK) ? Math.hypot(fit.sKaldK * Math.max(0, fit.kaldT - 4), 0.005) : null, wait: wait,
+      note: `Under ${WELL.kald.T} °C i hullet øker motstanden til væsken: vannet sirkulerer dårligere nær 4 °C, og HXi-35 blir tyktflytende.` }),
     wellScale({ tr: 't0w', trt: 'Upåvirket temperatur T₀', label: 'Upåvirket temperatur <span class="ws-sym">T₀</span>', unit: '°C', dec: 1, min: 3, max: 12,
       zones: [{ to: 6, col: '#b45309', name: 'kaldt' }, { to: 8, col: '#0e7490', name: 'middels' },
               { to: 10, col: '#15803d', name: 'godt' }, { to: 12, col: '#1d4ed8', name: 'svært godt' }],
@@ -5145,7 +5199,7 @@ function buildWellPanel(){
 // og er samtidig stabilitetskontrollen: et resultat som ikke setter seg,
 // er et varsel. Hvert hele døgn tilpasses på dataene fram til da, i
 // bakgrunnen, ett døgn per runde med varmstart, og lagres per datagrunnlag.
-const UTV_MODELL = 'kap-10';                 // v59: forhistorien per måned (kap-9: v58 ny form og jevnt uttak, kap-8: brønn-v49, kap-7: v48)
+const UTV_MODELL = 'kap-11';                 // v62: kald brønn (kap-10: v59 forhistorien per måned, kap-9: v58 ny form og jevnt uttak, kap-8: brønn-v49, kap-7: v48)
 const UTV_DAGER  = 30;                       // utviklingsgrafen viser siste 30 døgn                  // byttes når tilpasningen endres
 let utvCache = null, utvBusy = false;
 try { const c = localStorage.getItem('trtUtv'); if (c) utvCache = JSON.parse(c); } catch (_) {}
